@@ -17,6 +17,17 @@ const schema = z.object({
   message: "As senhas não coincidem.", path: ["confirmPassword"],
 });
 
+function traduzErro(msg: string) {
+  const m = msg.toLowerCase();
+  if (m.includes("weak") || m.includes("pwned"))
+    return "Esta senha é muito comum e apareceu em vazamentos. Escolha uma senha mais forte (mín. 8 caracteres, com letras, números e símbolos).";
+  if (m.includes("already registered") || m.includes("user already"))
+    return "Este email já está cadastrado. Faça login ou recupere sua senha.";
+  if (m.includes("invalid email")) return "Email inválido.";
+  if (m.includes("rate limit")) return "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+  return msg;
+}
+
 export function SignupForm() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
@@ -30,7 +41,8 @@ export function SignupForm() {
     setLoading(true);
     const { error, pending, isApproved } = await signUp(form.fullName, form.email, form.password);
     setLoading(false);
-    if (error) { toast.error(error); return; }
+    if (error) { toast.error(traduzErro(error)); return; }
+
     if (isApproved === false) {
       toast.info("Conta criada! Aguardando confirmação de email e aprovação do administrador.");
       navigate("/pending-approval", { replace: true });
