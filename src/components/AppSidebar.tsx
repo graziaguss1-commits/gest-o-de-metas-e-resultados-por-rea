@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { BarChart3, HelpCircle, LayoutDashboard, ListChecks, LogOut, Plus, Settings, Target } from "lucide-react";
+import { BarChart3, CalendarDays, CalendarCheck, HelpCircle, LayoutDashboard, ListChecks, LogOut, Plus, Settings, Target } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ export function AppSidebar({ onLancarResultado }: { onLancarResultado?: () => vo
     { title: "Visão geral", url: "/dashboard", icon: LayoutDashboard },
     { title: "Metas e objetivos", url: "/metas", icon: Target },
     { title: "Planos de ação", url: "/planos", icon: ListChecks },
+    { title: "Calendário", url: "/calendario", icon: CalendarDays },
+    { title: "Planejar semana", url: "/planejamento-semanal", icon: CalendarCheck },
     { title: "Resultados", url: "/relatorios", icon: BarChart3 },
   ];
   const footerItems: NavItem[] = [
