@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,276 +6,91 @@
 
 @layer base {
   :root {
-    /* === MetasIA palette (hex source of truth) ===
-       --navy: #02162A   --navy-2: #07223B   --navy-3: #0E2F4D
-       --blue: #0A4F95   --blue-hover: #0B5BAC   --blue-soft: #E8F0FB
-       --green: #14935C  --amber: #C2820B  --red: #C0392B
-    */
-
-    /* shadcn semantic tokens (HSL channels — used by ui/* components) */
-    --background: 218 25% 96%;          /* #F4F6F9 bg */
-    --foreground: 213 53% 12%;          /* #0E1B2C text */
+    --background: 30 33% 97%;
+    --foreground: 19 33% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 213 53% 12%;
+    --card-foreground: 19 33% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 213 53% 12%;
-    --primary: 210 87% 31%;             /* #0A4F95 blue */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 216 28% 93%;           /* #ECEFF4 bg-2 */
-    --secondary-foreground: 213 53% 12%;
-    --muted: 216 28% 93%;
-    --muted-foreground: 215 16% 38%;    /* #4A5868 text-2 */
-    --accent: 211 82% 95%;              /* #E8F0FB blue-soft */
-    --accent-foreground: 210 87% 31%;
-    --destructive: 6 64% 46%;           /* #C0392B red */
+    --popover-foreground: 19 33% 9%;
+    --primary: 14 33% 27%;
+    --primary-foreground: 30 33% 97%;
+    --secondary: 31 25% 89%;
+    --secondary-foreground: 18 35% 16%;
+    --muted: 31 25% 92%;
+    --muted-foreground: 20 10% 42%;
+    --accent: 28 57% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 6 64% 46%;
     --destructive-foreground: 0 0% 100%;
-    --success: 154 75% 33%;             /* #14935C green */
+    --success: 154 58% 33%;
     --success-foreground: 0 0% 100%;
-    --warning: 43 89% 40%;              /* #C2820B amber */
+    --warning: 39 82% 43%;
     --warning-foreground: 0 0% 100%;
-    --border: 215 21% 91%;              /* #E3E7ED border */
-    --input: 215 21% 91%;
-    --ring: 210 87% 31%;
-    --radius: 0.5rem;
-    --progress-active: 210 87% 31%;
-
-    /* sidebar tokens — navy palette */
-    --sidebar-background: 213 87% 9%;    /* #02162A navy */
-    --sidebar-foreground: 213 25% 88%;
-    --sidebar-primary: 210 88% 36%;      /* #0B5BAC blue-hover */
+    --border: 32 24% 87%;
+    --input: 32 24% 87%;
+    --ring: 28 57% 46%;
+    --radius: 0.75rem;
+    --progress-active: 14 33% 27%;
+    --sidebar-background: 18 38% 16%;
+    --sidebar-foreground: 30 33% 97%;
+    --sidebar-primary: 28 57% 46%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 213 56% 18%;       /* #0E2F4D navy-3 */
+    --sidebar-accent: 14 33% 27%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 213 65% 14%;       /* #07223B navy-2 */
-    --sidebar-ring: 210 88% 36%;
-
-    /* legacy aliases kept for base components */
-    --bg-base: 218 25% 96%;
-    --bg-surface-1: 0 0% 100%;
-    --bg-surface-2: 216 28% 93%;
-    --bg-elevated: 0 0% 100%;
-    --bg-subtle-accent: 211 82% 95%;
-    --bg-dark: 213 87% 9%;
-    --bg-darkest: 213 87% 9%;
-    --text-primary: 213 53% 12%;
-    --text-secondary: 215 16% 38%;
-    --text-tertiary: 215 14% 53%;        /* #7A8696 text-3 */
-    --text-on-dark: 213 25% 88%;
-    --text-on-dark-muted: 213 15% 65%;
-    --accent-primary: 210 87% 31%;
-    --accent-primary-hover: 210 88% 36%;
-    --accent-primary-light: 211 82% 95%;
-    --accent-warm: 43 89% 40%;
-    --accent-success: 154 75% 33%;
-    --border-default: 215 21% 91%;
-    --border-subtle: 215 25% 95%;
-
-    /* Hex shortcuts for inline styles — match the palette above. */
-    --text: #0E1B2C;
-    --text-2: #4A5868;
-    --text-3: #7A8696;
-    --bg: #F4F6F9;
-    --bg-2: #ECEFF4;
-    --border-hex: #E3E7ED;
-
-    /* MetasIA-specific named tokens (raw hex via direct CSS use) */
-    --color-navy: #02162A;
-    --color-navy-2: #07223B;
-    --color-navy-3: #0E2F4D;
-    --color-blue: #0A4F95;
-    --color-blue-hover: #0B5BAC;
-    --color-blue-soft: #E8F0FB;
-    --color-green: #14935C;
-    --color-green-bg: #E5F4ED;
-    --color-amber: #C2820B;
-    --color-amber-bg: #FBF1DA;
-    --color-red: #C0392B;
-    --color-red-bg: #FBE8E5;
-
-    --radius-card: 8px;
-    --radius-modal: 12px;
-    --shadow-card: 0 1px 4px rgba(0,0,0,0.08);
-    --shadow-raised: 0 8px 32px rgba(2,22,42,0.18), 0 2px 6px rgba(2,22,42,0.10);
-    --sidebar-w: 232px;
+    --sidebar-border: 15 30% 22%;
+    --sidebar-ring: 28 57% 46%;
+    --brand-primary: #5C3D2E;
+    --brand-primary-soft: #F1E8E3;
+    --brand-accent: #B87333;
+    --brand-accent-soft: #F8EBDD;
+    --brand-navy: #1B2C4E;
+    --brand-navy-soft: #E8ECF4;
+    --brand-dark: #3A2218;
+    --brand-ink: #1E1410;
+    --brand-light: #FAF7F4;
+    --brand-border: #EDE4DA;
+    --color-blue: #5C3D2E;
+    --color-blue-hover: #B87333;
+    --color-blue-soft: #F1E8E3;
+    --color-green: #2F7D5B;
+    --color-green-bg: #E8F3ED;
+    --color-amber: #A66B12;
+    --color-amber-bg: #FAF0DA;
+    --color-red: #B5473C;
+    --color-red-bg: #F8E7E4;
+    --radius-card: 14px;
+    --shadow-card: 0 1px 2px rgba(58,34,24,.04), 0 8px 28px rgba(58,34,24,.045);
+    --shadow-raised: 0 14px 40px rgba(58,34,24,.14);
+    --sidebar-w: 248px;
   }
-
-  .dark {
-    --background: 213 53% 6%;
-    --foreground: 213 25% 92%;
-    --card: 213 53% 9%;
-    --card-foreground: 213 25% 92%;
-    --popover: 213 53% 9%;
-    --popover-foreground: 213 25% 92%;
-    --primary: 210 80% 60%;
-    --primary-foreground: 213 53% 6%;
-    --secondary: 213 53% 12%;
-    --secondary-foreground: 213 25% 92%;
-    --muted: 213 53% 12%;
-    --muted-foreground: 213 15% 65%;
-    --accent: 213 53% 14%;
-    --accent-foreground: 210 80% 75%;
-    --destructive: 6 64% 50%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 154 70% 42%;
-    --warning: 43 85% 50%;
-    --border: 213 30% 18%;
-    --input: 213 30% 18%;
-    --ring: 210 80% 60%;
-    --sidebar-background: 213 87% 5%;
-    --sidebar-foreground: 213 25% 85%;
-    --sidebar-primary: 210 80% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 213 53% 14%;
-    --sidebar-accent-foreground: 213 25% 92%;
-    --sidebar-border: 213 56% 12%;
-    --sidebar-ring: 210 80% 60%;
-    --bg-base: 213 53% 6%;
-    --bg-surface-1: 213 53% 9%;
-    --bg-surface-2: 213 53% 12%;
-    --bg-elevated: 213 53% 11%;
-    --bg-subtle-accent: 213 53% 14%;
-    --bg-dark: 213 87% 5%;
-    --bg-darkest: 213 87% 4%;
-    --text-primary: 213 25% 92%;
-    --text-secondary: 213 15% 65%;
-    --text-tertiary: 213 12% 50%;
-    --text-on-dark: 213 25% 92%;
-    --text-on-dark-muted: 213 15% 65%;
-    --accent-primary: 210 80% 60%;
-    --accent-primary-hover: 210 80% 70%;
-    --accent-primary-light: 213 53% 14%;
-    --accent-warm: 43 85% 55%;
-    --accent-success: 154 70% 45%;
-    --border-default: 213 30% 18%;
-    --border-subtle: 213 25% 14%;
-  }
-}
-
-@layer base {
+  .dark { --background: 18 36% 8%; --foreground: 30 33% 95%; --card: 18 32% 11%; --card-foreground: 30 33% 95%; --popover: 18 32% 11%; --popover-foreground: 30 33% 95%; --primary: 28 57% 55%; --primary-foreground: 18 36% 8%; --secondary: 18 25% 15%; --secondary-foreground: 30 33% 95%; --muted: 18 25% 15%; --muted-foreground: 30 10% 65%; --accent: 28 57% 46%; --accent-foreground: 0 0% 100%; --border: 18 20% 20%; --input: 18 20% 20%; --ring: 28 57% 55%; }
   * { @apply border-border; }
-  body { @apply bg-background text-foreground font-sans antialiased; }
+  body { @apply bg-background text-foreground antialiased; font-family: 'DM Sans', sans-serif; }
 }
 
 @layer utilities {
+  .font-display { font-family: 'Playfair Display', serif; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
   .scrollbar-hide::-webkit-scrollbar { display: none; }
-
   .status-dot-verde { @apply inline-block w-2.5 h-2.5 rounded-full; background-color: var(--color-green); }
   .status-dot-amarelo { @apply inline-block w-2.5 h-2.5 rounded-full; background-color: var(--color-amber); }
   .status-dot-vermelho { @apply inline-block w-2.5 h-2.5 rounded-full; background-color: var(--color-red); }
 }
 
 @layer components {
-  .lp-section-light { background-color: hsl(0 0% 93%); color: hsl(213 90% 9%); }
-  .lp-section-dark { background-color: hsl(214 93% 6%); }
-  .lp-solid-card { background: hsl(0 0% 100%); border: 1px solid hsl(0 0% 88%); border-radius: 0.75rem; }
-  .lp-solid-card-dark { background: hsl(213 70% 11%); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.75rem; }
-  .lp-glass-card { background: rgba(255,255,255,0.06); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; }
-  .lp-btn-primary-indigo { @apply font-semibold px-8 py-4 rounded-xl transition-all duration-200; background-color: var(--color-blue); color: #FFFFFF; }
-  .lp-btn-primary-indigo:hover { background-color: var(--color-blue-hover); color: #FFFFFF; }
-  .lp-btn-ghost-clean { @apply font-semibold px-8 py-4 rounded-xl transition-all duration-200; border: 1px solid rgba(255,255,255,0.15); color: white; background: transparent; }
-  .lp-btn-ghost-clean:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); }
-  .lp-section-spacing { @apply py-24 lg:py-32; }
-
-  /* MetasIA card primitives */
-  .metasia-card {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-card);
-  }
+  .performance-page { max-width: 1440px; margin: 0 auto; }
+  .performance-hero { position: relative; overflow: hidden; border-radius: 20px; padding: 30px; color: white; background: linear-gradient(135deg, #3A2218 0%, #5C3D2E 58%, #8D552D 100%); box-shadow: 0 18px 50px rgba(58,34,24,.18); }
+  .performance-hero::after { content: ''; position: absolute; width: 320px; height: 320px; right: -80px; top: -170px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 0 0 55px rgba(255,255,255,.025), 0 0 0 110px rgba(255,255,255,.02); }
+  .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .2em; color: #D9A66D; }
+  .performance-card, .metasia-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
   .metasia-card-raised { box-shadow: var(--shadow-raised); }
-
-  /* status chips — solid bg */
+  .brand-button { background: var(--brand-accent) !important; color: white !important; }
+  .brand-button:hover { background: #A56227 !important; }
   .chip-status-verde { background-color: var(--color-green-bg); color: var(--color-green); }
   .chip-status-amarelo { background-color: var(--color-amber-bg); color: var(--color-amber); }
   .chip-status-vermelho { background-color: var(--color-red-bg); color: var(--color-red); }
 }
 
-/* === Global guard: blue/primary buttons MUST have white text in every state ===
-   Forces white on the button AND every descendant, so child spans/icons with
-   their own text color classes don't end up invisible on a solid blue bg.
-   The inline-style selector excludes blue-soft (light surface) and blue-hover
-   (handled separately) so it only fires for true solid-blue buttons.
-*/
-:where(
-  button.bg-primary,
-  button.bg-primary *,
-  a.bg-primary,
-  a.bg-primary *,
-  .btn-primary,
-  .btn-primary *,
-  .lp-btn-primary-indigo,
-  .lp-btn-primary-indigo *,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"]),
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"]) *,
-  button[style*="var(--color-blue-hover)"],
-  button[style*="var(--color-blue-hover)"] *,
-  a[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])[role="button"],
-  a[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])[role="button"] *
-) {
-  color: #FFFFFF !important;
-}
+:where(button.bg-primary, button.bg-primary *, a.bg-primary, a.bg-primary *, .brand-button, .brand-button *) { color: #FFFFFF !important; }
 
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):hover,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):hover *,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):focus,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):focus *,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):focus-visible,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):focus-visible *,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):active,
-:where(
-  button.bg-primary,
-  a.bg-primary,
-  .btn-primary,
-  .lp-btn-primary-indigo,
-  button[style*="var(--color-blue)"]:not([style*="var(--color-blue-soft)"]):not([style*="var(--color-blue-hover)"])
-):active * {
-  color: #FFFFFF !important;
-}
-
-
-
-
+@media (max-width: 640px) { .performance-hero { padding: 24px 20px; border-radius: 16px; } }

@@ -13,89 +13,32 @@ import DashboardPage from "./pages/DashboardPage";
 import MetasPage from "./pages/MetasPage";
 import AnaliseMetaPage from "./pages/AnaliseMetaPage";
 import PlanosPage from "./pages/PlanosPage";
+import CalendarPage from "./pages/CalendarPage";
+import WeeklyPlanningPage from "./pages/WeeklyPlanningPage";
 import RelatoriosPage from "./pages/RelatoriosPage";
 import AjudaPage from "./pages/AjudaPage";
 import SettingsPage from "./pages/SettingsPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    },
-  },
-});
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false } } });
+function TriggerHealthCheck() { useEffect(() => { const checked = sessionStorage.getItem("auth_trigger_checked"); if (checked) return; supabase.functions.invoke("ensure-auth-trigger").then(({ data, error }) => { sessionStorage.setItem("auth_trigger_checked", "1"); if (error || !(data as { ok?: boolean })?.ok) console.warn("[Auth Setup] Trigger check failed:", error || (data as { message?: string })?.message); }).catch((err) => console.warn("[Auth Setup]", err)); }, []); return null; }
 
-function TriggerHealthCheck() {
-  useEffect(() => {
-    const checked = sessionStorage.getItem("auth_trigger_checked");
-    if (checked) return;
-    supabase.functions
-      .invoke("ensure-auth-trigger")
-      .then(({ data, error }) => {
-        sessionStorage.setItem("auth_trigger_checked", "1");
-        if (error || !(data as { ok?: boolean })?.ok) {
-          console.warn(
-            "[Auth Setup] Trigger check failed:",
-            error || (data as { message?: string })?.message,
-          );
-        }
-      })
-      .catch((err) => console.warn("[Auth Setup]", err));
-  }, []);
-  return null;
-}
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <TriggerHealthCheck />
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/pending-approval" element={
-              <ProtectedRoute allowUnapproved><PendingApprovalPage /></ProtectedRoute>
-            } />
-            <Route path="/onboarding" element={
-              <ProtectedRoute><OnboardingPage /></ProtectedRoute>
-            } />
-            <Route path="/dashboard" element={
-              <ProtectedRoute><DashboardPage /></ProtectedRoute>
-            } />
-            <Route path="/metas" element={
-              <ProtectedRoute><MetasPage /></ProtectedRoute>
-            } />
-            <Route path="/metas/:id/analise" element={
-              <ProtectedRoute><AnaliseMetaPage /></ProtectedRoute>
-            } />
-            <Route path="/planos" element={
-              <ProtectedRoute><PlanosPage /></ProtectedRoute>
-            } />
-            <Route path="/relatorios" element={
-              <ProtectedRoute><RelatoriosPage /></ProtectedRoute>
-            } />
-            <Route path="/ajuda" element={
-              <ProtectedRoute><AjudaPage /></ProtectedRoute>
-            } />
-            <Route path="/configuracoes/*" element={
-              <ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>
-            } />
-            {/* Legacy alias kept for any in-flight links */}
-            <Route path="/settings/*" element={<Navigate to="/configuracoes" replace />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
-
+const App = () => <QueryClientProvider client={queryClient}><TooltipProvider><Toaster /><Sonner /><BrowserRouter><AuthProvider><TriggerHealthCheck /><Routes>
+  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+  <Route path="/auth" element={<AuthPage />} />
+  <Route path="/pending-approval" element={<ProtectedRoute allowUnapproved><PendingApprovalPage /></ProtectedRoute>} />
+  <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
+  <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+  <Route path="/metas" element={<ProtectedRoute><MetasPage /></ProtectedRoute>} />
+  <Route path="/metas/:id/analise" element={<ProtectedRoute><AnaliseMetaPage /></ProtectedRoute>} />
+  <Route path="/planos" element={<ProtectedRoute><PlanosPage /></ProtectedRoute>} />
+  <Route path="/calendario" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+  <Route path="/planejamento-semanal" element={<ProtectedRoute><WeeklyPlanningPage /></ProtectedRoute>} />
+  <Route path="/relatorios" element={<ProtectedRoute><RelatoriosPage /></ProtectedRoute>} />
+  <Route path="/ajuda" element={<ProtectedRoute><AjudaPage /></ProtectedRoute>} />
+  <Route path="/configuracoes/*" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
+  <Route path="/settings/*" element={<Navigate to="/configuracoes" replace />} />
+  <Route path="*" element={<NotFound />} />
+</Routes></AuthProvider></BrowserRouter></TooltipProvider></QueryClientProvider>;
 export default App;
