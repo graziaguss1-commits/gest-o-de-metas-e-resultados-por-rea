@@ -138,7 +138,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white">
-                <Link to="/planos"><CalendarDays className="mr-2 h-4 w-4" />Planejar semana</Link>
+                <Link to="/planejamento-semanal"><CalendarDays className="mr-2 h-4 w-4" />Planejar semana</Link>
               </Button>
               <Button onClick={() => setNovaOpen(true)} className="brand-button">
                 <Plus className="mr-2 h-4 w-4" />Nova meta
@@ -170,7 +170,7 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <SectionHeading title="Prioridades da semana" subtitle="Seu foco estratégico para os próximos dias" action="Planejar" href="/planos" />
+          <SectionHeading title="Prioridades da semana" subtitle="Seu foco estratégico para os próximos dias" action="Planejar" href="/planejamento-semanal" />
           {isLoading ? <Skeleton className="h-44 w-full" /> : prioridades.length === 0 ? (
             <EmptyState title="Defina o foco da sua semana" text="Crie sua primeira meta e transforme intenção em execução." onCreate={() => setNovaOpen(true)} />
           ) : (
