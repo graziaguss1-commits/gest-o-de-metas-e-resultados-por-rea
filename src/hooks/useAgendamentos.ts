@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agendamento } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
-import { configuracaoRecorrenciaCompleta, dataCorrespondeRecorrencia } from "@/lib/agenda";
+import { configuracaoRecorrenciaCompleta, dataCorrespondeRecorrencia, diasRecorrenciaPersistida } from "@/lib/agenda";
 
 const KEY = ["agendamentos"] as const;
 
@@ -110,12 +110,13 @@ export function useMaterializarRecorrencias() {
       const hoje = new Date().toISOString().slice(0,10);
       const { data: user } = await supabase.auth.getUser();
       const rows = tarefas.flatMap((t) => {
+        const dias = diasRecorrenciaPersistida(t.frequencia, t.dias_semana);
         if (
           !configuracaoRecorrenciaCompleta(
             t.frequencia,
             t.duracao_minutos,
             t.horario_preferencial,
-            t.dias_semana,
+            dias,
           )
         ) {
           return [];
@@ -132,7 +133,7 @@ export function useMaterializarRecorrencias() {
 
           const date = new Date(`${data}T12:00:00`);
           return (
-            dataCorrespondeRecorrencia(t.frequencia, date, t.dias_semana) &&
+            dataCorrespondeRecorrencia(t.frequencia, date, dias) &&
             !chaves.has(`${t.id}|${data}`)
           );
         }).map((data) => ({
