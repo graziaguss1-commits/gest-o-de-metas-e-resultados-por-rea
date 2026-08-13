@@ -99,19 +99,31 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
     if (next.unidadeFixa) setUnidade(next.unidadeFixa);
     else if (next.unidadeOpcoes) setUnidade(next.unidadeOpcoes[0]);
     else setUnidade("");
+
+    if (t === "projeto") {
+      setValorAlvo("0");
+      setIsInverse(false);
+    } else {
+      setValorAlvo("");
+    }
   };
 
   const resolveUnidade = () => cfg.unidadeFixa ?? unidade.trim();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const valor = Number(valorAlvo.replace(/\./g, "").replace(",", "."));
+    const projetoAutomatico = metricType === "projeto";
+    const valor = projetoAutomatico
+      ? isEdit
+        ? Number(meta?.valor_alvo ?? 0)
+        : 0
+      : Number(valorAlvo.replace(/\./g, "").replace(",", "."));
     const unidadeFinal = resolveUnidade();
 
     if (!nome.trim()) return toast.error("Informe o nome da meta.");
     if (!area) return toast.error("Selecione uma área.");
     if (!metricType) return toast.error("Escolha como esta meta será medida.");
-    if (!Number.isFinite(valor) || valor <= 0)
+    if (!projetoAutomatico && (!Number.isFinite(valor) || valor <= 0))
       return toast.error(`${cfg.alvoLabel} precisa ser um número positivo.`);
     if (!unidadeFinal)
       return toast.error(cfg.unidadeLabel ? `Informe: ${cfg.unidadeLabel}` : "Informe a unidade.");
@@ -129,7 +141,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       periodicidade: periodicidade as "mensal" | "trimestral" | "anual",
       data_inicio: dataInicio,
       data_fim: dataFim,
-      is_inverse: isInverse,
+      is_inverse: projetoAutomatico ? false : isInverse,
     };
 
     try {
@@ -219,72 +231,96 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
             <p className="text-xs text-muted-foreground">{cfg.ajuda}</p>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="alvo">{cfg.alvoLabel} *</Label>
-              <div className="relative">
-                {cfg.prefixo && (
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    {cfg.prefixo}
-                  </span>
-                )}
-                <Input
-                  id="alvo"
-                  type="text"
-                  inputMode="decimal"
-                  value={valorAlvo}
-                  onChange={(e) => setValorAlvo(e.target.value)}
-                  placeholder={cfg.alvoPlaceholder}
-                  className={cfg.prefixo ? "pl-10" : cfg.sufixo ? "pr-16" : undefined}
-                  required
-                />
-                {cfg.sufixo && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    {cfg.sufixo}
-                  </span>
-                )}
+          {metricType === "projeto" ? (
+            <div className="rounded-xl border border-[var(--brand-accent)]/30 bg-[var(--brand-accent-soft)]/50 p-4">
+              <div className="text-sm font-semibold text-[var(--brand-primary)]">
+                Etapas calculadas automaticamente
               </div>
-            </div>
-
-            {cfg.unidadeFixa ? (
-              <div className="space-y-1.5">
-                <Label>Unidade</Label>
-                <div className="h-10 flex items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
-                  {cfg.unidadeFixa} · definida automaticamente
+              <p className="mt-1 text-sm text-muted-foreground">
+                Cada plano de ação vinculado a esta meta será uma nova etapa. Você não precisa
+                definir o total agora.
+              </p>
+              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                <div className="rounded-lg bg-background/70 px-3 py-2">
+                  <strong>1 plano vinculado</strong>
+                  <span className="block text-muted-foreground">= 1 etapa do projeto</span>
+                </div>
+                <div className="rounded-lg bg-background/70 px-3 py-2">
+                  <strong>Etapa concluída</strong>
+                  <span className="block text-muted-foreground">
+                    quando todas as ações do plano forem concluídas
+                  </span>
                 </div>
               </div>
-            ) : cfg.unidadeOpcoes ? (
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>{cfg.unidadeLabel} *</Label>
-                <Select value={unidade || cfg.unidadeOpcoes[0]} onValueChange={setUnidade}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cfg.unidadeOpcoes.map((u) => (
-                      <SelectItem key={u} value={u} className="capitalize">
-                        {u}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="alvo">{cfg.alvoLabel} *</Label>
+                <div className="relative">
+                  {cfg.prefixo && (
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      {cfg.prefixo}
+                    </span>
+                  )}
+                  <Input
+                    id="alvo"
+                    type="text"
+                    inputMode="decimal"
+                    value={valorAlvo}
+                    onChange={(e) => setValorAlvo(e.target.value)}
+                    placeholder={cfg.alvoPlaceholder}
+                    className={cfg.prefixo ? "pl-10" : cfg.sufixo ? "pr-16" : undefined}
+                    required
+                  />
+                  {cfg.sufixo && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      {cfg.sufixo}
+                    </span>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="unidade">{cfg.unidadeLabel} *</Label>
-                <Input
-                  id="unidade"
-                  value={unidade}
-                  onChange={(e) => setUnidade(e.target.value)}
-                  placeholder={cfg.unidadePlaceholder}
-                  required
-                />
-                {cfg.unidadeAjuda && (
-                  <p className="text-xs text-muted-foreground">{cfg.unidadeAjuda}</p>
-                )}
-              </div>
-            )}
-          </div>
+
+              {cfg.unidadeFixa ? (
+                <div className="space-y-1.5">
+                  <Label>Unidade</Label>
+                  <div className="h-10 flex items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                    {cfg.unidadeFixa} · definida automaticamente
+                  </div>
+                </div>
+              ) : cfg.unidadeOpcoes ? (
+                <div className="space-y-1.5">
+                  <Label>{cfg.unidadeLabel} *</Label>
+                  <Select value={unidade || cfg.unidadeOpcoes[0]} onValueChange={setUnidade}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cfg.unidadeOpcoes.map((u) => (
+                        <SelectItem key={u} value={u} className="capitalize">
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="unidade">{cfg.unidadeLabel} *</Label>
+                  <Input
+                    id="unidade"
+                    value={unidade}
+                    onChange={(e) => setUnidade(e.target.value)}
+                    placeholder={cfg.unidadePlaceholder}
+                    required
+                  />
+                  {cfg.unidadeAjuda && (
+                    <p className="text-xs text-muted-foreground">{cfg.unidadeAjuda}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
@@ -324,15 +360,17 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-lg border p-3 bg-muted/30">
-            <div className="space-y-0.5">
-              <Label className="cursor-pointer">Meta inversa (menor é melhor)</Label>
-              <p className="text-xs text-muted-foreground">
-                Para churn, tempo de resposta, custos, etc.
-              </p>
+          {metricType !== "projeto" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3 bg-muted/30">
+              <div className="space-y-0.5">
+                <Label className="cursor-pointer">Meta inversa (menor é melhor)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Para churn, tempo de resposta, custos, etc.
+                </p>
+              </div>
+              <Switch checked={isInverse} onCheckedChange={setIsInverse} />
             </div>
-            <Switch checked={isInverse} onCheckedChange={setIsInverse} />
-          </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="desc">Descrição (opcional)</Label>
