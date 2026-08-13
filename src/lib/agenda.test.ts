@@ -4,6 +4,7 @@ import {
   comparativoTempo,
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
+  diasRecorrenciaPersistida,
   labelMomentoRecorrencia,
   formatDuracao,
   formatTotalHoras,
@@ -85,5 +86,11 @@ describe("recorrências da agenda", () => {
   it("não considera completa uma recorrência sem dia, horário ou duração", () => {
     expect(configuracaoRecorrenciaCompleta("semanal", 60, "09:00", null)).toBe(false);
     expect(configuracaoRecorrenciaCompleta("mensal", 60, "09:00", [10])).toBe(true);
+  });
+
+  it("preserva os padrões das rotinas antigas", () => {
+    expect(diasRecorrenciaPersistida("diaria", null)).toEqual([1, 2, 3, 4, 5]);
+    expect(diasRecorrenciaPersistida("semanal", null)).toEqual([1]);
+    expect(diasRecorrenciaPersistida("mensal", null)).toEqual([1]);
   });
 });
