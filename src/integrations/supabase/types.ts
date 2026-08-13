@@ -348,6 +348,9 @@ export type Database = {
           data_fim: string | null
           data_inicio: string | null
           descricao: string
+          dias_semana: number[] | null
+          duracao_estimada_minutos: number | null
+          horario_preferencial: string | null
           esforco: number
           frequencia: string
           id: string
@@ -365,6 +368,9 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string | null
           descricao: string
+          dias_semana?: number[] | null
+          duracao_estimada_minutos?: number | null
+          horario_preferencial?: string | null
           esforco?: number
           frequencia?: string
           id?: string
@@ -382,6 +388,9 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string | null
           descricao?: string
+          dias_semana?: number[] | null
+          duracao_estimada_minutos?: number | null
+          horario_preferencial?: string | null
           esforco?: number
           frequencia?: string
           id?: string
@@ -517,6 +526,7 @@ export type Database = {
           quantidade: number
           registrado_por: string | null
           tarefa_id: string
+          tempo_real_minutos: number | null
           updated_at: string
         }
         Insert: {
@@ -527,6 +537,7 @@ export type Database = {
           quantidade?: number
           registrado_por?: string | null
           tarefa_id: string
+          tempo_real_minutos?: number | null
           updated_at?: string
         }
         Update: {
@@ -537,6 +548,7 @@ export type Database = {
           quantidade?: number
           registrado_por?: string | null
           tarefa_id?: string
+          tempo_real_minutos?: number | null
           updated_at?: string
         }
         Relationships: [
