@@ -134,7 +134,11 @@ export function useCreatePlano() {
           responsavel_id: t.responsavel_id ?? null,
           data_inicio: t.data_inicio || null,
           data_fim: t.data_fim || null,
+          duracao_minutos: t.duracao_minutos ?? null,
+          horario_preferencial: t.horario_preferencial || null,
+          dias_semana: t.dias_semana ?? null,
         }));
+
 
       if (taskRows.length > 0) {
         const { error: tErr } = await supabase.from("plano_tarefas").insert(taskRows);
