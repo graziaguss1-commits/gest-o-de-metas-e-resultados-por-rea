@@ -203,7 +203,35 @@ export function useAddTarefa() {
         responsavel_id: t.responsavel_id ?? null,
         data_inicio: t.data_inicio || null,
         data_fim: t.data_fim || null,
+        duracao_minutos: t.duracao_minutos ?? null,
+        horario_preferencial: t.horario_preferencial || null,
+        dias_semana: t.dias_semana ?? null,
       });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+  });
+}
+
+/** Atualiza campos de uma ação existente (inclui duração/horário/dias). */
+export function useUpdateTarefa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...patch
+    }: {
+      id: string;
+      descricao?: string;
+      prazo?: string | null;
+      frequencia?: string;
+      quantidade_planejada?: number;
+      unidade?: string;
+      duracao_minutos?: number | null;
+      horario_preferencial?: string | null;
+      dias_semana?: number[] | null;
+    }) => {
+      const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
@@ -219,11 +247,14 @@ export function useRegistrarExecucao() {
       quantidade,
       data,
       observacao,
+      tempoRealMinutos,
     }: {
       tarefaId: string;
       quantidade: number;
       data: string;
       observacao?: string | null;
+      /** Tempo real gasto — nunca substitui a estimativa da ação. */
+      tempoRealMinutos?: number | null;
     }) => {
       const { data: user } = await supabase.auth.getUser();
       const uid = user.user?.id;
@@ -233,6 +264,7 @@ export function useRegistrarExecucao() {
         quantidade,
         data_referencia: data,
         observacao: observacao?.trim() || null,
+        tempo_real_minutos: tempoRealMinutos ?? null,
         registrado_por: uid,
       });
       if (error) throw error;
@@ -243,6 +275,7 @@ export function useRegistrarExecucao() {
     },
   });
 }
+
 
 export function useDeletePlano() {
   const qc = useQueryClient();
