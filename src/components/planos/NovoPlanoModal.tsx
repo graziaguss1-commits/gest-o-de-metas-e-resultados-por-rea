@@ -36,6 +36,9 @@ type LinhaTarefa = {
   unidade: string;
   impacto: string;
   esforco: string;
+  duracao: string;
+  horario: string;
+  diasSemana: number[];
 };
 
 const linhaVazia = (): LinhaTarefa => ({
@@ -46,6 +49,9 @@ const linhaVazia = (): LinhaTarefa => ({
   unidade: "",
   impacto: "5",
   esforco: "5",
+  duracao: "45",
+  horario: "",
+  diasSemana: [1, 2, 3, 4, 5],
 });
 
 export function NovoPlanoModal({ open, onOpenChange }: Props) {
@@ -81,6 +87,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           unidade: t.unidade,
           impacto: Number(t.impacto) || 5,
           esforco: Number(t.esforco) || 5,
+          duracao_estimada_minutos: Number(t.duracao) || null,
+          horario_preferencial: t.horario || null,
+          dias_semana: t.frequencia === "diaria" ? t.diasSemana : null,
         })),
       });
       toast.success("Plano criado");
@@ -196,6 +205,37 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     onChange={(e) => patch(i, { prazo: e.target.value })}
                   />
                 </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Duração por execução</Label>
+                    <Select value={t.duracao} onValueChange={(v) => patch(i, { duracao: v })}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[15, 30, 45, 60, 90, 120].map((min) => (
+                          <SelectItem key={min} value={String(min)}>
+                            {min < 60 ? `${min} min` : min === 60 ? "1h" : min === 90 ? "1h30" : "2h"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Horário preferencial (opcional)</Label>
+                    <Input type="time" className="h-9" value={t.horario} onChange={(e) => patch(i, { horario: e.target.value })} />
+                  </div>
+                </div>
+                {t.frequencia === "diaria" && (
+                  <div>
+                    <Label className="text-xs">Dias de execução</Label>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((label, day) => {
+                        const active = t.diasSemana.includes(day);
+                        return <Button key={day} type="button" size="sm" variant={active ? "default" : "outline"} className="h-8 px-2 text-xs" onClick={() => patch(i, { diasSemana: active ? t.diasSemana.filter((d) => d !== day) : [...t.diasSemana, day].sort() })}>{label}</Button>;
+                      })}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">A duração reserva um bloco no calendário; o prazo final continua separado.</p>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                   <label className="flex items-center gap-1.5">
                     Impacto
