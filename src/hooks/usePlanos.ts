@@ -16,6 +16,91 @@ export type PlanoWithMeta = Plano & {
   tarefas: Tarefa[];
 };
 
+async function metaIdDoPlano(planoId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("planos_acao")
+    .select("meta_id")
+    .eq("id", planoId)
+    .maybeSingle();
+  return data?.meta_id ?? null;
+}
+
+/**
+ * Em metas do tipo projeto, cada plano vinculado é uma etapa.
+ * A etapa é concluída quando o plano possui ações e todas estão concluídas.
+ */
+async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
+  if (!metaId) return;
+
+  const { data: meta, error: metaError } = await supabase
+    .from("metas")
+    .select("metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status")
+    .eq("id", metaId)
+    .maybeSingle();
+  if (metaError || !meta) return;
+
+  const projeto = meta.metric_type === "projeto" || meta.unidade === "etapas";
+  if (!projeto) return;
+
+  const { data: planos, error: planosError } = await supabase
+    .from("planos_acao")
+    .select("id")
+    .eq("meta_id", metaId);
+  if (planosError) return;
+
+  const ids = (planos ?? []).map((plano) => plano.id);
+  let tarefas: Pick<Tarefa, "plano_id" | "concluida">[] = [];
+  if (ids.length) {
+    const { data, error } = await supabase
+      .from("plano_tarefas")
+      .select("plano_id,concluida")
+      .in("plano_id", ids);
+    if (error) return;
+    tarefas = (data ?? []) as Pick<Tarefa, "plano_id" | "concluida">[];
+  }
+
+  const concluidas = ids.filter((planoId) => {
+    const tarefasDoPlano = tarefas.filter((tarefa) => tarefa.plano_id === planoId);
+    return tarefasDoPlano.length > 0 && tarefasDoPlano.every((tarefa) => tarefa.concluida);
+  }).length;
+  const total = ids.length;
+
+  const statusAnterior = meta.status as "verde" | "amarelo" | "vermelho";
+  let statusCalculado: "verde" | "amarelo" | "vermelho" =
+    total === 0 ? "amarelo" : statusAnterior;
+
+  if (total > 0) {
+    const { data } = await supabase.rpc("calcular_status_meta", {
+      p_valor_atual: concluidas,
+      p_valor_alvo: total,
+      p_data_inicio: meta.data_inicio,
+      p_data_fim: meta.data_fim,
+      p_is_inverse: false,
+    });
+    statusCalculado =
+      (data as "verde" | "amarelo" | "vermelho" | null) ?? statusAnterior;
+  }
+
+  if (
+    Number(meta.valor_alvo) === total &&
+    Number(meta.valor_atual) === concluidas &&
+    meta.is_inverse === false &&
+    meta.status === statusCalculado
+  ) {
+    return;
+  }
+
+  await supabase
+    .from("metas")
+    .update({
+      valor_alvo: total,
+      valor_atual: concluidas,
+      is_inverse: false,
+      status: statusCalculado,
+    })
+    .eq("id", metaId);
+}
+
 export function usePlanos() {
   return useQuery({
     queryKey: PLANOS_KEY,
@@ -24,7 +109,7 @@ export function usePlanos() {
         await Promise.all([
           supabase.from("planos_acao").select("*").order("created_at", { ascending: false }),
           supabase.from("plano_tarefas").select("*").order("ordem", { ascending: true }),
-          supabase.from("metas").select("id, nome, status, area"),
+          supabase.from("metas").select("id, nome, status, area, metric_type, unidade"),
         ]);
       if (pErr) throw pErr;
       if (tErr) throw tErr;
@@ -37,13 +122,19 @@ export function usePlanos() {
         tarefasByPlano.set(t.plano_id, arr);
       });
 
-      return (planos ?? []).map((p) => ({
+      const resultado = (planos ?? []).map((p) => ({
         ...(p as Plano),
         meta: p.meta_id
           ? (metaById.get(p.meta_id) as PlanoWithMeta["meta"]) ?? null
           : null,
         tarefas: tarefasByPlano.get(p.id) ?? [],
       }));
+
+      const metasDeProjeto = (metas ?? [])
+        .filter((meta) => meta.metric_type === "projeto" || meta.unidade === "etapas")
+        .map((meta) => meta.id);
+      await Promise.all(metasDeProjeto.map((metaId) => sincronizarEtapasDaMeta(metaId)));
+      return resultado;
     },
   });
 }
@@ -144,10 +235,14 @@ export function useCreatePlano() {
         const { error: tErr } = await supabase.from("plano_tarefas").insert(taskRows);
         if (tErr) throw tErr;
       }
+      await sincronizarEtapasDaMeta(input.meta_id);
       return plano as Plano;
     },
 
-    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["metas"] });
+    },
   });
 }
 
@@ -163,13 +258,20 @@ export function useUpdatePlano() {
       titulo: string;
       meta_id: string | null;
     }) => {
+      const metaAnterior = await metaIdDoPlano(id);
       const { error } = await supabase
         .from("planos_acao")
         .update({ titulo: titulo.trim(), meta_id })
         .eq("id", id);
       if (error) throw error;
+
+      const metasAfetadas = [...new Set([metaAnterior, meta_id].filter(Boolean))] as string[];
+      await Promise.all(metasAfetadas.map((meta) => sincronizarEtapasDaMeta(meta)));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["metas"] });
+    },
   });
 }
 
@@ -177,11 +279,20 @@ export function useToggleTarefa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, concluida }: { id: string; concluida: boolean }) => {
+      const { data: tarefa } = await supabase
+        .from("plano_tarefas")
+        .select("plano_id")
+        .eq("id", id)
+        .maybeSingle();
       const { error } = await supabase
         .from("plano_tarefas")
         .update({ concluida })
         .eq("id", id);
       if (error) throw error;
+
+      if (tarefa?.plano_id) {
+        await sincronizarEtapasDaMeta(await metaIdDoPlano(tarefa.plano_id));
+      }
     },
     onMutate: async ({ id, concluida }) => {
       await qc.cancelQueries({ queryKey: PLANOS_KEY });
@@ -200,7 +311,10 @@ export function useToggleTarefa() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(PLANOS_KEY, ctx.prev);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["metas"] });
+    },
   });
 }
 
@@ -230,8 +344,12 @@ export function useAddTarefa() {
         dias_semana: t.dias_semana ?? null,
       });
       if (error) throw error;
+      await sincronizarEtapasDaMeta(await metaIdDoPlano(planoId));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["metas"] });
+    },
   });
 }
 
@@ -343,9 +461,14 @@ export function useDeletePlano() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const metaId = await metaIdDoPlano(id);
       const { error } = await supabase.from("planos_acao").delete().eq("id", id);
       if (error) throw error;
+      await sincronizarEtapasDaMeta(metaId);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["metas"] });
+    },
   });
 }

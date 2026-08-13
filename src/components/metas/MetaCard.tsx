@@ -4,6 +4,7 @@ import { ChevronDown, History, Plus, Sparkles, Calendar, Pencil } from "lucide-r
 import {
   formatDateISOToBR,
   formatProgresso,
+  getMetricType,
   progressoEsperado,
   progressoReal,
   type MetaWithResponsavel,
@@ -36,6 +37,7 @@ function initials(name?: string | null) {
 export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico, onEditar }: Props) {
   const [open, setOpen] = useState(!!defaultOpen);
   const status = meta.status as Status;
+  const projetoPorEtapas = getMetricType(meta) === "projeto";
   const real = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
   const esperado = progressoEsperado(meta.data_inicio, meta.data_fim);
 
@@ -115,20 +117,38 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
             <p className="text-sm text-muted-foreground">{meta.descricao}</p>
           )}
 
+          {projetoPorEtapas && (
+            <p className="rounded-lg bg-[var(--brand-accent-soft)] px-3 py-2 text-xs text-muted-foreground">
+              O total e o progresso são atualizados pelos planos vinculados. Cada plano representa
+              uma etapa; ela é concluída quando todas as suas ações forem concluídas.
+            </p>
+          )}
+
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              onClick={() => onLancarResultado(meta)}
-              style={{ backgroundColor: "var(--color-blue)", color: "white" }}
-              className="hover:opacity-90"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Atualizar resultado
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onVerHistorico(meta)}>
-              <History className="h-4 w-4 mr-1.5" />
-              Histórico de medições
-            </Button>
+            {projetoPorEtapas ? (
+              <Button size="sm" asChild style={{ backgroundColor: "var(--color-blue)", color: "white" }}>
+                <Link to="/planos">
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Adicionar etapa pelo plano
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => onLancarResultado(meta)}
+                  style={{ backgroundColor: "var(--color-blue)", color: "white" }}
+                  className="hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Atualizar resultado
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onVerHistorico(meta)}>
+                  <History className="h-4 w-4 mr-1.5" />
+                  Histórico de medições
+                </Button>
+              </>
+            )}
             {onEditar && (
               <Button size="sm" variant="outline" onClick={() => onEditar(meta)}>
                 <Pencil className="h-4 w-4 mr-1.5" />
