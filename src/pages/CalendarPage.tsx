@@ -53,8 +53,22 @@ export default function CalendarPage() {
   const capacidade = settings?.capacidade_diaria_minutos ?? 480;
   const tasks = useMemo<CalendarTask[]>(() => (planos ?? []).flatMap((plano) => plano.tarefas.map((task) => ({ ...task, plano: plano.titulo, area: plano.meta?.area ?? "Sem área", meta: plano.meta?.nome ?? null }))), [planos]);
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const taskIdsAgendadosNaSemana = useMemo(() => new Set(agendamentos.map((a) => a.tarefa_id)), [agendamentos]);
+  const inicioSemana = iso(days[0]);
+  const fimSemana = iso(days[6]);
+  const temRotinaAutomaticaAtiva = (task: CalendarTask) =>
+    ["diaria", "semanal", "mensal"].includes(task.frequencia) &&
+    Boolean(task.horario_preferencial) &&
+    Boolean(task.duracao_minutos) &&
+    (!task.data_inicio || task.data_inicio <= fimSemana) &&
+    (!task.data_fim || task.data_fim >= inicioSemana);
+  const availableToSchedule = tasks.filter((task) =>
+    !task.concluida &&
+    !taskIdsAgendadosNaSemana.has(task.id) &&
+    !temRotinaAutomaticaAtiva(task)
+  );
   const overdue = tasks.filter((task) => !task.concluida && task.prazo && task.prazo < iso(new Date()));
-  const withoutDate = tasks.filter((task) => !task.concluida && !task.prazo);
+  const withoutDate = availableToSchedule.filter((task) => !task.prazo);
   const weekLabel = `${days[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} — ${days[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
   const minutosCompromissos = compromissos.reduce((total, c) => { const [hi,mi]=c.hora_inicio.split(":").map(Number); const [hf,mf]=c.hora_fim.split(":").map(Number); return total + (hf*60+mf-hi*60-mi); }, 0);
   const minutosSemana = totalSemana(days.map(iso), agendamentos) + minutosCompromissos;
@@ -74,7 +88,7 @@ export default function CalendarPage() {
       <CalendarMetric label="Compromissos" value={String(compromissos.length)} tone="primary" />
       <CalendarMetric label="Tempo planejado na semana" value={formatTotalHoras(minutosSemana)} tone="accent" />
       <CalendarMetric label="Atrasadas (prazo)" value={String(overdue.length)} tone="red" />
-      <CalendarMetric label="Sem data" value={String(withoutDate.length)} tone="accent" />
+      <CalendarMetric label="Sem agendamento" value={String(withoutDate.length)} tone="accent" />
     </section>
 
     <div className="flex justify-end gap-2"><Button size="sm" variant={calendarView==="horas"?"default":"outline"} onClick={()=>setCalendarView("horas")}>Por horário</Button><Button size="sm" variant={calendarView==="compacto"?"default":"outline"} onClick={()=>setCalendarView("compacto")}>Compacto</Button></div>
@@ -129,18 +143,18 @@ export default function CalendarPage() {
       </div>}
     </div>
 
-    <section className="performance-card p-4">
-      <h2 className="font-display text-lg font-semibold">Ações disponíveis para agendar</h2>
-      <p className="text-xs text-muted-foreground">Escolha uma ação e posicione em data e horário. Sem duração estimada, o app pede a duração antes de agendar.</p>
+    {availableToSchedule.length > 0 && <section className="performance-card p-4">
+      <h2 className="font-display text-lg font-semibold">Pendências para agendar nesta semana</h2>
+      <p className="text-xs text-muted-foreground">Aqui aparecem somente ações que ainda não têm horário na semana selecionada.</p>
       <div className="mt-3 grid gap-2 md:grid-cols-2">
-        {tasks.filter((t) => !t.concluida).slice(0, 8).map((t) => <div key={t.id} className="flex items-center justify-between gap-2 rounded-xl border p-3">
+        {availableToSchedule.slice(0, 8).map((t) => <div key={t.id} className="flex items-center justify-between gap-2 rounded-xl border p-3">
           <div className="min-w-0"><div className="truncate text-sm font-medium">{t.descricao}</div><div className="text-xs text-muted-foreground">{t.plano} · {t.duracao_minutos ? `${t.duracao_minutos} min por execução` : "sem duração estimada"}</div></div>
           <Button size="sm" variant="outline" onClick={() => setAgendar({ tarefa: t, data: iso(new Date()) })}><CalendarClock className="mr-1 h-3.5 w-3.5" />Agendar</Button>
         </div>)}
       </div>
-    </section>
+    </section>}
 
-    {(overdue.length > 0 || withoutDate.length > 0) && <section className="grid gap-4 lg:grid-cols-2">{overdue.length > 0 && <TaskList title="Ações atrasadas" icon={<CircleAlert className="h-4 w-4 text-[var(--color-red)]" />} tasks={overdue} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} />}{withoutDate.length > 0 && <TaskList title="Ações sem data" icon={<CircleAlert className="h-4 w-4 text-[var(--brand-accent)]" />} tasks={withoutDate} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} />}</section>}
+    {overdue.length > 0 && <section><TaskList title="Ações atrasadas" icon={<CircleAlert className="h-4 w-4 text-[var(--color-red)]" />} tasks={overdue} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} /></section>}
 
     <NovoPlanoModal open={novoOpen} onOpenChange={setNovoOpen} />
     <NovoCompromissoModal open={compromissoOpen} onOpenChange={setCompromissoOpen} dataInicial={compromissoData} />
