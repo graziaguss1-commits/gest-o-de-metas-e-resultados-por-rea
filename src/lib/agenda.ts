@@ -7,8 +7,8 @@
  * 2. Ações antigas sem estimativa permanecem `null` — nunca inventamos duração.
  * 3. Ocorrências agendadas são registros reais (`tarefa_agendamentos`) criados
  *    apenas para o período visível/escolhido pela usuária. Nada é gerado
- *    automaticamente para o futuro infinito; recorrência diária apenas sugere
- *    os dias da semana em que a ação deveria ser agendada.
+ *    automaticamente para o futuro infinito. Rotinas diárias, semanais e mensais
+ *    são materializadas somente dentro da semana que está sendo visualizada.
  * 4. Tempo real gasto (`tempo_real_minutos`) nunca substitui a estimativa;
  *    serve só para comparação "Estimado 45 min · Real 55 min".
  */
