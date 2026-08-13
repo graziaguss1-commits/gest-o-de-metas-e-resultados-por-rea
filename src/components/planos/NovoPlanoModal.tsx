@@ -77,6 +77,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!titulo.trim()) return toast.error("Informe o título do plano.");
+    const diariaIncompleta = tarefas.find((t) => t.descricao.trim() && t.frequencia === "diaria" && (!t.horario || !t.duracao || !t.dias?.length));
+    if (diariaIncompleta) return toast.error(`Complete horário, duração e dias da rotina diária: ${diariaIncompleta.descricao}`);
 
     try {
       await create.mutateAsync({
@@ -84,7 +86,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
         meta_id: metaId === "__none__" ? null : metaId,
         tarefas: tarefas.map((t) => ({
           descricao: t.descricao,
-          prazo: t.prazo || null,
+          prazo: t.frequencia === "unica" ? (t.prazo || null) : null,
+          data_inicio: t.frequencia !== "unica" ? new Date().toISOString().slice(0, 10) : null,
+          data_fim: t.frequencia !== "unica" ? (t.prazo || null) : null,
           frequencia: t.frequencia,
           quantidade_planejada: Number(t.quantidade.replace(",", ".")) || 1,
           unidade: t.unidade,
@@ -174,7 +178,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                 <div className="flex flex-wrap gap-2">
                   <Select
                     value={t.frequencia}
-                    onValueChange={(v) => patch(i, { frequencia: v as Frequencia })}
+                    onValueChange={(v) => patch(i, { frequencia: v as Frequencia, dias: v === "diaria" ? (t.dias ?? [1,2,3,4,5]) : t.dias })}
                   >
                     <SelectTrigger className="h-9 w-[130px]">
                       <SelectValue />
@@ -201,16 +205,19 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     onChange={(e) => patch(i, { unidade: e.target.value })}
                     placeholder="pessoas prospectadas, Reels, reuniões…"
                   />
-                  <Input
-                    type="date"
-                    className="w-[150px]"
-                    value={t.prazo}
-                    onChange={(e) => patch(i, { prazo: e.target.value })}
-                  />
+                  <label className="min-w-[150px] flex-1 text-[10px] font-semibold text-muted-foreground">
+                    {t.frequencia === "unica" ? "Prazo" : "Rotina ativa até (opcional)"}
+                    <Input
+                      type="date"
+                      className="mt-1 w-full"
+                      value={t.prazo}
+                      onChange={(e) => patch(i, { prazo: e.target.value })}
+                    />
+                  </label>
                 </div>
                 <div className="space-y-2 rounded-md bg-muted/40 p-2.5">
                   <div className="text-[11px] font-semibold">
-                    Duração estimada por execução
+                    Duração estimada por execução{t.frequencia === "diaria" ? " *" : ""}
                     <span className="ml-1 font-normal text-muted-foreground">
                       (quanto tempo leva cada vez — não é o prazo final)
                     </span>
@@ -218,7 +225,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                   <DuracaoPicker value={t.duracao} onChange={(v) => patch(i, { duracao: v })} />
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      Horário preferencial
+                      Horário da rotina{t.frequencia === "diaria" ? " *" : ""}
                       <Input
                         type="time"
                         className="h-8 w-[110px]"
@@ -234,7 +241,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                   </div>
                   {t.frequencia === "diaria" && (
                     <div className="space-y-1.5">
-                      <div className="text-[11px] font-semibold">Dias de execução</div>
+                      <div className="text-[11px] font-semibold">Dias de execução *</div>
                       <DiasSemanaPicker value={t.dias} onChange={(v) => patch(i, { dias: v })} />
                       {labelDiasSemana(t.dias) && (
                         <p className="text-[11px] text-muted-foreground">{labelDiasSemana(t.dias)}</p>
@@ -242,6 +249,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     </div>
                   )}
                   <p className="text-[11px] text-muted-foreground">
+                    {t.frequencia === "diaria" && (!t.horario || !t.duracao || !t.dias?.length) && <span className="mb-1 block font-semibold text-destructive">Defina horário, duração e dias para inserir a rotina automaticamente na agenda.</span>}
                     Resumo: {t.quantidade || 0} {t.unidade || "unidades"} ·{" "}
                     {FREQUENCIA_LABEL[t.frequencia].toLowerCase()}
                     {t.duracao ? ` · ${formatDuracao(t.duracao)} por execução` : " · sem duração estimada"}
