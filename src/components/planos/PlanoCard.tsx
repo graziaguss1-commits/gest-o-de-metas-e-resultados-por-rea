@@ -49,6 +49,7 @@ import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
 import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
 import { EditarPlanoModal } from "@/components/planos/EditarPlanoModal";
 import { EditarTarefaModal } from "@/components/planos/EditarTarefaModal";
+import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
 import { CalendarClock } from "lucide-react";
 
 export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
@@ -65,6 +66,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     frequencia: "unica" as Frequencia,
     quantidade: "1",
     unidade: "",
+    impacto: 5,
+    esforco: 5,
     duracao: null as number | null,
     horario: "",
     dias: null as number[] | null,
@@ -91,11 +94,24 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         frequencia: nova.frequencia,
         quantidade_planejada: Number(nova.quantidade.replace(",", ".")) || 1,
         unidade: nova.unidade,
+        impacto: nova.impacto,
+        esforco: nova.esforco,
         duracao_minutos: nova.duracao,
         horario_preferencial: nova.horario || null,
         dias_semana: nova.frequencia === "diaria" ? nova.dias : null,
       });
-      setNova({ descricao: "", prazo: "", frequencia: "unica", quantidade: "1", unidade: "", duracao: null, horario: "", dias: null });
+      setNova({
+        descricao: "",
+        prazo: "",
+        frequencia: "unica",
+        quantidade: "1",
+        unidade: "",
+        impacto: 5,
+        esforco: 5,
+        duracao: null,
+        horario: "",
+        dias: null,
+      });
       setAdding(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao adicionar ação";
@@ -261,6 +277,13 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
               className="h-8 w-[140px]"
             />
           </div>
+          <ImpactoEsforcoPicker
+            impacto={nova.impacto}
+            esforco={nova.esforco}
+            onImpactoChange={(impacto) => setNova({ ...nova, impacto })}
+            onEsforcoChange={(esforco) => setNova({ ...nova, esforco })}
+            compact
+          />
           {nova.frequencia === "diaria" && <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
             <div className="text-xs font-semibold">Agenda da rotina diária</div>
             <DuracaoPicker value={nova.duracao} onChange={(duracao)=>setNova({...nova,duracao})}/>
