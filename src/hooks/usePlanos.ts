@@ -258,20 +258,40 @@ export function useUpdateTarefa() {
       horario_preferencial?: string | null;
       dias_semana?: number[] | null;
     }) => {
+      const { data: anterior, error: readError } = await supabase
+        .from("plano_tarefas")
+        .select("frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana")
+        .eq("id", id)
+        .single();
+      if (readError) throw readError;
+
       const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
       if (error) throw error;
 
-      // Ocorrências futuras geradas automaticamente precisam refletir a nova
-      // frequência, os novos dias, o horário e a duração. Registros realizados
-      // e agendamentos criados manualmente são preservados.
-      const hoje = new Date().toISOString().slice(0, 10);
-      const { error: agendaError } = await supabase
-        .from("tarefa_agendamentos")
-        .delete()
-        .eq("tarefa_id", id)
-        .eq("observacao", "Gerado pela recorrência")
-        .gte("data", hoje);
-      if (agendaError) throw agendaError;
+      const horaAnterior = anterior.horario_preferencial?.slice(0, 5) ?? null;
+      const horaNova = patch.horario_preferencial?.slice(0, 5) ?? null;
+      const diasAnteriores = JSON.stringify(anterior.dias_semana ?? null);
+      const diasNovos = JSON.stringify(patch.dias_semana ?? null);
+      const agendaMudou =
+        (patch.frequencia !== undefined && patch.frequencia !== anterior.frequencia) ||
+        (patch.data_inicio !== undefined && patch.data_inicio !== anterior.data_inicio) ||
+        (patch.data_fim !== undefined && patch.data_fim !== anterior.data_fim) ||
+        (patch.duracao_minutos !== undefined && patch.duracao_minutos !== anterior.duracao_minutos) ||
+        (patch.horario_preferencial !== undefined && horaNova !== horaAnterior) ||
+        (patch.dias_semana !== undefined && diasNovos !== diasAnteriores);
+
+      if (agendaMudou) {
+        // Ocorrências futuras geradas automaticamente precisam refletir a
+        // nova configuração. Histórico e agendamentos manuais são preservados.
+        const hoje = new Date().toISOString().slice(0, 10);
+        const { error: agendaError } = await supabase
+          .from("tarefa_agendamentos")
+          .delete()
+          .eq("tarefa_id", id)
+          .eq("observacao", "Gerado pela recorrência")
+          .gte("data", hoje);
+        if (agendaError) throw agendaError;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PLANOS_KEY });
