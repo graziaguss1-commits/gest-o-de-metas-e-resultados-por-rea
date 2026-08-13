@@ -40,6 +40,7 @@ export type Execucao = {
   data_referencia: string;
   quantidade: number;
   observacao?: string | null;
+  tempo_real_minutos?: number | null;
 };
 
 function toISO(d: Date): string {
