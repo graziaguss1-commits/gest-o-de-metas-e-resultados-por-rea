@@ -88,7 +88,12 @@ export type NovoTarefaInput = {
   responsavel_id?: string | null;
   data_inicio?: string | null;
   data_fim?: string | null;
+  /** Estimativa por execução, em minutos. `null` = sem estimativa. */
+  duracao_minutos?: number | null;
+  horario_preferencial?: string | null;
+  dias_semana?: number[] | null;
 };
+
 
 export type NovoPlanoInput = {
   titulo: string;
