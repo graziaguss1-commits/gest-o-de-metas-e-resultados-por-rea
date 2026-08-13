@@ -43,10 +43,9 @@ import {
   type Frequencia,
 } from "@/lib/execucao";
 import { todayISO, type Tarefa } from "@/lib/metas";
-import { formatDuracao, hhmm, labelDiasSemana } from "@/lib/agenda";
+import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida, formatDuracao, hhmm, labelMomentoRecorrencia } from "@/lib/agenda";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
-import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
-import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { EditarPlanoModal } from "@/components/planos/EditarPlanoModal";
 import { EditarTarefaModal } from "@/components/planos/EditarTarefaModal";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
@@ -82,7 +81,17 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     e.preventDefault();
     const txt = nova.descricao.trim();
     if (!txt) return;
-    if (nova.frequencia === "diaria" && (!nova.duracao || !nova.horario || !nova.dias?.length)) return toast.error("Defina horário, duração e dias da rotina diária.");
+    if (
+      nova.frequencia !== "unica" &&
+      !configuracaoRecorrenciaCompleta(
+        nova.frequencia,
+        nova.duracao,
+        nova.horario,
+        nova.dias,
+      )
+    ) {
+      return toast.error("Defina o dia, o horário e a duração da rotina.");
+    }
     try {
       await addTarefa.mutateAsync({
         planoId: plano.id,
@@ -98,7 +107,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         esforco: nova.esforco,
         duracao_minutos: nova.duracao,
         horario_preferencial: nova.horario || null,
-        dias_semana: nova.frequencia === "diaria" ? nova.dias : null,
+        dias_semana: nova.frequencia !== "unica" ? nova.dias : null,
       });
       setNova({
         descricao: "",
@@ -243,7 +252,14 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
           <div className="flex flex-wrap gap-2">
             <Select
               value={nova.frequencia}
-              onValueChange={(v) => setNova({ ...nova, frequencia: v as Frequencia, dias: v === "diaria" ? (nova.dias ?? [1,2,3,4,5]) : nova.dias })}
+              onValueChange={(value) => {
+                const frequencia = value as Frequencia;
+                setNova({
+                  ...nova,
+                  frequencia,
+                  dias: frequencia === "diaria" ? [1, 2, 3, 4, 5] : null,
+                });
+              }}
             >
               <SelectTrigger className="h-8 w-[130px]">
                 <SelectValue />
@@ -284,13 +300,16 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             onEsforcoChange={(esforco) => setNova({ ...nova, esforco })}
             compact
           />
-          {nova.frequencia === "diaria" && <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
-            <div className="text-xs font-semibold">Agenda da rotina diária</div>
-            <DuracaoPicker value={nova.duracao} onChange={(duracao)=>setNova({...nova,duracao})}/>
-            <label className="block text-xs font-medium">Horário da rotina *<Input type="time" value={nova.horario} onChange={(e)=>setNova({...nova,horario:e.target.value})} className="mt-1 h-8 w-[130px]"/></label>
-            <div><div className="mb-1 text-xs font-medium">Dias de execução *</div><DiasSemanaPicker value={nova.dias} onChange={(dias)=>setNova({...nova,dias})}/></div>
-            <p className="text-[11px] text-muted-foreground">Após salvar, a rotina entra automaticamente na semana visível do calendário.</p>
-          </div>}
+          <RecorrenciaAgendaFields
+            frequencia={nova.frequencia}
+            duracao={nova.duracao}
+            horario={nova.horario}
+            dias={nova.dias}
+            onDuracaoChange={(duracao) => setNova({ ...nova, duracao })}
+            onHorarioChange={(horario) => setNova({ ...nova, horario })}
+            onDiasChange={(dias) => setNova({ ...nova, dias })}
+            compact
+          />
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={!nova.descricao.trim()}>
               Adicionar
@@ -337,6 +356,8 @@ function TarefaLinha({
   const [editarOpen, setEditarOpen] = useState(false);
   const freq = getFrequencia(tarefa);
   const exec = execucaoTarefa(tarefa, execucoes);
+  const diasRecorrencia = diasRecorrenciaPersistida(freq, tarefa.dias_semana);
+  const momentoRecorrencia = labelMomentoRecorrencia(freq, diasRecorrencia);
   const mensuravel = freq !== "unica" || Number(tarefa.quantidade_planejada ?? 1) > 1 || !!tarefa.unidade;
 
   const salvar = async (e: FormEvent) => {
@@ -407,7 +428,7 @@ function TarefaLinha({
           <span className="rounded-full bg-muted px-2 py-0.5">Sem duração estimada</span>
         )}
         {hhmm(tarefa.horario_preferencial) && <span>Horário {hhmm(tarefa.horario_preferencial)}</span>}
-        {labelDiasSemana(tarefa.dias_semana) && <span>{labelDiasSemana(tarefa.dias_semana)}</span>}
+        {momentoRecorrencia && <span>{momentoRecorrencia}</span>}
         {tarefa.prazo && (
           <span>
             Prazo final {new Date(`${tarefa.prazo}T12:00:00`).toLocaleDateString("pt-BR")}
