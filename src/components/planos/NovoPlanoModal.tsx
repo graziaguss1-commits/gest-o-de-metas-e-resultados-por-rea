@@ -194,11 +194,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                         dias:
                           frequencia === "diaria"
                             ? [1, 2, 3, 4, 5]
-                            : frequencia === "semanal"
-                              ? [1]
-                              : frequencia === "mensal"
-                                ? [10]
-                                : null,
+                            : null,
                       });
                     }}
                   >
