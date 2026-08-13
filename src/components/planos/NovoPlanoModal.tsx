@@ -24,6 +24,7 @@ import { useCreatePlano } from "@/hooks/usePlanos";
 import { FREQUENCIAS, FREQUENCIA_LABEL, type Frequencia } from "@/lib/execucao";
 import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
 import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
 import { formatDuracao, horaFim, labelDiasSemana } from "@/lib/agenda";
 
 type Props = {
@@ -37,8 +38,8 @@ type LinhaTarefa = {
   frequencia: Frequencia;
   quantidade: string;
   unidade: string;
-  impacto: string;
-  esforco: string;
+  impacto: number;
+  esforco: number;
   duracao: number | null;
   horario: string;
   dias: number[] | null;
@@ -50,8 +51,8 @@ const linhaVazia = (): LinhaTarefa => ({
   frequencia: "unica",
   quantidade: "1",
   unidade: "",
-  impacto: "5",
-  esforco: "5",
+  impacto: 5,
+  esforco: 5,
   duracao: null,
   horario: "",
   dias: null,
@@ -92,8 +93,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           frequencia: t.frequencia,
           quantidade_planejada: Number(t.quantidade.replace(",", ".")) || 1,
           unidade: t.unidade,
-          impacto: Number(t.impacto) || 5,
-          esforco: Number(t.esforco) || 5,
+          impacto: t.impacto,
+          esforco: t.esforco,
           duracao_minutos: t.duracao,
           horario_preferencial: t.horario || null,
           dias_semana: t.frequencia === "diaria" ? t.dias : null,
@@ -256,30 +257,13 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     {t.prazo ? ` · prazo final ${t.prazo.split("-").reverse().join("/")}` : ""}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <label className="flex items-center gap-1.5">
-                    Impacto
-                    <Input
-                      type="number"
-                      min={1}
-                      max={10}
-                      className="h-8 w-[64px]"
-                      value={t.impacto}
-                      onChange={(e) => patch(i, { impacto: e.target.value })}
-                    />
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    Esforço
-                    <Input
-                      type="number"
-                      min={1}
-                      max={10}
-                      className="h-8 w-[64px]"
-                      value={t.esforco}
-                      onChange={(e) => patch(i, { esforco: e.target.value })}
-                    />
-                  </label>
-                </div>
+                <ImpactoEsforcoPicker
+                  impacto={t.impacto}
+                  esforco={t.esforco}
+                  onImpactoChange={(impacto) => patch(i, { impacto })}
+                  onEsforcoChange={(esforco) => patch(i, { esforco })}
+                  compact
+                />
               </div>
             ))}
             {tarefas.length < 5 && (
