@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, History, Plus, Sparkles, Calendar } from "lucide-react";
+import { ChevronDown, History, Plus, Sparkles, Calendar, Pencil } from "lucide-react";
 import {
   formatDateISOToBR,
-  formatValor,
+  formatProgresso,
   progressoEsperado,
   progressoReal,
   type MetaWithResponsavel,
@@ -19,6 +19,7 @@ type Props = {
   defaultOpen?: boolean;
   onLancarResultado: (meta: MetaWithResponsavel) => void;
   onVerHistorico: (meta: MetaWithResponsavel) => void;
+  onEditar?: (meta: MetaWithResponsavel) => void;
 };
 
 function initials(name?: string | null) {
@@ -31,7 +32,7 @@ function initials(name?: string | null) {
     .join("");
 }
 
-export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico }: Props) {
+export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico, onEditar }: Props) {
   const [open, setOpen] = useState(!!defaultOpen);
   const status = meta.status as Status;
   const real = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
@@ -123,6 +124,12 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico 
               <History className="h-4 w-4 mr-1.5" />
               Ver histórico
             </Button>
+            {onEditar && (
+              <Button size="sm" variant="outline" onClick={() => onEditar(meta)}>
+                <Pencil className="h-4 w-4 mr-1.5" />
+                Editar meta
+              </Button>
+            )}
             <Button size="sm" variant="outline" asChild>
               <Link to={`/metas/${meta.id}/analise`}>
                 <Sparkles className="h-4 w-4 mr-1.5" />
