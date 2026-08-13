@@ -43,6 +43,9 @@ import {
   type Frequencia,
 } from "@/lib/execucao";
 import { todayISO, type Tarefa } from "@/lib/metas";
+import { formatDuracao, hhmm, labelDiasSemana } from "@/lib/agenda";
+import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
+import { CalendarClock } from "lucide-react";
 
 export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
   const toggleTarefa = useToggleTarefa();
@@ -267,6 +270,7 @@ function TarefaLinha({
 }) {
   const registrar = useRegistrarExecucao();
   const [valor, setValor] = useState("");
+  const [agendarOpen, setAgendarOpen] = useState(false);
   const freq = getFrequencia(tarefa);
   const exec = execucaoTarefa(tarefa, execucoes);
   const mensuravel = freq !== "unica" || Number(tarefa.quantidade_planejada ?? 1) > 1 || !!tarefa.unidade;
@@ -301,6 +305,16 @@ function TarefaLinha({
         >
           {tarefa.descricao}
         </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          title="Agendar no calendário"
+          className="h-7 w-7 text-muted-foreground"
+          onClick={() => setAgendarOpen(true)}
+        >
+          <CalendarClock className="h-3.5 w-3.5" />
+        </Button>
         <span className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
           {FREQUENCIA_LABEL[freq]}
           {tarefa.prazo
@@ -308,6 +322,25 @@ function TarefaLinha({
             : ""}
         </span>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2 pl-6 text-[11px] text-muted-foreground">
+        {formatDuracao(tarefa.duracao_minutos) ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 font-medium">
+            {formatDuracao(tarefa.duracao_minutos)} por execução
+          </span>
+        ) : (
+          <span className="rounded-full bg-muted px-2 py-0.5">Sem duração estimada</span>
+        )}
+        {hhmm(tarefa.horario_preferencial) && <span>Horário {hhmm(tarefa.horario_preferencial)}</span>}
+        {labelDiasSemana(tarefa.dias_semana) && <span>{labelDiasSemana(tarefa.dias_semana)}</span>}
+        {tarefa.prazo && (
+          <span>
+            Prazo final {new Date(`${tarefa.prazo}T12:00:00`).toLocaleDateString("pt-BR")}
+          </span>
+        )}
+      </div>
+
+      <AgendarAcaoModal open={agendarOpen} onOpenChange={setAgendarOpen} tarefa={tarefa} dataInicial={todayISO()} />
 
       {mensuravel && (
         <div className="flex items-center gap-2 pl-6 flex-wrap">
