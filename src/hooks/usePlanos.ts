@@ -88,6 +88,9 @@ export type NovoTarefaInput = {
   responsavel_id?: string | null;
   data_inicio?: string | null;
   data_fim?: string | null;
+  duracao_estimada_minutos?: number | null;
+  horario_preferencial?: string | null;
+  dias_semana?: number[] | null;
 };
 
 export type NovoPlanoInput = {
@@ -129,6 +132,9 @@ export function useCreatePlano() {
           responsavel_id: t.responsavel_id ?? null,
           data_inicio: t.data_inicio || null,
           data_fim: t.data_fim || null,
+          duracao_estimada_minutos: t.duracao_estimada_minutos ?? null,
+          horario_preferencial: t.horario_preferencial || null,
+          dias_semana: t.dias_semana ?? null,
         }));
 
       if (taskRows.length > 0) {
@@ -194,6 +200,9 @@ export function useAddTarefa() {
         responsavel_id: t.responsavel_id ?? null,
         data_inicio: t.data_inicio || null,
         data_fim: t.data_fim || null,
+        duracao_estimada_minutos: t.duracao_estimada_minutos ?? null,
+        horario_preferencial: t.horario_preferencial || null,
+        dias_semana: t.dias_semana ?? null,
       });
       if (error) throw error;
     },
@@ -210,11 +219,13 @@ export function useRegistrarExecucao() {
       quantidade,
       data,
       observacao,
+      tempoRealMinutos,
     }: {
       tarefaId: string;
       quantidade: number;
       data: string;
       observacao?: string | null;
+      tempoRealMinutos?: number | null;
     }) => {
       const { data: user } = await supabase.auth.getUser();
       const uid = user.user?.id;
@@ -225,6 +236,7 @@ export function useRegistrarExecucao() {
         data_referencia: data,
         observacao: observacao?.trim() || null,
         registrado_por: uid,
+        tempo_real_minutos: tempoRealMinutos ?? null,
       });
       if (error) throw error;
     },
