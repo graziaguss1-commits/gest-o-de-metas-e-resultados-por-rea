@@ -137,6 +137,20 @@ export function diaMesRecorrencia(dias?: number[] | null): number | null {
   return Number.isInteger(dia) && dia >= 1 && dia <= 31 ? dia : null;
 }
 
+/**
+ * Compatibilidade com rotinas salvas antes da escolha explícita do momento.
+ * Diárias eram seg–sex; semanais eram segunda; mensais eram dia 1.
+ */
+export function diasRecorrenciaPersistida(
+  frequencia?: string | null,
+  dias?: number[] | null,
+): number[] | null {
+  if (dias?.length) return dias;
+  if (frequencia === "diaria") return [...DIAS_UTEIS];
+  if (frequencia === "semanal" || frequencia === "mensal") return [1];
+  return null;
+}
+
 /** Confirma se uma rotina possui todos os dados necessários para entrar na agenda. */
 export function configuracaoRecorrenciaCompleta(
   frequencia?: string | null,
