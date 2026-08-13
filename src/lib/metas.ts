@@ -88,9 +88,9 @@ export const METRIC_CONFIG: Record<MetricType, MetricConfig> = {
   },
   projeto: {
     label: "Projeto por etapas",
-    alvoLabel: "Total de etapas",
-    ajuda: "O progresso avança conforme as etapas concluídas.",
-    alvoPlaceholder: "8",
+    alvoLabel: "Etapas automáticas",
+    ajuda: "Cada plano de ação vinculado vira uma etapa; o total é calculado automaticamente.",
+    alvoPlaceholder: "automático",
     unidadeFixa: "etapas",
     sufixo: "etapas",
   },
@@ -141,7 +141,7 @@ export const STATUS_COLOR: Record<Status, { fg: string; bg: string }> = {
 };
 
 export function progressoReal(valorAtual: number, valorAlvo: number, isInverse: boolean): number {
-  if (valorAlvo === 0) return valorAtual === 0 ? 1 : 0;
+  if (valorAlvo === 0) return 0;
   if (isInverse) return Math.max(0, Math.min(1, 1 - valorAtual / valorAlvo));
   return Math.max(0, Math.min(1, valorAtual / valorAlvo));
 }
@@ -180,6 +180,9 @@ export function formatProgresso(
   meta: { valor_atual: number; valor_alvo: number; unidade: string; metric_type?: string | null },
 ): string {
   const tipo = getMetricType(meta);
+  if (tipo === "projeto" && meta.valor_alvo === 0) {
+    return "Nenhuma etapa vinculada";
+  }
   if (tipo === "financeiro" || tipo === "percentual") {
     return `${formatValor(meta.valor_atual, meta.unidade)} de ${formatValor(meta.valor_alvo, meta.unidade)}`;
   }
