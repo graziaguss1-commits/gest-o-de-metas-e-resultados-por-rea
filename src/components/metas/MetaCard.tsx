@@ -91,17 +91,15 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico 
                 </span>
               </div>
               <ProgressBar value={real} status={status} height={10} />
-              <div className="flex items-baseline justify-between text-sm">
-                <span className="font-bold text-lg">
-                  {formatValor(meta.valor_atual, meta.unidade)}
-                </span>
-                <span className="text-muted-foreground">
-                  / {formatValor(meta.valor_alvo, meta.unidade)}{" "}
-                  {meta.is_inverse && (
-                    <span className="text-[10px] italic">(menor é melhor)</span>
-                  )}
-                </span>
+              <div className="flex items-baseline justify-between text-sm gap-2">
+                <span className="font-bold text-lg">{formatProgresso(meta)}</span>
+                {meta.is_inverse && (
+                  <span className="text-[10px] italic text-muted-foreground">
+                    (menor é melhor)
+                  </span>
+                )}
               </div>
+
             </div>
 
             <BurnUpMini meta={meta} />
