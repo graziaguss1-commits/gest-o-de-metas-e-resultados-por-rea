@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useAgendamentos } from "@/hooks/useAgendamentos";
 import { useActions } from "@/hooks/useActions";
+import { useCompromissos } from "@/hooks/useCompromissos";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { capacidadeDoDia, formatTotalHoras, totalSemana } from "@/lib/agenda";
 
@@ -29,6 +30,7 @@ export function CapacidadeSemana() {
     });
   }, []);
   const { data: agendamentos = [] } = useAgendamentos(iso(dias[0]), iso(dias[6]));
+  const { data: compromissos = [] } = useCompromissos(iso(dias[0]), iso(dias[6]));
   const capacidade = settings?.capacidade_diaria_minutos ?? 480;
 
   const minutosAvulsos = (data: string) =>
@@ -36,9 +38,19 @@ export function CapacidadeSemana() {
       .filter((action) => action.data_agendada === data)
       .reduce((total, action) => total + (action.duracao_minutos ?? 0), 0);
 
+  const minutosCompromissos = (data: string) =>
+    compromissos
+      .filter((compromisso) => compromisso.data === data)
+      .reduce((total, compromisso) => {
+        const [hi, mi] = compromisso.hora_inicio.split(":").map(Number);
+        const [hf, mf] = compromisso.hora_fim.split(":").map(Number);
+        return total + (hf * 60 + mf - hi * 60 - mi);
+      }, 0);
+
   const capacidadeCompleta = (data: string) => {
     const base = capacidadeDoDia(data, agendamentos, capacidade);
-    const planejado = base.planejado + minutosAvulsos(data);
+    const planejado =
+      base.planejado + minutosAvulsos(data) + minutosCompromissos(data);
     return {
       ...base,
       planejado,
@@ -49,7 +61,11 @@ export function CapacidadeSemana() {
 
   const semana =
     totalSemana(dias.map(iso), agendamentos) +
-    dias.reduce((total, dia) => total + minutosAvulsos(iso(dia)), 0);
+    dias.reduce(
+      (total, dia) =>
+        total + minutosAvulsos(iso(dia)) + minutosCompromissos(iso(dia)),
+      0,
+    );
   const sobrecarregados = dias
     .map((d) => capacidadeCompleta(iso(d)))
     .filter((c) => c.sobrecarga);
