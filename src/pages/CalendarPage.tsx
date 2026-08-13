@@ -154,7 +154,7 @@ export default function CalendarPage() {
       </div>
     </section>}
 
-    {(overdue.length > 0 || withoutDate.length > 0) && <section className="grid gap-4 lg:grid-cols-2">{overdue.length > 0 && <TaskList title="Ações atrasadas" icon={<CircleAlert className="h-4 w-4 text-[var(--color-red)]" />} tasks={overdue} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} />}{withoutDate.length > 0 && <TaskList title="Pendências sem agendamento" icon={<CircleAlert className="h-4 w-4 text-[var(--brand-accent)]" />} tasks={withoutDate} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} />}</section>}
+    {overdue.length > 0 && <section><TaskList title="Ações atrasadas" icon={<CircleAlert className="h-4 w-4 text-[var(--color-red)]" />} tasks={overdue} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} /></section>}
 
     <NovoPlanoModal open={novoOpen} onOpenChange={setNovoOpen} />
     <NovoCompromissoModal open={compromissoOpen} onOpenChange={setCompromissoOpen} dataInicial={compromissoData} />
