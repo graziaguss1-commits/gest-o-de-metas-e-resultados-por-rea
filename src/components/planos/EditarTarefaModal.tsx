@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
 import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
 import { useUpdateTarefa } from "@/hooks/usePlanos";
 import {
   FREQUENCIAS,
@@ -46,8 +47,8 @@ type FormState = {
   duracao: number | null;
   horario: string;
   dias: number[] | null;
-  impacto: string;
-  esforco: string;
+  impacto: number;
+  esforco: number;
 };
 
 const estadoDaTarefa = (tarefa: Tarefa): FormState => {
@@ -63,8 +64,8 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     horario: tarefa.horario_preferencial?.slice(0, 5) ?? "",
     dias: tarefa.dias_semana ??
       (frequencia === "diaria" ? [1, 2, 3, 4, 5] : frequencia === "semanal" ? [1] : null),
-    impacto: String(tarefa.impacto ?? 5),
-    esforco: String(tarefa.esforco ?? 5),
+    impacto: tarefa.impacto ?? 5,
+    esforco: tarefa.esforco ?? 5,
   };
 };
 
@@ -123,8 +124,8 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
           form.frequencia === "diaria" || form.frequencia === "semanal"
             ? form.dias
             : null,
-        impacto: Math.min(10, Math.max(1, Number(form.impacto) || 5)),
-        esforco: Math.min(10, Math.max(1, Number(form.esforco) || 5)),
+        impacto: form.impacto,
+        esforco: form.esforco,
       });
       toast.success("Ação atualizada e agenda recalculada");
       onOpenChange(false);
@@ -259,28 +260,12 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Impacto (1–10)</Label>
-              <Input
-                type="number"
-                min={1}
-                max={10}
-                value={form.impacto}
-                onChange={(event) => patch({ impacto: event.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Esforço (1–10)</Label>
-              <Input
-                type="number"
-                min={1}
-                max={10}
-                value={form.esforco}
-                onChange={(event) => patch({ esforco: event.target.value })}
-              />
-            </div>
-          </div>
+          <ImpactoEsforcoPicker
+            impacto={form.impacto}
+            esforco={form.esforco}
+            onImpactoChange={(impacto) => patch({ impacto })}
+            onEsforcoChange={(esforco) => patch({ esforco })}
+          />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
