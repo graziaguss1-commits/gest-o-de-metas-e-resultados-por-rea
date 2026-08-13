@@ -55,7 +55,7 @@ export function useExecucoes() {
     queryFn: async (): Promise<Execucao[]> => {
       const { data, error } = await supabase
         .from("tarefa_execucoes")
-        .select("id, tarefa_id, data_referencia, quantidade, observacao")
+        .select("id, tarefa_id, data_referencia, quantidade, observacao, tempo_real_minutos")
         .order("data_referencia", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((e) => ({ ...e, quantidade: Number(e.quantidade) })) as Execucao[];
