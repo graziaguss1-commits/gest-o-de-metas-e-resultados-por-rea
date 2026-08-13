@@ -65,15 +65,29 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
   }).length;
   const total = ids.length;
 
-  if (Number(meta.valor_alvo) === total && Number(meta.valor_atual) === concluidas) return;
+  let statusCalculado: "verde" | "amarelo" | "vermelho" =
+    total === 0 ? "amarelo" : meta.status;
 
-  const { data: statusCalculado } = await supabase.rpc("calcular_status_meta", {
-    p_valor_atual: concluidas,
-    p_valor_alvo: total,
-    p_data_inicio: meta.data_inicio,
-    p_data_fim: meta.data_fim,
-    p_is_inverse: false,
-  });
+  if (total > 0) {
+    const { data } = await supabase.rpc("calcular_status_meta", {
+      p_valor_atual: concluidas,
+      p_valor_alvo: total,
+      p_data_inicio: meta.data_inicio,
+      p_data_fim: meta.data_fim,
+      p_is_inverse: false,
+    });
+    statusCalculado =
+      (data as "verde" | "amarelo" | "vermelho" | null) ?? meta.status;
+  }
+
+  if (
+    Number(meta.valor_alvo) === total &&
+    Number(meta.valor_atual) === concluidas &&
+    meta.is_inverse === false &&
+    meta.status === statusCalculado
+  ) {
+    return;
+  }
 
   await supabase
     .from("metas")
@@ -81,7 +95,7 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
       valor_alvo: total,
       valor_atual: concluidas,
       is_inverse: false,
-      status: (statusCalculado as "verde" | "amarelo" | "vermelho" | null) ?? meta.status,
+      status: statusCalculado,
     })
     .eq("id", metaId);
 }
