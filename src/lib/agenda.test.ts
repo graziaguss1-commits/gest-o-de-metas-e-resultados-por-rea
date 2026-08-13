@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   capacidadeDoDia,
   comparativoTempo,
+  configuracaoRecorrenciaCompleta,
+  dataCorrespondeRecorrencia,
+  labelMomentoRecorrencia,
   formatDuracao,
   formatTotalHoras,
   horaFim,
@@ -58,5 +61,29 @@ describe("agenda", () => {
     expect(labelDiasSemana([1, 2, 3, 4, 5, 6, 7])).toBe("Todos os dias");
     expect(labelDiasSemana([2, 4])).toBe("Ter, Qui");
     expect(labelDiasSemana(null)).toBeNull();
+  });
+});
+
+
+describe("recorrências da agenda", () => {
+  it("agenda uma rotina semanal apenas no dia escolhido", () => {
+    expect(dataCorrespondeRecorrencia("semanal", new Date(2026, 7, 13), [4])).toBe(true);
+    expect(dataCorrespondeRecorrencia("semanal", new Date(2026, 7, 14), [4])).toBe(false);
+    expect(labelMomentoRecorrencia("semanal", [4])).toBe("Toda quinta");
+  });
+
+  it("agenda avaliar DRE todo mês no dia 10", () => {
+    expect(dataCorrespondeRecorrencia("mensal", new Date(2026, 8, 10), [10])).toBe(true);
+    expect(dataCorrespondeRecorrencia("mensal", new Date(2026, 8, 11), [10])).toBe(false);
+    expect(labelMomentoRecorrencia("mensal", [10])).toBe("Todo dia 10");
+  });
+
+  it("usa o último dia nos meses que não possuem o dia escolhido", () => {
+    expect(dataCorrespondeRecorrencia("mensal", new Date(2027, 1, 28), [31])).toBe(true);
+  });
+
+  it("não considera completa uma recorrência sem dia, horário ou duração", () => {
+    expect(configuracaoRecorrenciaCompleta("semanal", 60, "09:00", null)).toBe(false);
+    expect(configuracaoRecorrenciaCompleta("mensal", 60, "09:00", [10])).toBe(true);
   });
 });
