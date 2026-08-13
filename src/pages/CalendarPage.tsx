@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Pencil, Plus, Trash2, BriefcaseBusiness } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePlanos, useToggleTarefa, type PlanoWithMeta } from "@/hooks/usePlanos";
 import { useAgendamentos, useRemoverAgendamento } from "@/hooks/useAgendamentos";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useCompromissos, useAtualizarCompromisso, useExcluirCompromisso } from "@/hooks/useCompromissos";
+import { NovoCompromissoModal } from "@/components/calendar/NovoCompromissoModal";
 import { NovoPlanoModal } from "@/components/planos/NovoPlanoModal";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { RegistrarRealizadoModal } from "@/components/planos/RegistrarRealizadoModal";
@@ -33,8 +35,13 @@ export default function CalendarPage() {
   const remover = useRemoverAgendamento();
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [novoOpen, setNovoOpen] = useState(false);
+  const [compromissoOpen, setCompromissoOpen] = useState(false);
+  const [compromissoData, setCompromissoData] = useState<string>();
+  const atualizarCompromisso = useAtualizarCompromisso();
+  const excluirCompromisso = useExcluirCompromisso();
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(anchor, i)), [anchor]);
   const { data: agendamentos = [] } = useAgendamentos(iso(days[0]), iso(days[6]));
+  const { data: compromissos = [] } = useCompromissos(iso(days[0]), iso(days[6]));
 
   const [agendar, setAgendar] = useState<{ tarefa: Tarefa; data?: string; agendamentoId?: string; hora?: string; duracao?: number | null } | null>(null);
   const [registrar, setRegistrar] = useState<{ tarefa: Tarefa; data: string } | null>(null);
@@ -45,13 +52,15 @@ export default function CalendarPage() {
   const overdue = tasks.filter((task) => !task.concluida && task.prazo && task.prazo < iso(new Date()));
   const withoutDate = tasks.filter((task) => !task.concluida && !task.prazo);
   const weekLabel = `${days[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} — ${days[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
-  const minutosSemana = totalSemana(days.map(iso), agendamentos);
+  const minutosCompromissos = compromissos.reduce((total, c) => { const [hi,mi]=c.hora_inicio.split(":").map(Number); const [hf,mf]=c.hora_fim.split(":").map(Number); return total + (hf*60+mf-hi*60-mi); }, 0);
+  const minutosSemana = totalSemana(days.map(iso), agendamentos) + minutosCompromissos;
 
   return <AppShell><div className="performance-page space-y-6">
-    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="eyebrow mb-2">AGENDA E EXECUÇÃO</div><h1 className="font-display text-3xl font-semibold">Calendário estratégico</h1><p className="mt-1 text-sm text-muted-foreground">Programe suas ações por horário e veja se cabem no tempo disponível.</p></div><Button onClick={() => setNovoOpen(true)} className="brand-button"><Plus className="mr-2 h-4 w-4" />Novo plano</Button></header>
+    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="eyebrow mb-2">AGENDA E EXECUÇÃO</div><h1 className="font-display text-3xl font-semibold">Calendário estratégico</h1><p className="mt-1 text-sm text-muted-foreground">Ações, pendências e compromissos da semana em um só lugar.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setCompromissoData(iso(new Date())); setCompromissoOpen(true); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Novo compromisso</Button><Button onClick={() => setNovoOpen(true)} className="brand-button"><Plus className="mr-2 h-4 w-4" />Novo plano</Button></div></header>
 
-    <section className="grid gap-3 sm:grid-cols-4">
+    <section className="grid gap-3 sm:grid-cols-5">
       <CalendarMetric label="Ações agendadas" value={String(agendamentos.length)} tone="primary" />
+      <CalendarMetric label="Compromissos" value={String(compromissos.length)} tone="primary" />
       <CalendarMetric label="Tempo planejado na semana" value={formatTotalHoras(minutosSemana)} tone="accent" />
       <CalendarMetric label="Atrasadas (prazo)" value={String(overdue.length)} tone="red" />
       <CalendarMetric label="Sem data" value={String(withoutDate.length)} tone="accent" />
@@ -63,8 +72,12 @@ export default function CalendarPage() {
         {days.map((day) => {
           const dia = iso(day);
           const blocos = agendamentos.filter((a) => a.data === dia).sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+          const compromissosDia = compromissos.filter((c) => c.data === dia).sort((a,b)=>a.hora_inicio.localeCompare(b.hora_inicio));
           const semHora = tasks.filter((task) => task.prazo === dia);
-          const cap = capacidadeDoDia(dia, agendamentos, capacidade);
+          const capBase = capacidadeDoDia(dia, agendamentos, capacidade);
+          const minutosFixos = compromissosDia.reduce((total,c)=>{const [hi,mi]=c.hora_inicio.split(":").map(Number);const [hf,mf]=c.hora_fim.split(":").map(Number);return total+(hf*60+mf-hi*60-mi)},0);
+          const planejadoTotal = capBase.planejado + minutosFixos;
+          const cap = { ...capBase, planejado: planejadoTotal, disponivel: Math.max(0, capacidade-planejadoTotal), sobrecarga: planejadoTotal>capacidade };
           const today = dia === iso(new Date());
           return <div key={dia} className={`min-h-[430px] p-3 ${today ? "bg-[var(--brand-accent-soft)]/40" : ""}`}>
             <div className="mb-3 flex items-center justify-between"><div><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{day.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</div><div className={`font-display text-2xl font-semibold ${today ? "text-[var(--brand-accent)]" : ""}`}>{day.getDate()}</div></div>{today && <span className="rounded-full bg-[var(--brand-accent)] px-2 py-0.5 text-[9px] font-bold uppercase text-white">Hoje</span>}</div>
@@ -75,7 +88,8 @@ export default function CalendarPage() {
             </div>
 
             <div className="space-y-2">
-              {blocos.length === 0 && semHora.length === 0 && <div className="rounded-xl border border-dashed p-3 text-center text-[11px] text-muted-foreground">Sem ações</div>}
+              {blocos.length === 0 && semHora.length === 0 && compromissosDia.length === 0 && <button onClick={() => {setCompromissoData(dia);setCompromissoOpen(true)}} className="w-full rounded-xl border border-dashed p-3 text-center text-[11px] text-muted-foreground hover:border-[var(--brand-accent)]">Adicionar compromisso</button>}
+              {compromissosDia.map((c)=><div key={c.id} className={`rounded-xl border-l-4 border-l-[var(--brand-accent)] bg-card p-2.5 ${c.concluido?"opacity-60":""}`}><div className="text-[11px] font-bold tabular-nums text-[var(--brand-accent)]">{hhmm(c.hora_inicio)}–{hhmm(c.hora_fim)}</div><div className={`mt-0.5 text-xs font-semibold ${c.concluido?"line-through":""}`}>{c.titulo}</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{c.area} · compromisso</div><div className="mt-2 flex gap-1"><Button size="sm" variant="outline" className="h-6 px-1.5 text-[10px]" onClick={()=>atualizarCompromisso.mutate({id:c.id,concluido:!c.concluido})}>{c.concluido?"Reabrir":"Concluir"}</Button><Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={()=>excluirCompromisso.mutate(c.id)}><Trash2 className="h-3 w-3"/></Button></div></div>)}
               {blocos.map((bloco) => {
                 const task = taskById.get(bloco.tarefa_id);
                 if (!task) return null;
@@ -114,6 +128,7 @@ export default function CalendarPage() {
     {(overdue.length > 0 || withoutDate.length > 0) && <section className="grid gap-4 lg:grid-cols-2">{overdue.length > 0 && <TaskList title="Ações atrasadas" icon={<CircleAlert className="h-4 w-4 text-[var(--color-red)]" />} tasks={overdue} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} />}{withoutDate.length > 0 && <TaskList title="Ações sem data" icon={<CircleAlert className="h-4 w-4 text-[var(--brand-accent)]" />} tasks={withoutDate} onToggle={(id, value) => toggle.mutate({ id, concluida: value })} />}</section>}
 
     <NovoPlanoModal open={novoOpen} onOpenChange={setNovoOpen} />
+    <NovoCompromissoModal open={compromissoOpen} onOpenChange={setCompromissoOpen} dataInicial={compromissoData} />
     <AgendarAcaoModal open={!!agendar} onOpenChange={(v) => !v && setAgendar(null)} tarefa={agendar?.tarefa ?? null} dataInicial={agendar?.data} agendamentoId={agendar?.agendamentoId} horaInicial={agendar?.hora} duracaoInicial={agendar?.duracao} />
     <RegistrarRealizadoModal open={!!registrar} onOpenChange={(v) => !v && setRegistrar(null)} tarefa={registrar?.tarefa ?? null} dataInicial={registrar?.data} />
   </div></AppShell>;
