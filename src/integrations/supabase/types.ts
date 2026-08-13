@@ -49,6 +49,7 @@ export type Database = {
       }
       app_settings: {
         Row: {
+          capacidade_diaria_minutos: number
           evolution_base_url: string | null
           evolution_configured: boolean
           evolution_instance: string | null
@@ -66,6 +67,7 @@ export type Database = {
           whatsapp_resumo_semanal: boolean
         }
         Insert: {
+          capacidade_diaria_minutos?: number
           evolution_base_url?: string | null
           evolution_configured?: boolean
           evolution_instance?: string | null
@@ -83,6 +85,7 @@ export type Database = {
           whatsapp_resumo_semanal?: boolean
         }
         Update: {
+          capacidade_diaria_minutos?: number
           evolution_base_url?: string | null
           evolution_configured?: boolean
           evolution_instance?: string | null
@@ -348,8 +351,11 @@ export type Database = {
           data_fim: string | null
           data_inicio: string | null
           descricao: string
+          dias_semana: number[] | null
+          duracao_minutos: number | null
           esforco: number
           frequencia: string
+          horario_preferencial: string | null
           id: string
           impacto: number
           ordem: number
@@ -365,8 +371,11 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string | null
           descricao: string
+          dias_semana?: number[] | null
+          duracao_minutos?: number | null
           esforco?: number
           frequencia?: string
+          horario_preferencial?: string | null
           id?: string
           impacto?: number
           ordem?: number
@@ -382,8 +391,11 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string | null
           descricao?: string
+          dias_semana?: number[] | null
+          duracao_minutos?: number | null
           esforco?: number
           frequencia?: string
+          horario_preferencial?: string | null
           id?: string
           impacto?: number
           ordem?: number
@@ -508,6 +520,50 @@ export type Database = {
         }
         Relationships: []
       }
+      tarefa_agendamentos: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          data: string
+          duracao_minutos: number
+          hora_inicio: string
+          id: string
+          observacao: string | null
+          tarefa_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          data: string
+          duracao_minutos?: number
+          hora_inicio: string
+          id?: string
+          observacao?: string | null
+          tarefa_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          data?: string
+          duracao_minutos?: number
+          hora_inicio?: string
+          id?: string
+          observacao?: string | null
+          tarefa_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarefa_agendamentos_tarefa_id_fkey"
+            columns: ["tarefa_id"]
+            isOneToOne: false
+            referencedRelation: "plano_tarefas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tarefa_execucoes: {
         Row: {
           created_at: string
@@ -517,6 +573,7 @@ export type Database = {
           quantidade: number
           registrado_por: string | null
           tarefa_id: string
+          tempo_real_minutos: number | null
           updated_at: string
         }
         Insert: {
@@ -527,6 +584,7 @@ export type Database = {
           quantidade?: number
           registrado_por?: string | null
           tarefa_id: string
+          tempo_real_minutos?: number | null
           updated_at?: string
         }
         Update: {
@@ -537,6 +595,7 @@ export type Database = {
           quantidade?: number
           registrado_por?: string | null
           tarefa_id?: string
+          tempo_real_minutos?: number | null
           updated_at?: string
         }
         Relationships: [

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppSettings, useUpdateAppSettings } from "@/hooks/useAppSettings";
+import { formatTotalHoras } from "@/lib/agenda";
 import { toast } from "sonner";
 
 export default function GeneralSettings() {
@@ -16,6 +18,9 @@ export default function GeneralSettings() {
     phone: "",
     company: "",
   });
+  const { data: settings } = useAppSettings();
+  const updateSettings = useUpdateAppSettings();
+  const [capacidade, setCapacidade] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -29,6 +34,24 @@ export default function GeneralSettings() {
     });
     setLoading(false);
   }, [profile]);
+
+  useEffect(() => {
+    if (settings) setCapacidade(String(settings.capacidade_diaria_minutos ?? 480));
+  }, [settings]);
+
+  const salvarCapacidade = async () => {
+    const min = Number(capacidade);
+    if (!Number.isFinite(min) || min < 30 || min > 1440) {
+      toast.error("Informe entre 30 e 1440 minutos.");
+      return;
+    }
+    try {
+      await updateSettings.mutateAsync({ capacidade_diaria_minutos: Math.round(min) });
+      toast.success("Capacidade diária atualizada.");
+    } catch {
+      toast.error("Não foi possível salvar a capacidade.");
+    }
+  };
 
   const handleChange = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -122,6 +145,40 @@ export default function GeneralSettings() {
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Salvar alterações
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Capacidade da agenda</CardTitle>
+          <CardDescription>
+            Quanto tempo por dia você tem disponível para executar seus planos. Usamos isso para avisar
+            sobre sobrecarga no calendário e no planejamento semanal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="capacidade">Minutos por dia</Label>
+            <Input
+              id="capacidade"
+              type="number"
+              min={30}
+              max={1440}
+              step={15}
+              className="w-[140px]"
+              value={capacidade}
+              onChange={(e) => setCapacidade(e.target.value)}
+            />
+          </div>
+          <p className="pb-2 text-sm text-muted-foreground">
+            Equivale a {formatTotalHoras(Number(capacidade) || 0)} por dia.
+          </p>
+        </CardContent>
+        <CardFooter className="flex justify-end">
+          <Button onClick={salvarCapacidade} disabled={updateSettings.isPending}>
+            {updateSettings.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar capacidade
           </Button>
         </CardFooter>
       </Card>

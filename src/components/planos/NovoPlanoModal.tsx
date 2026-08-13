@@ -22,6 +22,9 @@ import { Label } from "@/components/ui/label";
 import { useMetas } from "@/hooks/useMetas";
 import { useCreatePlano } from "@/hooks/usePlanos";
 import { FREQUENCIAS, FREQUENCIA_LABEL, type Frequencia } from "@/lib/execucao";
+import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
+import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { formatDuracao, horaFim, labelDiasSemana } from "@/lib/agenda";
 
 type Props = {
   open: boolean;
@@ -36,6 +39,9 @@ type LinhaTarefa = {
   unidade: string;
   impacto: string;
   esforco: string;
+  duracao: number | null;
+  horario: string;
+  dias: number[] | null;
 };
 
 const linhaVazia = (): LinhaTarefa => ({
@@ -46,6 +52,9 @@ const linhaVazia = (): LinhaTarefa => ({
   unidade: "",
   impacto: "5",
   esforco: "5",
+  duracao: null,
+  horario: "",
+  dias: null,
 });
 
 export function NovoPlanoModal({ open, onOpenChange }: Props) {
@@ -81,6 +90,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           unidade: t.unidade,
           impacto: Number(t.impacto) || 5,
           esforco: Number(t.esforco) || 5,
+          duracao_minutos: t.duracao,
+          horario_preferencial: t.horario || null,
+          dias_semana: t.frequencia === "diaria" ? t.dias : null,
         })),
       });
       toast.success("Plano criado");
@@ -195,6 +207,46 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     value={t.prazo}
                     onChange={(e) => patch(i, { prazo: e.target.value })}
                   />
+                </div>
+                <div className="space-y-2 rounded-md bg-muted/40 p-2.5">
+                  <div className="text-[11px] font-semibold">
+                    Duração estimada por execução
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      (quanto tempo leva cada vez — não é o prazo final)
+                    </span>
+                  </div>
+                  <DuracaoPicker value={t.duracao} onChange={(v) => patch(i, { duracao: v })} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      Horário preferencial
+                      <Input
+                        type="time"
+                        className="h-8 w-[110px]"
+                        value={t.horario}
+                        onChange={(e) => patch(i, { horario: e.target.value })}
+                      />
+                    </label>
+                    {t.horario && t.duracao ? (
+                      <span className="text-[11px] font-medium text-[var(--brand-primary)]">
+                        {t.horario}–{horaFim(t.horario, t.duracao)}
+                      </span>
+                    ) : null}
+                  </div>
+                  {t.frequencia === "diaria" && (
+                    <div className="space-y-1.5">
+                      <div className="text-[11px] font-semibold">Dias de execução</div>
+                      <DiasSemanaPicker value={t.dias} onChange={(v) => patch(i, { dias: v })} />
+                      {labelDiasSemana(t.dias) && (
+                        <p className="text-[11px] text-muted-foreground">{labelDiasSemana(t.dias)}</p>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Resumo: {t.quantidade || 0} {t.unidade || "unidades"} ·{" "}
+                    {FREQUENCIA_LABEL[t.frequencia].toLowerCase()}
+                    {t.duracao ? ` · ${formatDuracao(t.duracao)} por execução` : " · sem duração estimada"}
+                    {t.prazo ? ` · prazo final ${t.prazo.split("-").reverse().join("/")}` : ""}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                   <label className="flex items-center gap-1.5">

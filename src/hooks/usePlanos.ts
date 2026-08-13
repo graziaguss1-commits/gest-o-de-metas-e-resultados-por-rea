@@ -55,7 +55,7 @@ export function useExecucoes() {
     queryFn: async (): Promise<Execucao[]> => {
       const { data, error } = await supabase
         .from("tarefa_execucoes")
-        .select("id, tarefa_id, data_referencia, quantidade, observacao")
+        .select("id, tarefa_id, data_referencia, quantidade, observacao, tempo_real_minutos")
         .order("data_referencia", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((e) => ({ ...e, quantidade: Number(e.quantidade) })) as Execucao[];
@@ -88,7 +88,12 @@ export type NovoTarefaInput = {
   responsavel_id?: string | null;
   data_inicio?: string | null;
   data_fim?: string | null;
+  /** Estimativa por execução, em minutos. `null` = sem estimativa. */
+  duracao_minutos?: number | null;
+  horario_preferencial?: string | null;
+  dias_semana?: number[] | null;
 };
+
 
 export type NovoPlanoInput = {
   titulo: string;
@@ -129,7 +134,11 @@ export function useCreatePlano() {
           responsavel_id: t.responsavel_id ?? null,
           data_inicio: t.data_inicio || null,
           data_fim: t.data_fim || null,
+          duracao_minutos: t.duracao_minutos ?? null,
+          horario_preferencial: t.horario_preferencial || null,
+          dias_semana: t.dias_semana ?? null,
         }));
+
 
       if (taskRows.length > 0) {
         const { error: tErr } = await supabase.from("plano_tarefas").insert(taskRows);
@@ -194,7 +203,35 @@ export function useAddTarefa() {
         responsavel_id: t.responsavel_id ?? null,
         data_inicio: t.data_inicio || null,
         data_fim: t.data_fim || null,
+        duracao_minutos: t.duracao_minutos ?? null,
+        horario_preferencial: t.horario_preferencial || null,
+        dias_semana: t.dias_semana ?? null,
       });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+  });
+}
+
+/** Atualiza campos de uma ação existente (inclui duração/horário/dias). */
+export function useUpdateTarefa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...patch
+    }: {
+      id: string;
+      descricao?: string;
+      prazo?: string | null;
+      frequencia?: string;
+      quantidade_planejada?: number;
+      unidade?: string;
+      duracao_minutos?: number | null;
+      horario_preferencial?: string | null;
+      dias_semana?: number[] | null;
+    }) => {
+      const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
@@ -210,11 +247,14 @@ export function useRegistrarExecucao() {
       quantidade,
       data,
       observacao,
+      tempoRealMinutos,
     }: {
       tarefaId: string;
       quantidade: number;
       data: string;
       observacao?: string | null;
+      /** Tempo real gasto — nunca substitui a estimativa da ação. */
+      tempoRealMinutos?: number | null;
     }) => {
       const { data: user } = await supabase.auth.getUser();
       const uid = user.user?.id;
@@ -224,6 +264,7 @@ export function useRegistrarExecucao() {
         quantidade,
         data_referencia: data,
         observacao: observacao?.trim() || null,
+        tempo_real_minutos: tempoRealMinutos ?? null,
         registrado_por: uid,
       });
       if (error) throw error;
@@ -234,6 +275,7 @@ export function useRegistrarExecucao() {
     },
   });
 }
+
 
 export function useDeletePlano() {
   const qc = useQueryClient();
