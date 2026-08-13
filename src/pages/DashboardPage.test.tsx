@@ -1,4 +1,6 @@
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import DashboardPage from "./DashboardPage";
 
@@ -21,7 +23,14 @@ vi.mock("@/hooks/useOnboarding", () => ({
 
 describe("DashboardPage", () => {
   it("permite acessar o dashboard sem consultar ou bloquear por onboarding", () => {
-    render(<DashboardPage />);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <DashboardPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
 
     expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByText(/Bem-vindo, Ana!/)).toBeInTheDocument();
