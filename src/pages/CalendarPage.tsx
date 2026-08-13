@@ -16,7 +16,7 @@ import { NovoPlanoModal } from "@/components/planos/NovoPlanoModal";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { RegistrarRealizadoModal } from "@/components/planos/RegistrarRealizadoModal";
 import { AgendarAcaoAvulsaModal } from "@/components/actions/AgendarAcaoAvulsaModal";
-import { capacidadeDoDia, configuracaoRecorrenciaCompleta, formatTotalHoras, hhmm, horaFim, totalSemana } from "@/lib/agenda";
+import { capacidadeDoDia, configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida, formatTotalHoras, hhmm, horaFim, totalSemana } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
 
 type CalendarTask = PlanoWithMeta["tarefas"][number] & { plano: string; area: string; meta: string | null };
@@ -67,7 +67,7 @@ export default function CalendarPage() {
       task.frequencia,
       task.duracao_minutos,
       task.horario_preferencial,
-      task.dias_semana,
+      diasRecorrenciaPersistida(task.frequencia, task.dias_semana),
     ) &&
     ["diaria", "semanal", "mensal"].includes(task.frequencia) &&
     (!task.data_inicio || task.data_inicio <= fimSemana) &&
