@@ -65,8 +65,9 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
   }).length;
   const total = ids.length;
 
+  const statusAnterior = meta.status as "verde" | "amarelo" | "vermelho";
   let statusCalculado: "verde" | "amarelo" | "vermelho" =
-    total === 0 ? "amarelo" : meta.status;
+    total === 0 ? "amarelo" : statusAnterior;
 
   if (total > 0) {
     const { data } = await supabase.rpc("calcular_status_meta", {
@@ -77,7 +78,7 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
       p_is_inverse: false,
     });
     statusCalculado =
-      (data as "verde" | "amarelo" | "vermelho" | null) ?? meta.status;
+      (data as "verde" | "amarelo" | "vermelho" | null) ?? statusAnterior;
   }
 
   if (
