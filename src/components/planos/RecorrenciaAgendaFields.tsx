@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
@@ -32,6 +33,7 @@ export function RecorrenciaAgendaFields({
   onDiasChange,
   compact = false,
 }: Props) {
+  const fieldId = useId();
   const recorrente = frequencia !== "unica";
   const completa = configuracaoRecorrenciaCompleta(
     frequencia,
@@ -100,10 +102,10 @@ export function RecorrenciaAgendaFields({
 
           {frequencia === "mensal" && (
             <div className="space-y-1.5">
-              <Label htmlFor="dia-mes-recorrencia">Dia do mês *</Label>
+              <Label htmlFor={`dia-mes-recorrencia-${fieldId}`}>Dia do mês *</Label>
               <div className="flex items-center gap-2">
                 <Input
-                  id="dia-mes-recorrencia"
+                  id={`dia-mes-recorrencia-${fieldId}`}
                   type="number"
                   min={1}
                   max={31}
@@ -125,9 +127,9 @@ export function RecorrenciaAgendaFields({
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="horario-recorrencia">Horário preferencial *</Label>
+            <Label htmlFor={`horario-recorrencia-${fieldId}`}>Horário preferencial *</Label>
             <Input
-              id="horario-recorrencia"
+              id={`horario-recorrencia-${fieldId}`}
               type="time"
               value={horario}
               onChange={(event) => onHorarioChange(event.target.value)}
