@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -47,6 +47,8 @@ import { formatDuracao, hhmm, labelDiasSemana } from "@/lib/agenda";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
 import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { EditarPlanoModal } from "@/components/planos/EditarPlanoModal";
+import { EditarTarefaModal } from "@/components/planos/EditarTarefaModal";
 import { CalendarClock } from "lucide-react";
 
 export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
@@ -56,6 +58,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
   const { data: execucoes = [] } = useExecucoes();
   const { isAdmin } = useAuth();
   const [adding, setAdding] = useState(false);
+  const [editarPlanoOpen, setEditarPlanoOpen] = useState(false);
   const [nova, setNova] = useState({
     descricao: "",
     prazo: "",
@@ -124,7 +127,19 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
           </div>
         </div>
 
-        {isAdmin && (
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Editar plano"
+            aria-label="Editar plano"
+            className="h-8 w-8 text-muted-foreground"
+            onClick={() => setEditarPlanoOpen(true)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {isAdmin && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
@@ -159,6 +174,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             </AlertDialogContent>
           </AlertDialog>
         )}
+        </div>
       </div>
 
       {/* execução do plano */}
@@ -273,6 +289,12 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
           Adicionar ação
         </Button>
       )}
+
+      <EditarPlanoModal
+        open={editarPlanoOpen}
+        onOpenChange={setEditarPlanoOpen}
+        plano={plano}
+      />
     </div>
   );
 }
@@ -289,6 +311,7 @@ function TarefaLinha({
   const registrar = useRegistrarExecucao();
   const [valor, setValor] = useState("");
   const [agendarOpen, setAgendarOpen] = useState(false);
+  const [editarOpen, setEditarOpen] = useState(false);
   const freq = getFrequencia(tarefa);
   const exec = execucaoTarefa(tarefa, execucoes);
   const mensuravel = freq !== "unica" || Number(tarefa.quantidade_planejada ?? 1) > 1 || !!tarefa.unidade;
@@ -327,6 +350,17 @@ function TarefaLinha({
           type="button"
           variant="ghost"
           size="icon"
+          title="Editar ação"
+          aria-label="Editar ação"
+          className="h-7 w-7 text-muted-foreground"
+          onClick={() => setEditarOpen(true)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           title="Agendar no calendário"
           className="h-7 w-7 text-muted-foreground"
           onClick={() => setAgendarOpen(true)}
@@ -358,6 +392,7 @@ function TarefaLinha({
         )}
       </div>
 
+      <EditarTarefaModal open={editarOpen} onOpenChange={setEditarOpen} tarefa={tarefa} />
       <AgendarAcaoModal open={agendarOpen} onOpenChange={setAgendarOpen} tarefa={tarefa} dataInicial={todayISO()} />
 
       {mensuravel && (
