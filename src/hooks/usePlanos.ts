@@ -109,7 +109,7 @@ export function usePlanos() {
         await Promise.all([
           supabase.from("planos_acao").select("*").order("created_at", { ascending: false }),
           supabase.from("plano_tarefas").select("*").order("ordem", { ascending: true }),
-          supabase.from("metas").select("id, nome, status, area"),
+          supabase.from("metas").select("id, nome, status, area, metric_type, unidade"),
         ]);
       if (pErr) throw pErr;
       if (tErr) throw tErr;
@@ -130,8 +130,10 @@ export function usePlanos() {
         tarefas: tarefasByPlano.get(p.id) ?? [],
       }));
 
-      const metasVinculadas = [...new Set(resultado.map((plano) => plano.meta_id).filter(Boolean))] as string[];
-      await Promise.all(metasVinculadas.map((metaId) => sincronizarEtapasDaMeta(metaId)));
+      const metasDeProjeto = (metas ?? [])
+        .filter((meta) => meta.metric_type === "projeto" || meta.unidade === "etapas")
+        .map((meta) => meta.id);
+      await Promise.all(metasDeProjeto.map((metaId) => sincronizarEtapasDaMeta(metaId)));
       return resultado;
     },
   });
