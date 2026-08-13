@@ -22,10 +22,9 @@ import { Label } from "@/components/ui/label";
 import { useMetas } from "@/hooks/useMetas";
 import { useCreatePlano } from "@/hooks/usePlanos";
 import { FREQUENCIAS, FREQUENCIA_LABEL, type Frequencia } from "@/lib/execucao";
-import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
-import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
-import { formatDuracao, horaFim, labelDiasSemana } from "@/lib/agenda";
+import { configuracaoRecorrenciaCompleta, formatDuracao, labelMomentoRecorrencia } from "@/lib/agenda";
 
 type Props = {
   open: boolean;
@@ -78,8 +77,17 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!titulo.trim()) return toast.error("Informe o título do plano.");
-    const diariaIncompleta = tarefas.find((t) => t.descricao.trim() && t.frequencia === "diaria" && (!t.horario || !t.duracao || !t.dias?.length));
-    if (diariaIncompleta) return toast.error(`Complete horário, duração e dias da rotina diária: ${diariaIncompleta.descricao}`);
+    const recorrenciaIncompleta = tarefas.find(
+      (t) =>
+        t.descricao.trim() &&
+        t.frequencia !== "unica" &&
+        !configuracaoRecorrenciaCompleta(t.frequencia, t.duracao, t.horario, t.dias),
+    );
+    if (recorrenciaIncompleta) {
+      return toast.error(
+        `Complete o dia, o horário e a duração da rotina: ${recorrenciaIncompleta.descricao}`,
+      );
+    }
 
     try {
       await create.mutateAsync({
@@ -97,7 +105,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           esforco: t.esforco,
           duracao_minutos: t.duracao,
           horario_preferencial: t.horario || null,
-          dias_semana: t.frequencia === "diaria" ? t.dias : null,
+          dias_semana: t.frequencia !== "unica" ? t.dias : null,
         })),
       });
       toast.success("Plano criado");
@@ -179,7 +187,20 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                 <div className="flex flex-wrap gap-2">
                   <Select
                     value={t.frequencia}
-                    onValueChange={(v) => patch(i, { frequencia: v as Frequencia, dias: v === "diaria" ? (t.dias ?? [1,2,3,4,5]) : t.dias })}
+                    onValueChange={(value) => {
+                      const frequencia = value as Frequencia;
+                      patch(i, {
+                        frequencia,
+                        dias:
+                          frequencia === "diaria"
+                            ? [1, 2, 3, 4, 5]
+                            : frequencia === "semanal"
+                              ? [1]
+                              : frequencia === "mensal"
+                                ? [10]
+                                : null,
+                      });
+                    }}
                   >
                     <SelectTrigger className="h-9 w-[130px]">
                       <SelectValue />
@@ -216,47 +237,25 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     />
                   </label>
                 </div>
-                <div className="space-y-2 rounded-md bg-muted/40 p-2.5">
-                  <div className="text-[11px] font-semibold">
-                    Duração estimada por execução{t.frequencia === "diaria" ? " *" : ""}
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      (quanto tempo leva cada vez — não é o prazo final)
-                    </span>
-                  </div>
-                  <DuracaoPicker value={t.duracao} onChange={(v) => patch(i, { duracao: v })} />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      Horário da rotina{t.frequencia === "diaria" ? " *" : ""}
-                      <Input
-                        type="time"
-                        className="h-8 w-[110px]"
-                        value={t.horario}
-                        onChange={(e) => patch(i, { horario: e.target.value })}
-                      />
-                    </label>
-                    {t.horario && t.duracao ? (
-                      <span className="text-[11px] font-medium text-[var(--brand-primary)]">
-                        {t.horario}–{horaFim(t.horario, t.duracao)}
-                      </span>
-                    ) : null}
-                  </div>
-                  {t.frequencia === "diaria" && (
-                    <div className="space-y-1.5">
-                      <div className="text-[11px] font-semibold">Dias de execução *</div>
-                      <DiasSemanaPicker value={t.dias} onChange={(v) => patch(i, { dias: v })} />
-                      {labelDiasSemana(t.dias) && (
-                        <p className="text-[11px] text-muted-foreground">{labelDiasSemana(t.dias)}</p>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-[11px] text-muted-foreground">
-                    {t.frequencia === "diaria" && (!t.horario || !t.duracao || !t.dias?.length) && <span className="mb-1 block font-semibold text-destructive">Defina horário, duração e dias para inserir a rotina automaticamente na agenda.</span>}
-                    Resumo: {t.quantidade || 0} {t.unidade || "unidades"} ·{" "}
-                    {FREQUENCIA_LABEL[t.frequencia].toLowerCase()}
-                    {t.duracao ? ` · ${formatDuracao(t.duracao)} por execução` : " · sem duração estimada"}
-                    {t.prazo ? ` · prazo final ${t.prazo.split("-").reverse().join("/")}` : ""}
-                  </p>
-                </div>
+                <RecorrenciaAgendaFields
+                  frequencia={t.frequencia}
+                  duracao={t.duracao}
+                  horario={t.horario}
+                  dias={t.dias}
+                  onDuracaoChange={(duracao) => patch(i, { duracao })}
+                  onHorarioChange={(horario) => patch(i, { horario })}
+                  onDiasChange={(dias) => patch(i, { dias })}
+                  compact
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Resumo: {t.quantidade || 0} {t.unidade || "unidades"} ·{" "}
+                  {FREQUENCIA_LABEL[t.frequencia].toLowerCase()}
+                  {labelMomentoRecorrencia(t.frequencia, t.dias)
+                    ? ` · ${labelMomentoRecorrencia(t.frequencia, t.dias)}`
+                    : ""}
+                  {t.duracao ? ` · ${formatDuracao(t.duracao)} por execução` : " · sem duração estimada"}
+                  {t.prazo ? ` · rotina ativa até ${t.prazo.split("-").reverse().join("/")}` : ""}
+                </p>
                 <ImpactoEsforcoPicker
                   impacto={t.impacto}
                   esforco={t.esforco}
