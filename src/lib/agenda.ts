@@ -7,8 +7,8 @@
  * 2. Ações antigas sem estimativa permanecem `null` — nunca inventamos duração.
  * 3. Ocorrências agendadas são registros reais (`tarefa_agendamentos`) criados
  *    apenas para o período visível/escolhido pela usuária. Nada é gerado
- *    automaticamente para o futuro infinito; recorrência diária apenas sugere
- *    os dias da semana em que a ação deveria ser agendada.
+ *    automaticamente para o futuro infinito. Rotinas diárias, semanais e mensais
+ *    são materializadas somente dentro da semana que está sendo visualizada.
  * 4. Tempo real gasto (`tempo_real_minutos`) nunca substitui a estimativa;
  *    serve só para comparação "Estimado 45 min · Real 55 min".
  */
@@ -128,4 +128,83 @@ export function labelDiasSemana(dias?: number[] | null): string | null {
     .map((d) => DIAS_SEMANA.find((x) => x.valor === d)?.curto)
     .filter(Boolean)
     .join(", ");
+}
+
+
+/** Dia mensal armazenado em `dias_semana[0]` para manter compatibilidade sem migration. */
+export function diaMesRecorrencia(dias?: number[] | null): number | null {
+  const dia = Number(dias?.[0]);
+  return Number.isInteger(dia) && dia >= 1 && dia <= 31 ? dia : null;
+}
+
+/**
+ * Compatibilidade com rotinas salvas antes da escolha explícita do momento.
+ * Diárias eram seg–sex; semanais eram segunda; mensais eram dia 1.
+ */
+export function diasRecorrenciaPersistida(
+  frequencia?: string | null,
+  dias?: number[] | null,
+): number[] | null {
+  if (dias?.length) return dias;
+  if (frequencia === "diaria") return [...DIAS_UTEIS];
+  if (frequencia === "semanal" || frequencia === "mensal") return [1];
+  return null;
+}
+
+/** Confirma se uma rotina possui todos os dados necessários para entrar na agenda. */
+export function configuracaoRecorrenciaCompleta(
+  frequencia?: string | null,
+  duracaoMinutos?: number | null,
+  horarioPreferencial?: string | null,
+  dias?: number[] | null,
+): boolean {
+  if (!["diaria", "semanal", "mensal"].includes(frequencia ?? "")) return true;
+  if (!duracaoMinutos || duracaoMinutos <= 0 || !horarioPreferencial) return false;
+
+  if (frequencia === "mensal") return diaMesRecorrencia(dias) != null;
+
+  const diasValidos = (dias ?? []).filter(
+    (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7,
+  );
+  return frequencia === "semanal" ? diasValidos.length === 1 : diasValidos.length > 0;
+}
+
+/** Verifica se uma data pertence ao padrão diário, semanal ou mensal configurado. */
+export function dataCorrespondeRecorrencia(
+  frequencia: string,
+  date: Date,
+  dias?: number[] | null,
+): boolean {
+  if (frequencia === "mensal") {
+    const diaDesejado = diaMesRecorrencia(dias);
+    if (!diaDesejado) return false;
+    const ultimoDia = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return date.getDate() === Math.min(diaDesejado, ultimoDia);
+  }
+
+  if (frequencia === "diaria" || frequencia === "semanal") {
+    return (dias ?? []).includes(diaISO(date));
+  }
+
+  return false;
+}
+
+/** Rótulo gerencial do momento escolhido: "Toda terça" ou "Todo dia 10". */
+export function labelMomentoRecorrencia(
+  frequencia?: string | null,
+  dias?: number[] | null,
+): string | null {
+  if (frequencia === "mensal") {
+    const dia = diaMesRecorrencia(dias);
+    if (!dia) return null;
+    return `Todo dia ${dia}${dia > 28 ? " (ou no último dia)" : ""}`;
+  }
+
+  if (frequencia === "semanal") {
+    const dia = DIAS_SEMANA.find((item) => item.valor === dias?.[0]);
+    return dia ? `Toda ${dia.longo.toLowerCase()}` : null;
+  }
+
+  if (frequencia === "diaria") return labelDiasSemana(dias);
+  return null;
 }

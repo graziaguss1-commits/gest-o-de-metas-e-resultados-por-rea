@@ -18,8 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
-import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
+import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
 import { useUpdateTarefa } from "@/hooks/usePlanos";
 import {
@@ -28,7 +27,7 @@ import {
   getFrequencia,
   type Frequencia,
 } from "@/lib/execucao";
-import { horaFim, labelDiasSemana } from "@/lib/agenda";
+import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida } from "@/lib/agenda";
 import { todayISO, type Tarefa } from "@/lib/metas";
 
 type Props = {
@@ -62,8 +61,7 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     dataInicio: tarefa.data_inicio ?? todayISO(),
     duracao: tarefa.duracao_minutos ?? null,
     horario: tarefa.horario_preferencial?.slice(0, 5) ?? "",
-    dias: tarefa.dias_semana ??
-      (frequencia === "diaria" ? [1, 2, 3, 4, 5] : frequencia === "semanal" ? [1] : null),
+    dias: diasRecorrenciaPersistida(frequencia, tarefa.dias_semana),
     impacto: tarefa.impacto ?? 5,
     esforco: tarefa.esforco ?? 5,
   };
@@ -83,10 +81,8 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
       frequencia,
       dias:
         frequencia === "diaria"
-          ? form.dias ?? [1, 2, 3, 4, 5]
-          : frequencia === "semanal"
-            ? form.dias ?? [1]
-            : null,
+          ? [1, 2, 3, 4, 5]
+          : null,
     });
   };
 
@@ -94,10 +90,15 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
     event.preventDefault();
     if (!form.descricao.trim()) return toast.error("Informe a descrição da ação.");
     if (
-      form.frequencia === "diaria" &&
-      (!form.duracao || !form.horario || !form.dias?.length)
+      form.frequencia !== "unica" &&
+      !configuracaoRecorrenciaCompleta(
+        form.frequencia,
+        form.duracao,
+        form.horario,
+        form.dias,
+      )
     ) {
-      return toast.error("Defina horário, duração e dias da rotina diária.");
+      return toast.error("Defina o dia, o horário e a duração da rotina.");
     }
     if (
       form.frequencia !== "unica" &&
@@ -120,10 +121,7 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
         data_fim: form.frequencia === "unica" ? null : form.prazo || null,
         duracao_minutos: form.duracao,
         horario_preferencial: form.horario || null,
-        dias_semana:
-          form.frequencia === "diaria" || form.frequencia === "semanal"
-            ? form.dias
-            : null,
+        dias_semana: form.frequencia !== "unica" ? form.dias : null,
         impacto: form.impacto,
         esforco: form.esforco,
       });
@@ -135,7 +133,6 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
   };
 
   const recorrente = form.frequencia !== "unica";
-  const selecionaDias = form.frequencia === "diaria" || form.frequencia === "semanal";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -217,48 +214,15 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
             </div>
           </div>
 
-          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-            <div>
-              <div className="text-sm font-semibold">Bloco de agenda</div>
-              <p className="text-xs text-muted-foreground">
-                Defina quanto tempo essa ação ocupa e o horário preferencial.
-              </p>
-            </div>
-            <DuracaoPicker
-              value={form.duracao}
-              onChange={(duracao) => patch({ duracao })}
-            />
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="space-y-1.5 text-sm font-medium">
-                Horário preferencial{form.frequencia === "diaria" ? " *" : ""}
-                <Input
-                  type="time"
-                  className="w-[140px]"
-                  value={form.horario}
-                  onChange={(event) => patch({ horario: event.target.value })}
-                />
-              </label>
-              {form.horario && form.duracao && (
-                <span className="pb-2 text-sm font-medium text-[var(--brand-primary)]">
-                  {form.horario}–{horaFim(form.horario, form.duracao)}
-                </span>
-              )}
-            </div>
-
-            {selecionaDias && (
-              <div className="space-y-1.5">
-                <Label>
-                  {form.frequencia === "diaria" ? "Dias de execução *" : "Dia da semana"}
-                </Label>
-                <DiasSemanaPicker value={form.dias} onChange={(dias) => patch({ dias })} />
-                {labelDiasSemana(form.dias) && (
-                  <p className="text-xs text-muted-foreground">
-                    {labelDiasSemana(form.dias)}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          <RecorrenciaAgendaFields
+            frequencia={form.frequencia}
+            duracao={form.duracao}
+            horario={form.horario}
+            dias={form.dias}
+            onDuracaoChange={(duracao) => patch({ duracao })}
+            onHorarioChange={(horario) => patch({ horario })}
+            onDiasChange={(dias) => patch({ dias })}
+          />
 
           <ImpactoEsforcoPicker
             impacto={form.impacto}

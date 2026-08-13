@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agendamento } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
-import { diaISO } from "@/lib/agenda";
+import { configuracaoRecorrenciaCompleta, dataCorrespondeRecorrencia, diasRecorrenciaPersistida } from "@/lib/agenda";
 
 const KEY = ["agendamentos"] as const;
 
@@ -110,14 +110,32 @@ export function useMaterializarRecorrencias() {
       const hoje = new Date().toISOString().slice(0,10);
       const { data: user } = await supabase.auth.getUser();
       const rows = tarefas.flatMap((t) => {
-        if (!["diaria","semanal","mensal"].includes(t.frequencia) || !t.horario_preferencial || !t.duracao_minutos) return [];
+        const dias = diasRecorrenciaPersistida(t.frequencia, t.dias_semana);
+        if (
+          !configuracaoRecorrenciaCompleta(
+            t.frequencia,
+            t.duracao_minutos,
+            t.horario_preferencial,
+            dias,
+          )
+        ) {
+          return [];
+        }
+
         return datas.filter((data) => {
-          if (data < hoje || (t.data_inicio && data < t.data_inicio) || (t.data_fim && data > t.data_fim)) return false;
+          if (
+            data < hoje ||
+            (t.data_inicio && data < t.data_inicio) ||
+            (t.data_fim && data > t.data_fim)
+          ) {
+            return false;
+          }
+
           const date = new Date(`${data}T12:00:00`);
-          const isoDay = diaISO(date);
-          const dias = t.dias_semana ?? (t.frequencia === "diaria" ? [1,2,3,4,5] : [1]);
-          if (t.frequencia === "mensal") return date.getDate() === 1 && !chaves.has(`${t.id}|${data}`);
-          return dias.includes(isoDay) && !chaves.has(`${t.id}|${data}`);
+          return (
+            dataCorrespondeRecorrencia(t.frequencia, date, dias) &&
+            !chaves.has(`${t.id}|${data}`)
+          );
         }).map((data) => ({
           tarefa_id: t.id, data, hora_inicio: t.horario_preferencial!,
           duracao_minutos: t.duracao_minutos!, criado_por: user.user?.id ?? null,
