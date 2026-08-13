@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Pencil, Plus, Trash2, BriefcaseBusiness } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePlanos, useToggleTarefa, type PlanoWithMeta } from "@/hooks/usePlanos";
-import { useAgendamentos, useRemoverAgendamento } from "@/hooks/useAgendamentos";
+import { useAgendamentos, useMaterializarRecorrencias, useReagendarTarefa, useRemoverAgendamento } from "@/hooks/useAgendamentos";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useCompromissos, useAtualizarCompromisso, useExcluirCompromisso } from "@/hooks/useCompromissos";
 import { NovoCompromissoModal } from "@/components/calendar/NovoCompromissoModal";
+import { HourlyCalendarGrid } from "@/components/calendar/HourlyCalendarGrid";
 import { NovoPlanoModal } from "@/components/planos/NovoPlanoModal";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { RegistrarRealizadoModal } from "@/components/planos/RegistrarRealizadoModal";
@@ -33,8 +34,11 @@ export default function CalendarPage() {
   const { data: settings } = useAppSettings();
   const toggle = useToggleTarefa();
   const remover = useRemoverAgendamento();
+  const reagendar = useReagendarTarefa();
+  const materializar = useMaterializarRecorrencias();
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [novoOpen, setNovoOpen] = useState(false);
+  const [calendarView, setCalendarView] = useState<"horas"|"compacto">("horas");
   const [compromissoOpen, setCompromissoOpen] = useState(false);
   const [compromissoData, setCompromissoData] = useState<string>();
   const atualizarCompromisso = useAtualizarCompromisso();
@@ -55,6 +59,13 @@ export default function CalendarPage() {
   const minutosCompromissos = compromissos.reduce((total, c) => { const [hi,mi]=c.hora_inicio.split(":").map(Number); const [hf,mf]=c.hora_fim.split(":").map(Number); return total + (hf*60+mf-hi*60-mi); }, 0);
   const minutosSemana = totalSemana(days.map(iso), agendamentos) + minutosCompromissos;
 
+  useEffect(() => {
+    if (!tasks.length) return;
+    materializar.mutate({ tarefas: tasks, datas: days.map(iso) });
+  // A semana e a configuração das tarefas determinam as ocorrências; o hook evita duplicatas.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor, tasks.map((t) => `${t.id}:${t.frequencia}:${t.horario_preferencial}:${t.duracao_minutos}:${(t.dias_semana ?? []).join(",")}`).join("|")]);
+
   return <AppShell><div className="performance-page space-y-6">
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="eyebrow mb-2">AGENDA E EXECUÇÃO</div><h1 className="font-display text-3xl font-semibold">Calendário estratégico</h1><p className="mt-1 text-sm text-muted-foreground">Ações, pendências e compromissos da semana em um só lugar.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setCompromissoData(iso(new Date())); setCompromissoOpen(true); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Novo compromisso</Button><Button onClick={() => setNovoOpen(true)} className="brand-button"><Plus className="mr-2 h-4 w-4" />Novo plano</Button></div></header>
 
@@ -66,14 +77,18 @@ export default function CalendarPage() {
       <CalendarMetric label="Sem data" value={String(withoutDate.length)} tone="accent" />
     </section>
 
-    <div className="performance-card overflow-hidden">
+    <div className="flex justify-end gap-2"><Button size="sm" variant={calendarView==="horas"?"default":"outline"} onClick={()=>setCalendarView("horas")}>Por horário</Button><Button size="sm" variant={calendarView==="compacto"?"default":"outline"} onClick={()=>setCalendarView("compacto")}>Compacto</Button></div>
+
+    {calendarView === "horas" && <HourlyCalendarGrid days={days} agendamentos={agendamentos} compromissos={compromissos} taskById={taskById} onOpenDay={(data)=>{setCompromissoData(data);setCompromissoOpen(true)}} onMoveAction={(id,data,hora)=>{const atual=agendamentos.find(a=>a.id===id);if(atual)reagendar.mutate({id,data,horaInicio:hora,duracaoMinutos:atual.duracao_minutos});}} onMoveCommitment={(id,data,hora)=>{const atual=compromissos.find(c=>c.id===id);if(!atual)return;const [hi,mi]=atual.hora_inicio.split(":").map(Number);const [hf,mf]=atual.hora_fim.split(":").map(Number);const duracao=hf*60+mf-hi*60-mi;const [nh,nm]=hora.split(":").map(Number);const fim=nh*60+nm+duracao;atualizarCompromisso.mutate({id,data,hora_inicio:hora,hora_fim:`${String(Math.floor(fim/60)).padStart(2,"0")}:${String(fim%60).padStart(2,"0")}`});}} />}
+
+    <div className={`performance-card overflow-hidden ${calendarView === "compacto" ? "" : "hidden"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Semana selecionada</div><div className="mt-1 font-display text-lg font-semibold capitalize">{weekLabel}</div><div className="text-xs text-muted-foreground">Capacidade diária configurada: {formatTotalHoras(capacidade)}</div></div><div className="flex items-center gap-1"><Button size="icon" variant="outline" onClick={() => setAnchor(addDays(anchor, -7))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" onClick={() => setAnchor(startOfWeek(new Date()))}>Hoje</Button><Button size="icon" variant="outline" onClick={() => setAnchor(addDays(anchor, 7))}><ChevronRight className="h-4 w-4" /></Button></div></div>
       {isLoading ? <Skeleton className="h-[440px] w-full" /> : <div className="grid min-w-[900px] grid-cols-7 divide-x overflow-x-auto">
         {days.map((day) => {
           const dia = iso(day);
           const blocos = agendamentos.filter((a) => a.data === dia).sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
           const compromissosDia = compromissos.filter((c) => c.data === dia).sort((a,b)=>a.hora_inicio.localeCompare(b.hora_inicio));
-          const semHora = tasks.filter((task) => task.prazo === dia);
+          const semHora = tasks.filter((task) => task.prazo === dia && !agendamentos.some((a) => a.tarefa_id === task.id && a.data === dia));
           const capBase = capacidadeDoDia(dia, agendamentos, capacidade);
           const minutosFixos = compromissosDia.reduce((total,c)=>{const [hi,mi]=c.hora_inicio.split(":").map(Number);const [hf,mf]=c.hora_fim.split(":").map(Number);return total+(hf*60+mf-hi*60-mi)},0);
           const planejadoTotal = capBase.planejado + minutosFixos;
