@@ -140,6 +140,51 @@ export type Database = {
           },
         ]
       }
+      meta_funil_etapas: {
+        Row: {
+          created_at: string
+          id: string
+          meta_id: string
+          nome: string
+          ordem: number
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta_id: string
+          nome: string
+          ordem?: number
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta_id?: string
+          nome?: string
+          ordem?: number
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_funil_etapas_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "metas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_funil_etapas_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "metas_with_responsavel"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_lancamentos: {
         Row: {
           created_at: string
@@ -196,6 +241,7 @@ export type Database = {
           data_fim: string
           data_inicio: string
           descricao: string | null
+          funil_ativo: boolean
           id: string
           is_demo: boolean
           is_inverse: boolean
@@ -216,6 +262,7 @@ export type Database = {
           data_fim: string
           data_inicio: string
           descricao?: string | null
+          funil_ativo?: boolean
           id?: string
           is_demo?: boolean
           is_inverse?: boolean
@@ -236,6 +283,7 @@ export type Database = {
           data_fim?: string
           data_inicio?: string
           descricao?: string | null
+          funil_ativo?: boolean
           id?: string
           is_demo?: boolean
           is_inverse?: boolean
@@ -297,32 +345,53 @@ export type Database = {
         Row: {
           concluida: boolean
           created_at: string
+          data_fim: string | null
+          data_inicio: string | null
           descricao: string
+          esforco: number
+          frequencia: string
           id: string
+          impacto: number
           ordem: number
           plano_id: string
           prazo: string | null
+          quantidade_planejada: number
           responsavel_id: string | null
+          unidade: string
         }
         Insert: {
           concluida?: boolean
           created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           descricao: string
+          esforco?: number
+          frequencia?: string
           id?: string
+          impacto?: number
           ordem?: number
           plano_id: string
           prazo?: string | null
+          quantidade_planejada?: number
           responsavel_id?: string | null
+          unidade?: string
         }
         Update: {
           concluida?: boolean
           created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           descricao?: string
+          esforco?: number
+          frequencia?: string
           id?: string
+          impacto?: number
           ordem?: number
           plano_id?: string
           prazo?: string | null
+          quantidade_planejada?: number
           responsavel_id?: string | null
+          unidade?: string
         }
         Relationships: [
           {
@@ -439,6 +508,47 @@ export type Database = {
         }
         Relationships: []
       }
+      tarefa_execucoes: {
+        Row: {
+          created_at: string
+          data_referencia: string
+          id: string
+          observacao: string | null
+          quantidade: number
+          registrado_por: string | null
+          tarefa_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data_referencia: string
+          id?: string
+          observacao?: string | null
+          quantidade?: number
+          registrado_por?: string | null
+          tarefa_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data_referencia?: string
+          id?: string
+          observacao?: string | null
+          quantidade?: number
+          registrado_por?: string | null
+          tarefa_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarefa_execucoes_tarefa_id_fkey"
+            columns: ["tarefa_id"]
+            isOneToOne: false
+            referencedRelation: "plano_tarefas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -470,6 +580,7 @@ export type Database = {
           data_fim: string | null
           data_inicio: string | null
           descricao: string | null
+          funil_ativo: boolean | null
           id: string | null
           is_demo: boolean | null
           is_inverse: boolean | null

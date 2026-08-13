@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "./StatusChip";
 import { ProgressBar } from "./ProgressBar";
+import { ExecucaoConsolidada } from "./ExecucaoConsolidada";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -93,7 +94,9 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
               </div>
               <ProgressBar value={real} status={status} height={10} />
               <div className="flex items-baseline justify-between text-sm gap-2">
-                <span className="font-bold text-lg">{formatProgresso(meta)}</span>
+                <span className="font-bold text-lg">
+                  {formatProgresso(meta)} · {Math.round(real * 100)}%
+                </span>
                 {meta.is_inverse && (
                   <span className="text-[10px] italic text-muted-foreground">
                     (menor é melhor)
@@ -105,6 +108,8 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
 
             <BurnUpMini meta={meta} />
           </div>
+
+          <ExecucaoConsolidada meta={meta} />
 
           {meta.descricao && (
             <p className="text-sm text-muted-foreground">{meta.descricao}</p>
@@ -118,11 +123,11 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
               className="hover:opacity-90"
             >
               <Plus className="h-4 w-4 mr-1.5" />
-              Lançar resultado
+              Atualizar resultado
             </Button>
             <Button size="sm" variant="outline" onClick={() => onVerHistorico(meta)}>
               <History className="h-4 w-4 mr-1.5" />
-              Ver histórico
+              Histórico de medições
             </Button>
             {onEditar && (
               <Button size="sm" variant="outline" onClick={() => onEditar(meta)}>

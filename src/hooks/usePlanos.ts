@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Plano, Tarefa } from "@/lib/metas";
+import { execucaoPlano, type Execucao } from "@/lib/execucao";
 
 const PLANOS_KEY = ["planos"] as const;
+const EXEC_KEY = ["execucoes"] as const;
 
 export type PlanoWithMeta = Plano & {
   meta?: {
@@ -46,7 +48,47 @@ export function usePlanos() {
   });
 }
 
-export type NovoTarefaInput = { descricao: string; prazo?: string | null };
+/** Todas as execuções registradas (histórico completo, filtrado por período no cliente). */
+export function useExecucoes() {
+  return useQuery({
+    queryKey: EXEC_KEY,
+    queryFn: async (): Promise<Execucao[]> => {
+      const { data, error } = await supabase
+        .from("tarefa_execucoes")
+        .select("id, tarefa_id, data_referencia, quantidade, observacao")
+        .order("data_referencia", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((e) => ({ ...e, quantidade: Number(e.quantidade) })) as Execucao[];
+    },
+  });
+}
+
+/** Execução consolidada (0..1) dos planos vinculados a uma meta. */
+export function useExecucaoDaMeta(metaId: string | undefined) {
+  const { data: planos = [] } = usePlanos();
+  const { data: execucoes = [] } = useExecucoes();
+  const relevantes = planos.filter((p) => p.meta_id === metaId);
+  const tarefas = relevantes.flatMap((p) => p.tarefas);
+  return {
+    planos: relevantes,
+    tarefas,
+    execucoes,
+    pct: tarefas.length ? execucaoPlano(tarefas, execucoes) : null,
+  };
+}
+
+export type NovoTarefaInput = {
+  descricao: string;
+  prazo?: string | null;
+  frequencia?: string;
+  quantidade_planejada?: number;
+  unidade?: string;
+  impacto?: number;
+  esforco?: number;
+  responsavel_id?: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+};
 
 export type NovoPlanoInput = {
   titulo: string;
@@ -73,9 +115,21 @@ export function useCreatePlano() {
       if (pErr) throw pErr;
 
       const taskRows = input.tarefas
-        .map((t) => ({ descricao: t.descricao.trim(), prazo: t.prazo || null }))
-        .filter((t) => t.descricao.length > 0)
-        .map((t, ordem) => ({ plano_id: plano.id, descricao: t.descricao, prazo: t.prazo, ordem }));
+        .filter((t) => t.descricao.trim().length > 0)
+        .map((t, ordem) => ({
+          plano_id: plano.id,
+          descricao: t.descricao.trim(),
+          prazo: t.prazo || null,
+          ordem,
+          frequencia: t.frequencia ?? "unica",
+          quantidade_planejada: t.quantidade_planejada ?? 1,
+          unidade: t.unidade?.trim() ?? "",
+          impacto: t.impacto ?? 5,
+          esforco: t.esforco ?? 5,
+          responsavel_id: t.responsavel_id ?? null,
+          data_inicio: t.data_inicio || null,
+          data_fim: t.data_fim || null,
+        }));
 
       if (taskRows.length > 0) {
         const { error: tErr } = await supabase.from("plano_tarefas").insert(taskRows);
@@ -124,24 +178,62 @@ export function useAddTarefa() {
   return useMutation({
     mutationFn: async ({
       planoId,
-      descricao,
       ordem,
-      prazo,
-    }: {
-      planoId: string;
-      descricao: string;
-      ordem: number;
-      prazo?: string | null;
-    }) => {
-      const { error } = await supabase
-        .from("plano_tarefas")
-        .insert({ plano_id: planoId, descricao, ordem, prazo: prazo || null });
+      ...t
+    }: NovoTarefaInput & { planoId: string; ordem: number }) => {
+      const { error } = await supabase.from("plano_tarefas").insert({
+        plano_id: planoId,
+        ordem,
+        descricao: t.descricao,
+        prazo: t.prazo || null,
+        frequencia: t.frequencia ?? "unica",
+        quantidade_planejada: t.quantidade_planejada ?? 1,
+        unidade: t.unidade?.trim() ?? "",
+        impacto: t.impacto ?? 5,
+        esforco: t.esforco ?? 5,
+        responsavel_id: t.responsavel_id ?? null,
+        data_inicio: t.data_inicio || null,
+        data_fim: t.data_fim || null,
+      });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
   });
 }
 
+/** Registra o realizado de uma ação em uma data (histórico preservado). */
+export function useRegistrarExecucao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      tarefaId,
+      quantidade,
+      data,
+      observacao,
+    }: {
+      tarefaId: string;
+      quantidade: number;
+      data: string;
+      observacao?: string | null;
+    }) => {
+      const { data: user } = await supabase.auth.getUser();
+      const uid = user.user?.id;
+      if (!uid) throw new Error("Sessão expirada — faça login novamente.");
+      const { error } = await supabase.from("tarefa_execucoes").insert({
+        tarefa_id: tarefaId,
+        quantidade,
+        data_referencia: data,
+        observacao: observacao?.trim() || null,
+        registrado_por: uid,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: EXEC_KEY });
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+    },
+  });
+}
 
 export function useDeletePlano() {
   const qc = useQueryClient();
