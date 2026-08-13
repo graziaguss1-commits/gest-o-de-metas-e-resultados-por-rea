@@ -167,5 +167,27 @@ export function formatValor(valor: number, unidade: string): string {
   return `${valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${u}`.trim();
 }
 
+/** Só o número, sem unidade (útil para "0 de 2 mentorados"). */
+export function formatNumero(valor: number): string {
+  return valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+}
+
+/**
+ * Texto de progresso conforme o tipo de medição.
+ * Ex.: "0 de 2 mentorados", "R$ 0 de R$ 120.000", "0% de 85%".
+ */
+export function formatProgresso(
+  meta: { valor_atual: number; valor_alvo: number; unidade: string; metric_type?: string | null },
+): string {
+  const tipo = getMetricType(meta);
+  if (tipo === "financeiro" || tipo === "percentual") {
+    return `${formatValor(meta.valor_atual, meta.unidade)} de ${formatValor(meta.valor_alvo, meta.unidade)}`;
+  }
+  const u = meta.unidade.trim();
+  return `${formatNumero(meta.valor_atual)} de ${formatNumero(meta.valor_alvo)}${u ? ` ${u}` : ""}`;
+}
+
+
+
 export function formatDateISOToBR(iso: string): string { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
 export function todayISO(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
