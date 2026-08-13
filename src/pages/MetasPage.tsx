@@ -173,13 +173,24 @@ export default function MetasPage() {
                   setLancarOpen(true);
                 }}
                 onVerHistorico={(m) => setHistoricoMeta(m)}
+                onEditar={(m) => {
+                  setEditMeta(m);
+                  setNovaOpen(true);
+                }}
               />
             ))}
           </div>
         )}
       </div>
 
-      <NovaMetaModal open={novaOpen} onOpenChange={setNovaOpen} />
+      <NovaMetaModal
+        open={novaOpen}
+        onOpenChange={(v) => {
+          setNovaOpen(v);
+          if (!v) setEditMeta(null);
+        }}
+        meta={editMeta}
+      />
       <LancarResultadoModal
         open={lancarOpen}
         onOpenChange={(v) => {

@@ -20,7 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMetas } from "@/hooks/useMetas";
 import {
   formatDateISOToBR,
-  formatValor,
+  formatProgresso,
   progressoEsperado,
   progressoReal,
   STATUS_COLOR,
