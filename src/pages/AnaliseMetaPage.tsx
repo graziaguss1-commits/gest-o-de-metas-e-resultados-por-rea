@@ -155,6 +155,11 @@ export default function AnaliseMetaPage() {
   const real = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
   const esperado = progressoEsperado(meta.data_inicio, meta.data_fim);
   const desvio = desvioPercentual(meta);
+  const metricType = getMetricType(meta);
+  const valorFmt = (v: number) =>
+    metricType === "financeiro" || metricType === "percentual"
+      ? formatValor(v, meta.unidade)
+      : `${formatNumero(v)} ${meta.unidade}`.trim();
 
   return (
     <AppShell>

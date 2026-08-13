@@ -31,6 +31,7 @@ export default function MetasPage() {
   const [lancarMetaId, setLancarMetaId] = useState<string | undefined>(undefined);
   const [lancarOpen, setLancarOpen] = useState(false);
   const [historicoMeta, setHistoricoMeta] = useState<MetaWithResponsavel | null>(null);
+  const [editMeta, setEditMeta] = useState<MetaWithResponsavel | null>(null);
 
   const [filtroArea, setFiltroArea] = useState<string>("todas");
   const [filtroPeriod, setFiltroPeriod] = useState<string>("todas");
