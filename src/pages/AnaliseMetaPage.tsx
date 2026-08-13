@@ -24,6 +24,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { BurnUpChart } from "@/components/metas/BurnUpChart";
+import { ExecucaoConsolidada } from "@/components/metas/ExecucaoConsolidada";
+import { FunilMeta } from "@/components/metas/FunilMeta";
 import { StatusChip } from "@/components/metas/StatusChip";
 import {
   useComentarios,
@@ -200,11 +202,15 @@ export default function AnaliseMetaPage() {
         <div className="grid lg:grid-cols-[1.6fr_1fr] gap-5">
           {/* esquerda */}
           <div className="space-y-4">
+            <ExecucaoConsolidada meta={meta} variant="completo" />
+
             <BurnUpChart
               meta={meta}
               lancamentos={lancamentos}
               previsaoFinal={analise.data?.previsao_final}
             />
+
+            <FunilMeta meta={meta} />
 
             <div className="metasia-card overflow-hidden">
               <div className="px-4 py-3 border-b">
