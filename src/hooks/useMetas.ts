@@ -111,12 +111,16 @@ export function useCreateMeta() {
       });
       if (statusErr) throw statusErr;
 
+      const projetoSemEtapas =
+        (input.metric_type === "projeto" || input.unidade === "etapas") &&
+        Number(input.valor_alvo) === 0;
+
       const { data, error } = await supabase
         .from("metas")
         .insert({
           ...input,
           criado_por: uid,
-          status: (statusData as Status) ?? "verde",
+          status: projetoSemEtapas ? "amarelo" : (statusData as Status) ?? "verde",
         })
         .select()
         .single();
