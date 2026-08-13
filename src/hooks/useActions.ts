@@ -60,8 +60,13 @@ async function sincronizarLocais(remotas: ActionItem[]): Promise<ActionItem[]> {
   if (!locais.length) return remotas;
 
   const { data: user } = await supabase.auth.getUser();
-  const rows = locais.map(({ id: _id, created_at: _createdAt, ...action }) => ({
-    ...action,
+  const rows = locais.map((action) => ({
+    descricao: action.descricao,
+    area: action.area,
+    impacto: action.impacto,
+    esforco: action.esforco,
+    prazo: action.prazo,
+    concluida: action.concluida,
     criado_por: user.user?.id ?? null,
   }));
   const { data, error } = await table().insert(rows).select("*");
