@@ -151,6 +151,28 @@ export function useCreatePlano() {
   });
 }
 
+export function useUpdatePlano() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      titulo,
+      meta_id,
+    }: {
+      id: string;
+      titulo: string;
+      meta_id: string | null;
+    }) => {
+      const { error } = await supabase
+        .from("planos_acao")
+        .update({ titulo: titulo.trim(), meta_id })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+  });
+}
+
 export function useToggleTarefa() {
   const qc = useQueryClient();
   return useMutation({
@@ -227,14 +249,34 @@ export function useUpdateTarefa() {
       frequencia?: string;
       quantidade_planejada?: number;
       unidade?: string;
+      impacto?: number;
+      esforco?: number;
+      responsavel_id?: string | null;
+      data_inicio?: string | null;
+      data_fim?: string | null;
       duracao_minutos?: number | null;
       horario_preferencial?: string | null;
       dias_semana?: number[] | null;
     }) => {
       const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
       if (error) throw error;
+
+      // Ocorrências futuras geradas automaticamente precisam refletir a nova
+      // frequência, os novos dias, o horário e a duração. Registros realizados
+      // e agendamentos criados manualmente são preservados.
+      const hoje = new Date().toISOString().slice(0, 10);
+      const { error: agendaError } = await supabase
+        .from("tarefa_agendamentos")
+        .delete()
+        .eq("tarefa_id", id)
+        .eq("observacao", "Gerado pela recorrência")
+        .gte("data", hoje);
+      if (agendaError) throw agendaError;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: PLANOS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["agendamentos"] });
+    },
   });
 }
 
