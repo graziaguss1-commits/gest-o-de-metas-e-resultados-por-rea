@@ -199,6 +199,7 @@ export type Database = {
           id: string
           is_demo: boolean
           is_inverse: boolean
+          metric_type: string
           nome: string
           periodicidade: string
           responsavel_id: string | null
@@ -218,6 +219,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           is_inverse?: boolean
+          metric_type?: string
           nome: string
           periodicidade: string
           responsavel_id?: string | null
@@ -237,6 +239,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           is_inverse?: boolean
+          metric_type?: string
           nome?: string
           periodicidade?: string
           responsavel_id?: string | null
@@ -470,6 +473,7 @@ export type Database = {
           id: string | null
           is_demo: boolean | null
           is_inverse: boolean | null
+          metric_type: string | null
           nome: string | null
           periodicidade: string | null
           responsavel_avatar: string | null

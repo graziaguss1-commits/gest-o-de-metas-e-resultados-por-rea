@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -20,21 +20,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AREAS, PERIODICIDADES, todayISO } from "@/lib/metas";
-import { useCreateMeta, useMembros } from "@/hooks/useMetas";
+import {
+  AREAS,
+  METRIC_CONFIG,
+  METRIC_TYPES,
+  PERIODICIDADES,
+  getMetricType,
+  todayISO,
+  type MetaWithResponsavel,
+  type MetricType,
+} from "@/lib/metas";
+import { useCreateMeta, useMembros, useUpdateMeta } from "@/hooks/useMetas";
 
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Quando informada, o modal edita a meta em vez de criar uma nova. */
+  meta?: MetaWithResponsavel | null;
 };
 
-export function NovaMetaModal({ open, onOpenChange }: Props) {
+export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
+  const isEdit = !!meta;
+
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [area, setArea] = useState<string>(AREAS[0]);
   const [responsavelId, setResponsavelId] = useState<string>("__none__");
+  const [metricType, setMetricType] = useState<MetricType>("quantidade");
   const [valorAlvo, setValorAlvo] = useState<string>("");
-  const [unidade, setUnidade] = useState("R$");
+  const [unidade, setUnidade] = useState("");
   const [periodicidade, setPeriodicidade] = useState<string>("mensal");
   const [dataInicio, setDataInicio] = useState<string>(todayISO());
   const [dataFim, setDataFim] = useState<string>("");
@@ -42,50 +56,93 @@ export function NovaMetaModal({ open, onOpenChange }: Props) {
 
   const { data: membros = [] } = useMembros();
   const createMeta = useCreateMeta();
+  const updateMeta = useUpdateMeta();
+  const saving = createMeta.isPending || updateMeta.isPending;
 
-  const reset = () => {
-    setNome("");
-    setDescricao("");
-    setArea(AREAS[0]);
-    setResponsavelId("__none__");
-    setValorAlvo("");
-    setUnidade("R$");
-    setPeriodicidade("mensal");
-    setDataInicio(todayISO());
-    setDataFim("");
-    setIsInverse(false);
+  const cfg = METRIC_CONFIG[metricType];
+
+  useEffect(() => {
+    if (!open) return;
+    if (meta) {
+      const tipo = getMetricType(meta);
+      setNome(meta.nome ?? "");
+      setDescricao(meta.descricao ?? "");
+      setArea(meta.area ?? AREAS[0]);
+      setResponsavelId(meta.responsavel_id ?? "__none__");
+      setMetricType(tipo);
+      setValorAlvo(String(meta.valor_alvo ?? ""));
+      setUnidade(METRIC_CONFIG[tipo].unidadeFixa ?? meta.unidade ?? "");
+      setPeriodicidade(meta.periodicidade ?? "mensal");
+      setDataInicio(meta.data_inicio ?? todayISO());
+      setDataFim(meta.data_fim ?? "");
+      setIsInverse(!!meta.is_inverse);
+    } else {
+      setNome("");
+      setDescricao("");
+      setArea(AREAS[0]);
+      setResponsavelId("__none__");
+      setMetricType("quantidade");
+      setValorAlvo("");
+      setUnidade("");
+      setPeriodicidade("mensal");
+      setDataInicio(todayISO());
+      setDataFim("");
+      setIsInverse(false);
+    }
+  }, [open, meta]);
+
+  const changeMetricType = (v: string) => {
+    const t = v as MetricType;
+    setMetricType(t);
+    const next = METRIC_CONFIG[t];
+    // Nunca herda unidade de outro tipo (evita "R$" em meta de quantidade).
+    if (next.unidadeFixa) setUnidade(next.unidadeFixa);
+    else if (next.unidadeOpcoes) setUnidade(next.unidadeOpcoes[0]);
+    else setUnidade("");
   };
+
+  const resolveUnidade = () => cfg.unidadeFixa ?? unidade.trim();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const valor = Number(valorAlvo.replace(",", "."));
+    const valor = Number(valorAlvo.replace(/\./g, "").replace(",", "."));
+    const unidadeFinal = resolveUnidade();
+
     if (!nome.trim()) return toast.error("Informe o nome da meta.");
     if (!area) return toast.error("Selecione uma área.");
+    if (!metricType) return toast.error("Escolha como esta meta será medida.");
     if (!Number.isFinite(valor) || valor <= 0)
-      return toast.error("Valor alvo precisa ser um número positivo.");
-    if (!unidade.trim()) return toast.error("Informe a unidade (R$, %, leads, etc).");
+      return toast.error(`${cfg.alvoLabel} precisa ser um número positivo.`);
+    if (!unidadeFinal)
+      return toast.error(cfg.unidadeLabel ? `Informe: ${cfg.unidadeLabel}` : "Informe a unidade.");
     if (!dataInicio || !dataFim) return toast.error("Defina datas de início e fim.");
     if (dataFim < dataInicio) return toast.error("Data fim precisa ser após início.");
 
+    const payload = {
+      nome: nome.trim(),
+      descricao: descricao.trim() || null,
+      area,
+      responsavel_id: responsavelId === "__none__" ? null : responsavelId,
+      valor_alvo: valor,
+      unidade: unidadeFinal,
+      metric_type: metricType,
+      periodicidade: periodicidade as "mensal" | "trimestral" | "anual",
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      is_inverse: isInverse,
+    };
+
     try {
-      await createMeta.mutateAsync({
-        nome: nome.trim(),
-        descricao: descricao.trim() || null,
-        area,
-        responsavel_id: responsavelId === "__none__" ? null : responsavelId,
-        valor_alvo: valor,
-        valor_atual: 0,
-        unidade: unidade.trim(),
-        periodicidade: periodicidade as "mensal" | "trimestral" | "anual",
-        data_inicio: dataInicio,
-        data_fim: dataFim,
-        is_inverse: isInverse,
-      });
-      toast.success("Meta criada com sucesso");
-      reset();
+      if (isEdit && meta) {
+        await updateMeta.mutateAsync({ id: meta.id as string, patch: payload });
+        toast.success("Meta atualizada com sucesso");
+      } else {
+        await createMeta.mutateAsync({ ...payload, valor_atual: 0 });
+        toast.success("Meta criada com sucesso");
+      }
       onOpenChange(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao criar meta";
+      const message = err instanceof Error ? err.message : "Erro ao salvar meta";
       toast.error(message);
     }
   };
@@ -94,9 +151,9 @@ export function NovaMetaModal({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nova meta</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar meta" : "Nova meta"}</DialogTitle>
           <DialogDescription>
-            Defina o alvo, a janela e o responsável. O status será calculado automaticamente.
+            Defina como a meta será medida, o alvo e a janela. O status é calculado automaticamente.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
@@ -106,12 +163,12 @@ export function NovaMetaModal({ open, onOpenChange }: Props) {
               id="nome"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Receita MRR Maio"
+              placeholder="Ex: Converter 2 mentorados"
               required
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Área *</Label>
               <Select value={area} onValueChange={setArea}>
@@ -145,32 +202,91 @@ export function NovaMetaModal({ open, onOpenChange }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5 col-span-2">
-              <Label htmlFor="alvo">Valor alvo *</Label>
-              <Input
-                id="alvo"
-                type="text"
-                inputMode="decimal"
-                value={valorAlvo}
-                onChange={(e) => setValorAlvo(e.target.value)}
-                placeholder="120000"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="unidade">Unidade *</Label>
-              <Input
-                id="unidade"
-                value={unidade}
-                onChange={(e) => setUnidade(e.target.value)}
-                placeholder="R$"
-                required
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label>Como esta meta será medida? *</Label>
+            <Select value={metricType} onValueChange={changeMetricType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {METRIC_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {METRIC_CONFIG[t].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{cfg.ajuda}</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="alvo">{cfg.alvoLabel} *</Label>
+              <div className="relative">
+                {cfg.prefixo && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    {cfg.prefixo}
+                  </span>
+                )}
+                <Input
+                  id="alvo"
+                  type="text"
+                  inputMode="decimal"
+                  value={valorAlvo}
+                  onChange={(e) => setValorAlvo(e.target.value)}
+                  placeholder={cfg.alvoPlaceholder}
+                  className={cfg.prefixo ? "pl-10" : cfg.sufixo ? "pr-16" : undefined}
+                  required
+                />
+                {cfg.sufixo && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    {cfg.sufixo}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {cfg.unidadeFixa ? (
+              <div className="space-y-1.5">
+                <Label>Unidade</Label>
+                <div className="h-10 flex items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                  {cfg.unidadeFixa} · definida automaticamente
+                </div>
+              </div>
+            ) : cfg.unidadeOpcoes ? (
+              <div className="space-y-1.5">
+                <Label>{cfg.unidadeLabel} *</Label>
+                <Select value={unidade || cfg.unidadeOpcoes[0]} onValueChange={setUnidade}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cfg.unidadeOpcoes.map((u) => (
+                      <SelectItem key={u} value={u} className="capitalize">
+                        {u}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="unidade">{cfg.unidadeLabel} *</Label>
+                <Input
+                  id="unidade"
+                  value={unidade}
+                  onChange={(e) => setUnidade(e.target.value)}
+                  placeholder={cfg.unidadePlaceholder}
+                  required
+                />
+                {cfg.unidadeAjuda && (
+                  <p className="text-xs text-muted-foreground">{cfg.unidadeAjuda}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label>Periodicidade *</Label>
               <Select value={periodicidade} onValueChange={setPeriodicidade}>
@@ -208,7 +324,7 @@ export function NovaMetaModal({ open, onOpenChange }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3 bg-muted/30">
             <div className="space-y-0.5">
               <Label className="cursor-pointer">Meta inversa (menor é melhor)</Label>
               <p className="text-xs text-muted-foreground">
@@ -235,11 +351,11 @@ export function NovaMetaModal({ open, onOpenChange }: Props) {
             </Button>
             <Button
               type="submit"
-              disabled={createMeta.isPending}
+              disabled={saving}
               style={{ backgroundColor: "var(--color-blue)", color: "white" }}
               className="hover:opacity-90"
             >
-              {createMeta.isPending ? "Criando…" : "Criar meta"}
+              {saving ? "Salvando…" : isEdit ? "Salvar alterações" : "Criar meta"}
             </Button>
           </DialogFooter>
         </form>

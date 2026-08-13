@@ -38,6 +38,8 @@ import {
   desvioPercentual,
   formatDateISOToBR,
   formatValor,
+  formatNumero,
+  getMetricType,
   progressoEsperado,
   progressoReal,
   type Status,
@@ -153,6 +155,11 @@ export default function AnaliseMetaPage() {
   const real = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
   const esperado = progressoEsperado(meta.data_inicio, meta.data_fim);
   const desvio = desvioPercentual(meta);
+  const metricType = getMetricType(meta);
+  const valorFmt = (v: number) =>
+    metricType === "financeiro" || metricType === "percentual"
+      ? formatValor(v, meta.unidade)
+      : `${formatNumero(v)} ${meta.unidade}`.trim();
 
   return (
     <AppShell>
@@ -180,9 +187,9 @@ export default function AnaliseMetaPage() {
             )}
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold">{formatValor(meta.valor_atual, meta.unidade)}</div>
+            <div className="text-2xl font-bold">{valorFmt(meta.valor_atual)}</div>
             <div className="text-xs text-muted-foreground">
-              de {formatValor(meta.valor_alvo, meta.unidade)} ·{" "}
+              de {valorFmt(meta.valor_alvo)} ·{" "}
               <span style={{ color: desvio < -20 ? "var(--color-red)" : desvio < -5 ? "var(--color-amber)" : "var(--color-green)" }}>
                 {desvio}pp
               </span>
@@ -238,7 +245,7 @@ export default function AnaliseMetaPage() {
                             {formatDateISOToBR(l.data_lancamento)}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {formatValor(l.valor, meta.unidade)}
+                            {valorFmt(l.valor)}
                           </TableCell>
                           <TableCell>
                             <span
@@ -354,7 +361,7 @@ export default function AnaliseMetaPage() {
                         </>
                       )}
                       <span className="text-muted-foreground">
-                        ({formatValor(analise.data.previsao_final, meta.unidade)})
+                        ({valorFmt(analise.data.previsao_final)})
                       </span>
                     </div>
                     <div className="text-sm leading-relaxed text-foreground whitespace-pre-line">

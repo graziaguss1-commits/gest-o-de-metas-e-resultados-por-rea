@@ -31,6 +31,7 @@ export default function MetasPage() {
   const [lancarMetaId, setLancarMetaId] = useState<string | undefined>(undefined);
   const [lancarOpen, setLancarOpen] = useState(false);
   const [historicoMeta, setHistoricoMeta] = useState<MetaWithResponsavel | null>(null);
+  const [editMeta, setEditMeta] = useState<MetaWithResponsavel | null>(null);
 
   const [filtroArea, setFiltroArea] = useState<string>("todas");
   const [filtroPeriod, setFiltroPeriod] = useState<string>("todas");
@@ -173,13 +174,24 @@ export default function MetasPage() {
                   setLancarOpen(true);
                 }}
                 onVerHistorico={(m) => setHistoricoMeta(m)}
+                onEditar={(m) => {
+                  setEditMeta(m);
+                  setNovaOpen(true);
+                }}
               />
             ))}
           </div>
         )}
       </div>
 
-      <NovaMetaModal open={novaOpen} onOpenChange={setNovaOpen} />
+      <NovaMetaModal
+        open={novaOpen}
+        onOpenChange={(v) => {
+          setNovaOpen(v);
+          if (!v) setEditMeta(null);
+        }}
+        meta={editMeta}
+      />
       <LancarResultadoModal
         open={lancarOpen}
         onOpenChange={(v) => {
