@@ -32,6 +32,10 @@ export type TarefaMensuravel = {
   prazo?: string | null;
   data_inicio?: string | null;
   data_fim?: string | null;
+  /** Estimativa de duração por execução (minutos). */
+  duracao_minutos?: number | null;
+  horario_preferencial?: string | null;
+  dias_semana?: number[] | null;
 };
 
 export type Execucao = {
@@ -40,6 +44,8 @@ export type Execucao = {
   data_referencia: string;
   quantidade: number;
   observacao?: string | null;
+  /** Tempo real gasto na execução (minutos), opcional. */
+  tempo_real_minutos?: number | null;
 };
 
 function toISO(d: Date): string {
