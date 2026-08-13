@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useAgendamentos } from "@/hooks/useAgendamentos";
+import { useActions } from "@/hooks/useActions";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { capacidadeDoDia, formatTotalHoras, totalSemana } from "@/lib/agenda";
 
@@ -15,9 +16,10 @@ function inicioDaSemana(base = new Date()) {
   return d;
 }
 
-/** Tempo planejado por dia e na semana, com aviso de sobrecarga. */
+/** Tempo planejado por dia e na semana, incluindo prioridades avulsas. */
 export function CapacidadeSemana() {
   const { data: settings } = useAppSettings();
+  const { data: actions = [] } = useActions();
   const dias = useMemo(() => {
     const start = inicioDaSemana();
     return Array.from({ length: 7 }, (_, i) => {
@@ -28,16 +30,39 @@ export function CapacidadeSemana() {
   }, []);
   const { data: agendamentos = [] } = useAgendamentos(iso(dias[0]), iso(dias[6]));
   const capacidade = settings?.capacidade_diaria_minutos ?? 480;
-  const semana = totalSemana(dias.map(iso), agendamentos);
+
+  const minutosAvulsos = (data: string) =>
+    actions
+      .filter((action) => action.data_agendada === data)
+      .reduce((total, action) => total + (action.duracao_minutos ?? 0), 0);
+
+  const capacidadeCompleta = (data: string) => {
+    const base = capacidadeDoDia(data, agendamentos, capacidade);
+    const planejado = base.planejado + minutosAvulsos(data);
+    return {
+      ...base,
+      planejado,
+      disponivel: Math.max(0, capacidade - planejado),
+      sobrecarga: planejado > capacidade,
+    };
+  };
+
+  const semana =
+    totalSemana(dias.map(iso), agendamentos) +
+    dias.reduce((total, dia) => total + minutosAvulsos(iso(dia)), 0);
   const sobrecarregados = dias
-    .map((d) => capacidadeDoDia(iso(d), agendamentos, capacidade))
+    .map((d) => capacidadeCompleta(iso(d)))
     .filter((c) => c.sobrecarga);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-display text-2xl font-semibold">{formatTotalHoras(semana)}</span>
-        <span className="text-sm text-muted-foreground">planejadas nesta semana</span>
+        <span className="font-display text-2xl font-semibold">
+          {formatTotalHoras(semana)}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          planejadas nesta semana
+        </span>
         <span className="text-xs text-muted-foreground">
           · capacidade diária {formatTotalHoras(capacidade)}
         </span>
@@ -45,12 +70,17 @@ export function CapacidadeSemana() {
 
       <div className="grid gap-2 sm:grid-cols-7">
         {dias.map((d) => {
-          const cap = capacidadeDoDia(iso(d), agendamentos, capacidade);
-          const pct = Math.min(100, Math.round((cap.planejado / Math.max(1, capacidade)) * 100));
+          const cap = capacidadeCompleta(iso(d));
+          const pct = Math.min(
+            100,
+            Math.round((cap.planejado / Math.max(1, capacidade)) * 100),
+          );
           return (
             <div key={iso(d)} className="rounded-xl border p-2.5">
               <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}
+                {d
+                  .toLocaleDateString("pt-BR", { weekday: "short" })
+                  .replace(".", "")}
               </div>
               <div className="mt-0.5 text-sm font-semibold tabular-nums">
                 {formatTotalHoras(cap.planejado)}
@@ -60,12 +90,16 @@ export function CapacidadeSemana() {
                   className="h-full rounded-full"
                   style={{
                     width: `${pct}%`,
-                    backgroundColor: cap.sobrecarga ? "var(--color-red)" : "var(--brand-primary)",
+                    backgroundColor: cap.sobrecarga
+                      ? "var(--color-red)"
+                      : "var(--brand-primary)",
                   }}
                 />
               </div>
               <div className="mt-1 text-[10px] text-muted-foreground">
-                {cap.sobrecarga ? "Sobrecarga" : `${formatTotalHoras(cap.disponivel)} livres`}
+                {cap.sobrecarga
+                  ? "Sobrecarga"
+                  : `${formatTotalHoras(cap.disponivel)} livres`}
               </div>
             </div>
           );
@@ -76,8 +110,11 @@ export function CapacidadeSemana() {
         <div className="flex items-start gap-2 rounded-xl border border-[var(--color-red)]/40 p-3 text-xs text-[var(--color-red)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            {sobrecarregados.length === 1 ? "1 dia está" : `${sobrecarregados.length} dias estão`} acima
-            da capacidade. Reagende ou reduza ações para o tempo caber na agenda.
+            {sobrecarregados.length === 1
+              ? "1 dia está"
+              : `${sobrecarregados.length} dias estão`}{" "}
+            acima da capacidade. Reagende ou reduza ações para o tempo caber na
+            agenda.
           </span>
         </div>
       )}
