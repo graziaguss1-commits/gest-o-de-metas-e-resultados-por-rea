@@ -78,7 +78,7 @@ export default function CalendarPage() {
     materializar.mutate({ tarefas: tasks, datas: days.map(iso) });
   // A semana e a configuração das tarefas determinam as ocorrências; o hook evita duplicatas.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor, tasks.map((t) => `${t.id}:${t.frequencia}:${t.horario_preferencial}:${t.duracao_minutos}:${(t.dias_semana ?? []).join(",")}`).join("|")]);
+  }, [anchor, tasks.map((t) => `${t.id}:${t.frequencia}:${t.data_inicio}:${t.data_fim}:${t.horario_preferencial}:${t.duracao_minutos}:${(t.dias_semana ?? []).join(",")}`).join("|")]);
 
   return <AppShell><div className="performance-page space-y-6">
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="eyebrow mb-2">AGENDA E EXECUÇÃO</div><h1 className="font-display text-3xl font-semibold">Calendário estratégico</h1><p className="mt-1 text-sm text-muted-foreground">Ações, pendências e compromissos da semana em um só lugar.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setCompromissoData(iso(new Date())); setCompromissoOpen(true); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Novo compromisso</Button><Button onClick={() => setNovoOpen(true)} className="brand-button"><Plus className="mr-2 h-4 w-4" />Novo plano</Button></div></header>
