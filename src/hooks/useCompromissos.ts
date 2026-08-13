@@ -21,10 +21,31 @@ export type NovoCompromisso = Omit<Compromisso, "id" | "serie_id" | "concluido">
 
 type CompromissoBanco = Omit<Compromisso, "serie_id">;
 const KEY = ["compromissos"] as const;
+const MARCADOR_RECORRENCIA = /^\[\[recorrencia:(semanal|quinzenal|mensal);fim:(\d{4}-\d{2}-\d{2})\]\]\n?/;
 
 const parseData = (valor: string) => new Date(`${valor}T12:00:00`);
 const iso = (data: Date) =>
   `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+
+function normalizarRegistro(registro: CompromissoBanco): CompromissoBanco {
+  const observacao = registro.observacao ?? "";
+  const legado = observacao.match(MARCADOR_RECORRENCIA);
+  if (!legado) {
+    return {
+      ...registro,
+      recorrencia: registro.recorrencia ?? "nenhuma",
+      recorrencia_fim: registro.recorrencia_fim ?? null,
+    };
+  }
+  return {
+    ...registro,
+    recorrencia: (registro.recorrencia && registro.recorrencia !== "nenhuma"
+      ? registro.recorrencia
+      : legado[1]) as RecorrenciaCompromisso,
+    recorrencia_fim: registro.recorrencia_fim ?? legado[2],
+    observacao: observacao.replace(MARCADOR_RECORRENCIA, "") || null,
+  };
+}
 
 function proximaOcorrencia(data: Date, recorrencia: RecorrenciaCompromisso) {
   const proxima = new Date(data);
@@ -40,8 +61,9 @@ function proximaOcorrencia(data: Date, recorrencia: RecorrenciaCompromisso) {
   return proxima;
 }
 
-function expandirNaJanela(registros: CompromissoBanco[], inicio: string, fim: string): Compromisso[] {
-  return registros.flatMap((registro) => {
+function expandirNaJanela(registrosBrutos: CompromissoBanco[], inicio: string, fim: string): Compromisso[] {
+  return registrosBrutos.flatMap((registroBruto) => {
+    const registro = normalizarRegistro(registroBruto);
     const recorrencia = registro.recorrencia ?? "nenhuma";
     if (recorrencia === "nenhuma") {
       return registro.data >= inicio && registro.data <= fim
@@ -84,16 +106,48 @@ export function useCompromissos(inicio: string, fim: string) {
   });
 }
 
+const bancoSemRecorrencia = (input: NovoCompromisso, criadoPor?: string) => ({
+  titulo: input.titulo,
+  data: input.data,
+  hora_inicio: input.hora_inicio,
+  hora_fim: input.hora_fim,
+  area: input.area,
+  observacao: input.observacao,
+  criado_por: criadoPor,
+});
+
 export function useCriarCompromisso() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: NovoCompromisso) => {
       const { data: user } = await supabase.auth.getUser();
+      const criadoPor = user.user?.id;
+
+      if (input.recorrencia === "nenhuma") {
+        const { error } = await supabase.from("compromissos").insert(bancoSemRecorrencia(input, criadoPor));
+        if (error) throw error;
+        return;
+      }
+
       const { error } = await supabase.from("compromissos").insert({
         ...input,
-        criado_por: user.user?.id,
+        criado_por: criadoPor,
       } as never);
-      if (error) throw error;
+      if (!error) return;
+
+      const schemaDesatualizado =
+        error.code === "PGRST204" ||
+        error.message.toLowerCase().includes("recorrencia") ||
+        error.message.toLowerCase().includes("schema cache");
+      if (!schemaDesatualizado) throw error;
+
+      const marcador = `[[recorrencia:${input.recorrencia};fim:${input.recorrencia_fim}]]`;
+      const observacao = [marcador, input.observacao].filter(Boolean).join("\n");
+      const { error: erroFallback } = await supabase.from("compromissos").insert({
+        ...bancoSemRecorrencia(input, criadoPor),
+        observacao,
+      });
+      if (erroFallback) throw erroFallback;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
