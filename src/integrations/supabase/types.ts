@@ -104,6 +104,12 @@ export type Database = {
         }
         Relationships: []
       }
+      compromissos: {
+        Row: { area: string; concluido: boolean; created_at: string; criado_por: string | null; data: string; hora_fim: string; hora_inicio: string; id: string; observacao: string | null; titulo: string; updated_at: string }
+        Insert: { area?: string; concluido?: boolean; created_at?: string; criado_por?: string | null; data: string; hora_fim: string; hora_inicio: string; id?: string; observacao?: string | null; titulo: string; updated_at?: string }
+        Update: { area?: string; concluido?: boolean; created_at?: string; criado_por?: string | null; data?: string; hora_fim?: string; hora_inicio?: string; id?: string; observacao?: string | null; titulo?: string; updated_at?: string }
+        Relationships: []
+      }
       meta_comentarios: {
         Row: {
           autor_id: string | null
