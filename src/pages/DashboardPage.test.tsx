@@ -32,7 +32,7 @@ describe("DashboardPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText(/Bem-vindo, Ana!/)).toBeInTheDocument();
+    expect(screen.getByText("PAINEL DE PERFORMANCE")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Ana");
   });
 });
