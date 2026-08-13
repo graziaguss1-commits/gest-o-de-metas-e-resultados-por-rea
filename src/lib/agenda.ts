@@ -129,3 +129,68 @@ export function labelDiasSemana(dias?: number[] | null): string | null {
     .filter(Boolean)
     .join(", ");
 }
+
+
+/** Dia mensal armazenado em `dias_semana[0]` para manter compatibilidade sem migration. */
+export function diaMesRecorrencia(dias?: number[] | null): number | null {
+  const dia = Number(dias?.[0]);
+  return Number.isInteger(dia) && dia >= 1 && dia <= 31 ? dia : null;
+}
+
+/** Confirma se uma rotina possui todos os dados necessários para entrar na agenda. */
+export function configuracaoRecorrenciaCompleta(
+  frequencia?: string | null,
+  duracaoMinutos?: number | null,
+  horarioPreferencial?: string | null,
+  dias?: number[] | null,
+): boolean {
+  if (!["diaria", "semanal", "mensal"].includes(frequencia ?? "")) return true;
+  if (!duracaoMinutos || duracaoMinutos <= 0 || !horarioPreferencial) return false;
+
+  if (frequencia === "mensal") return diaMesRecorrencia(dias) != null;
+
+  const diasValidos = (dias ?? []).filter(
+    (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7,
+  );
+  return frequencia === "semanal" ? diasValidos.length === 1 : diasValidos.length > 0;
+}
+
+/** Verifica se uma data pertence ao padrão diário, semanal ou mensal configurado. */
+export function dataCorrespondeRecorrencia(
+  frequencia: string,
+  date: Date,
+  dias?: number[] | null,
+): boolean {
+  if (frequencia === "mensal") {
+    const diaDesejado = diaMesRecorrencia(dias);
+    if (!diaDesejado) return false;
+    const ultimoDia = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return date.getDate() === Math.min(diaDesejado, ultimoDia);
+  }
+
+  if (frequencia === "diaria" || frequencia === "semanal") {
+    return (dias ?? []).includes(diaISO(date));
+  }
+
+  return false;
+}
+
+/** Rótulo gerencial do momento escolhido: "Toda terça" ou "Todo dia 10". */
+export function labelMomentoRecorrencia(
+  frequencia?: string | null,
+  dias?: number[] | null,
+): string | null {
+  if (frequencia === "mensal") {
+    const dia = diaMesRecorrencia(dias);
+    if (!dia) return null;
+    return `Todo dia ${dia}${dia > 28 ? " (ou no último dia)" : ""}`;
+  }
+
+  if (frequencia === "semanal") {
+    const dia = DIAS_SEMANA.find((item) => item.valor === dias?.[0]);
+    return dia ? `Toda ${dia.longo.toLowerCase()}` : null;
+  }
+
+  if (frequencia === "diaria") return labelDiasSemana(dias);
+  return null;
+}
