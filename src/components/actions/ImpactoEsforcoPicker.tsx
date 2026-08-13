@@ -50,7 +50,7 @@ export function ImpactoEsforcoPicker({
         <div>
           <h4 className="text-sm font-semibold">Impacto × esforço</h4>
           <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-            Avalie esta ação para posicioná-la automaticamente na matriz de prioridades.
+            Avalie esta ação com a mesma regra usada na matriz de prioridades.
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-background px-2 py-1 text-[10px] font-semibold text-muted-foreground">
