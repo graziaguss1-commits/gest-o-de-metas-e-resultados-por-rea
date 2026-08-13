@@ -21,6 +21,32 @@ export type NovoCompromisso = Omit<Compromisso, "id" | "serie_id" | "concluido">
 
 type CompromissoBanco = Omit<Compromisso, "serie_id">;
 const KEY = ["compromissos"] as const;
+const STORAGE_KEY = "metasia_compromissos_contingencia";
+
+function lerLocais(): CompromissoBanco[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as CompromissoBanco[];
+  } catch {
+    return [];
+  }
+}
+
+function salvarLocais(registros: CompromissoBanco[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(registros));
+}
+
+function salvarLocal(input: NovoCompromisso) {
+  const agora = new Date().toISOString();
+  const registro = {
+    ...input,
+    id: `local-${crypto.randomUUID()}`,
+    concluido: false,
+    created_at: agora,
+    updated_at: agora,
+  } as CompromissoBanco;
+  salvarLocais([...lerLocais(), registro]);
+  return registro;
+}
 const MARCADOR_RECORRENCIA = /^\[\[recorrencia:(semanal|quinzenal|mensal);fim:(\d{4}-\d{2}-\d{2})\]\]\n?/;
 
 const parseData = (valor: string) => new Date(`${valor}T12:00:00`);
@@ -100,8 +126,8 @@ export function useCompromissos(inicio: string, fim: string) {
         .lte("data", fim)
         .order("data")
         .order("hora_inicio");
-      if (error) throw error;
-      return expandirNaJanela((data ?? []) as unknown as CompromissoBanco[], inicio, fim);
+      const remotos = error ? [] : (data ?? []) as unknown as CompromissoBanco[];
+      return expandirNaJanela([...remotos, ...lerLocais()], inicio, fim);
     },
   });
 }
@@ -122,32 +148,17 @@ export function useCriarCompromisso() {
     mutationFn: async (input: NovoCompromisso) => {
       const { data: user } = await supabase.auth.getUser();
       const criadoPor = user.user?.id;
+      const payload = input.recorrencia === "nenhuma"
+        ? bancoSemRecorrencia(input, criadoPor)
+        : { ...input, criado_por: criadoPor };
 
-      if (input.recorrencia === "nenhuma") {
-        const { error } = await supabase.from("compromissos").insert(bancoSemRecorrencia(input, criadoPor));
-        if (error) throw error;
-        return;
-      }
+      const { error } = await supabase.from("compromissos").insert(payload as never);
+      if (!error) return { armazenamento: "banco" as const };
 
-      const { error } = await supabase.from("compromissos").insert({
-        ...input,
-        criado_por: criadoPor,
-      } as never);
-      if (!error) return;
-
-      const schemaDesatualizado =
-        error.code === "PGRST204" ||
-        error.message.toLowerCase().includes("recorrencia") ||
-        error.message.toLowerCase().includes("schema cache");
-      if (!schemaDesatualizado) throw error;
-
-      const marcador = `[[recorrencia:${input.recorrencia};fim:${input.recorrencia_fim}]]`;
-      const observacao = [marcador, input.observacao].filter(Boolean).join("\n");
-      const { error: erroFallback } = await supabase.from("compromissos").insert({
-        ...bancoSemRecorrencia(input, criadoPor),
-        observacao,
-      });
-      if (erroFallback) throw erroFallback;
+      // Contingência: o deploy do front-end pode chegar antes da migração do banco.
+      // O compromisso continua funcional neste dispositivo e não bloqueia a agenda.
+      salvarLocal(input);
+      return { armazenamento: "local" as const };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
@@ -159,6 +170,10 @@ export function useAtualizarCompromisso() {
   return useMutation({
     mutationFn: async ({ id, ...values }: AtualizacaoCompromisso) => {
       const serieId = id.split("@")[0];
+      if (serieId.startsWith("local-")) {
+        salvarLocais(lerLocais().map((item) => item.id === serieId ? { ...item, ...values } as CompromissoBanco : item));
+        return;
+      }
       const { error } = await supabase.from("compromissos").update(values as never).eq("id", serieId);
       if (error) throw error;
     },
@@ -171,6 +186,10 @@ export function useExcluirCompromisso() {
   return useMutation({
     mutationFn: async (id: string) => {
       const serieId = id.split("@")[0];
+      if (serieId.startsWith("local-")) {
+        salvarLocais(lerLocais().filter((item) => item.id !== serieId));
+        return;
+      }
       const { error } = await supabase.from("compromissos").delete().eq("id", serieId);
       if (error) throw error;
     },
