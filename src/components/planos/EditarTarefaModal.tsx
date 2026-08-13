@@ -27,7 +27,7 @@ import {
   getFrequencia,
   type Frequencia,
 } from "@/lib/execucao";
-import { configuracaoRecorrenciaCompleta } from "@/lib/agenda";
+import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida } from "@/lib/agenda";
 import { todayISO, type Tarefa } from "@/lib/metas";
 
 type Props = {
@@ -61,15 +61,7 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     dataInicio: tarefa.data_inicio ?? todayISO(),
     duracao: tarefa.duracao_minutos ?? null,
     horario: tarefa.horario_preferencial?.slice(0, 5) ?? "",
-    dias:
-      tarefa.dias_semana ??
-      (frequencia === "diaria"
-        ? [1, 2, 3, 4, 5]
-        : frequencia === "semanal"
-          ? [1]
-          : frequencia === "mensal"
-            ? [10]
-            : null),
+    dias: diasRecorrenciaPersistida(frequencia, tarefa.dias_semana),
     impacto: tarefa.impacto ?? 5,
     esforco: tarefa.esforco ?? 5,
   };
@@ -90,11 +82,7 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
       dias:
         frequencia === "diaria"
           ? [1, 2, 3, 4, 5]
-          : frequencia === "semanal"
-            ? [1]
-            : frequencia === "mensal"
-              ? [10]
-              : null,
+          : null,
     });
   };
 
