@@ -1,4 +1,4 @@
-import { diagnosticar, prazoConsumido } from "@/lib/execucao";
+import { diagnosticar, execucaoResponsavel, prazoConsumido } from "@/lib/execucao";
 import { useExecucaoDaMeta } from "@/hooks/usePlanos";
 import { formatProgresso, progressoReal, type MetaWithResponsavel } from "@/lib/metas";
 
@@ -19,11 +19,16 @@ const TOM: Record<"verde" | "amarelo" | "vermelho", { fg: string; bg: string }> 
  * São indicadores independentes: executar o plano não altera o resultado.
  */
 export function ExecucaoConsolidada({ meta, variant = "compacto" }: Props) {
-  const { pct: execPct, tarefas } = useExecucaoDaMeta(meta.id);
+  const { pct: execPct, tarefas, execucoes } = useExecucaoDaMeta(meta.id);
   const resultado = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
   const prazo = prazoConsumido(meta.data_inicio, meta.data_fim);
   const diag = diagnosticar(resultado, execPct ?? 0, prazo);
   const tom = TOM[diag.tom];
+  const desempenhoPorPessoa = (meta.responsaveis ?? []).map((responsavel) => ({
+    ...responsavel,
+    pct: execucaoResponsavel(tarefas, execucoes, responsavel.id),
+    totalAcoes: tarefas.filter((tarefa) => tarefa.responsavel_id === responsavel.id).length,
+  }));
 
   return (
     <div className="space-y-3">
@@ -51,6 +56,43 @@ export function ExecucaoConsolidada({ meta, variant = "compacto" }: Props) {
           cor="hsl(var(--muted-foreground))"
         />
       </div>
+
+      {desempenhoPorPessoa.length > 0 && (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Execução por responsável
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {desempenhoPorPessoa.map((responsavel) => {
+              const percentual = responsavel.pct === null ? null : Math.round(responsavel.pct * 100);
+              return (
+                <div key={responsavel.id} className="rounded-md bg-muted/35 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-medium">{responsavel.full_name}</span>
+                    <span className="font-bold" style={{ color: "var(--color-amber)" }}>
+                      {percentual === null ? "—" : `${percentual}%`}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${percentual ?? 0}%`,
+                        backgroundColor: "var(--color-amber)",
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    {responsavel.totalAcoes === 0
+                      ? "Sem ações atribuídas"
+                      : `${responsavel.totalAcoes} ${responsavel.totalAcoes === 1 ? "ação atribuída" : "ações atribuídas"}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div
         className="rounded-lg px-3 py-2.5 text-xs space-y-1"

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
+import { ResponsavelSelect } from "@/components/shared/ResponsaveisPicker";
 import { useUpdateTarefa } from "@/hooks/usePlanos";
 import {
   FREQUENCIAS,
@@ -28,12 +29,13 @@ import {
   type Frequencia,
 } from "@/lib/execucao";
 import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida } from "@/lib/agenda";
-import { todayISO, type Tarefa } from "@/lib/metas";
+import { todayISO, type MembroResumo, type Tarefa } from "@/lib/metas";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tarefa: Tarefa;
+  responsaveis: MembroResumo[];
 };
 
 type FormState = {
@@ -48,6 +50,7 @@ type FormState = {
   dias: number[] | null;
   impacto: number;
   esforco: number;
+  responsavelId: string;
 };
 
 const estadoDaTarefa = (tarefa: Tarefa): FormState => {
@@ -64,10 +67,11 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     dias: diasRecorrenciaPersistida(frequencia, tarefa.dias_semana),
     impacto: tarefa.impacto ?? 5,
     esforco: tarefa.esforco ?? 5,
+    responsavelId: tarefa.responsavel_id ?? "",
   };
 };
 
-export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
+export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: Props) {
   const update = useUpdateTarefa();
   const [form, setForm] = useState<FormState>(() => estadoDaTarefa(tarefa));
   const patch = (values: Partial<FormState>) => setForm((current) => ({ ...current, ...values }));
@@ -89,6 +93,7 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.descricao.trim()) return toast.error("Informe a descrição da ação.");
+    if (!form.responsavelId) return toast.error("Selecione quem executará esta ação.");
     if (
       form.frequencia !== "unica" &&
       !configuracaoRecorrenciaCompleta(
@@ -124,6 +129,7 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
         dias_semana: form.frequencia !== "unica" ? form.dias : null,
         impacto: form.impacto,
         esforco: form.esforco,
+        responsavel_id: form.responsavelId,
       });
       toast.success("Ação atualizada e agenda recalculada");
       onOpenChange(false);
@@ -153,6 +159,18 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa }: Props) {
               onChange={(event) => patch({ descricao: event.target.value })}
               required
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Responsável pela execução *</Label>
+            <ResponsavelSelect
+              membros={responsaveis}
+              value={form.responsavelId}
+              onChange={(responsavelId) => patch({ responsavelId })}
+            />
+            <p className="text-xs text-muted-foreground">
+              O progresso desta ação será creditado a essa pessoa.
+            </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

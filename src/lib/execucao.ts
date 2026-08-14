@@ -36,6 +36,8 @@ export type TarefaMensuravel = {
   duracao_minutos?: number | null;
   horario_preferencial?: string | null;
   dias_semana?: number[] | null;
+  /** Pessoa creditada pela execução desta ação. */
+  responsavel_id?: string | null;
 };
 
 export type Execucao = {
@@ -142,6 +144,20 @@ export function execucaoPlano(
     somaPeso += peso;
   }
   return somaPeso === 0 ? 0 : soma / somaPeso;
+}
+
+/**
+ * Execução das ações atribuídas a uma pessoa. Retorna null quando ela ainda não
+ * possui ações, evitando apresentar 0% como se houvesse atraso.
+ */
+export function execucaoResponsavel(
+  tarefas: TarefaMensuravel[],
+  execucoes: Execucao[] = [],
+  responsavelId: string,
+  hoje: Date = new Date(),
+): number | null {
+  const atribuidas = tarefas.filter((tarefa) => tarefa.responsavel_id === responsavelId);
+  return atribuidas.length ? execucaoPlano(atribuidas, execucoes, hoje) : null;
 }
 
 /** Fração do prazo consumida entre início e fim (0..1). */

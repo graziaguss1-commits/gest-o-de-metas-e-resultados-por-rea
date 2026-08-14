@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   diagnosticar,
   execucaoPlano,
+  execucaoResponsavel,
   execucaoTarefa,
   gargaloFunil,
   periodoCorrente,
@@ -66,6 +67,27 @@ describe("execução dos planos", () => {
     ];
     // (1*9 + 0*1) / 10
     expect(execucaoPlano([a, b], execs, hoje)).toBeCloseTo(0.9);
+  });
+
+  it("credita a porcentagem somente ao responsável da ação", () => {
+    const gra = tarefa({ id: "gra", responsavel_id: "user-gra", impacto: 5 });
+    const colaborador = tarefa({
+      id: "colaborador",
+      responsavel_id: "user-colaborador",
+      impacto: 5,
+    });
+    const execs: Execucao[] = [
+      {
+        id: "e-gra",
+        tarefa_id: "gra",
+        data_referencia: "2026-08-13",
+        quantidade: 10,
+      },
+    ];
+
+    expect(execucaoResponsavel([gra, colaborador], execs, "user-gra", hoje)).toBe(1);
+    expect(execucaoResponsavel([gra, colaborador], execs, "user-colaborador", hoje)).toBe(0);
+    expect(execucaoResponsavel([gra], execs, "sem-acoes", hoje)).toBeNull();
   });
 
   it("calcula o período semanal de segunda a domingo", () => {

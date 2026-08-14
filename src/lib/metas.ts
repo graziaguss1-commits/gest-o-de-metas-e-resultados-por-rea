@@ -3,7 +3,16 @@ import type { Database } from "@/integrations/supabase/types";
 export type Meta = Database["public"]["Tables"]["metas"]["Row"];
 export type MetaInsert = Database["public"]["Tables"]["metas"]["Insert"];
 export type MetaUpdate = Database["public"]["Tables"]["metas"]["Update"];
-export type MetaWithResponsavel = Database["public"]["Views"]["metas_with_responsavel"]["Row"];
+export type MembroResumo = {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+};
+
+type MetaView = Database["public"]["Views"]["metas_with_responsavel"]["Row"];
+export type MetaWithResponsavel = MetaView & {
+  responsaveis: MembroResumo[];
+};
 export type Lancamento = Database["public"]["Tables"]["meta_lancamentos"]["Row"];
 export type Comentario = Database["public"]["Tables"]["meta_comentarios"]["Row"];
 export type Plano = Database["public"]["Tables"]["planos_acao"]["Row"];

@@ -15,7 +15,7 @@ import type { AppRole } from "@/types/auth";
 const ROLE_LABEL: Record<AppRole, string> = {
   admin: "Admin",
   supervisor: "Supervisor",
-  agent: "Agent",
+  agent: "Colaborador",
 };
 
 export default function TeamSettings() {
@@ -48,7 +48,7 @@ export default function TeamSettings() {
               <SelectItem value="all">Todas permissões</SelectItem>
               <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="supervisor">Supervisor</SelectItem>
-              <SelectItem value="agent">Agent</SelectItem>
+              <SelectItem value="agent">Colaborador</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -167,7 +167,8 @@ export default function TeamSettings() {
           <DialogHeader>
             <DialogTitle>Convidar novo usuário</DialogTitle>
             <DialogDescription>
-              Compartilhe o link de cadastro abaixo. Após o registro, o novo usuário aparecerá aqui como pendente e poderá ser aprovado.
+              Compartilhe o link abaixo. Após o cadastro, a pessoa ficará pendente até sua
+              aprovação. Ela só verá as metas em que for selecionada como responsável.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

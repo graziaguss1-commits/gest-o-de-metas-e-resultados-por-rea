@@ -31,6 +31,8 @@ import {
   type MetricType,
 } from "@/lib/metas";
 import { useCreateMeta, useMembros, useUpdateMeta } from "@/hooks/useMetas";
+import { useAuth } from "@/hooks/useAuth";
+import { ResponsaveisPicker } from "@/components/shared/ResponsaveisPicker";
 
 type Props = {
   open: boolean;
@@ -45,7 +47,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [area, setArea] = useState<string>(AREAS[0]);
-  const [responsavelId, setResponsavelId] = useState<string>("__none__");
+  const [responsaveisIds, setResponsaveisIds] = useState<string[]>([]);
   const [metricType, setMetricType] = useState<MetricType>("quantidade");
   const [valorAlvo, setValorAlvo] = useState<string>("");
   const [unidade, setUnidade] = useState("");
@@ -55,6 +57,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
   const [isInverse, setIsInverse] = useState(false);
 
   const { data: membros = [] } = useMembros();
+  const { user } = useAuth();
   const createMeta = useCreateMeta();
   const updateMeta = useUpdateMeta();
   const saving = createMeta.isPending || updateMeta.isPending;
@@ -68,7 +71,10 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       setNome(meta.nome ?? "");
       setDescricao(meta.descricao ?? "");
       setArea(meta.area ?? AREAS[0]);
-      setResponsavelId(meta.responsavel_id ?? "__none__");
+      setResponsaveisIds(
+        meta.responsaveis?.map((responsavel) => responsavel.id) ??
+          (meta.responsavel_id ? [meta.responsavel_id] : []),
+      );
       setMetricType(tipo);
       setValorAlvo(String(meta.valor_alvo ?? ""));
       setUnidade(METRIC_CONFIG[tipo].unidadeFixa ?? meta.unidade ?? "");
@@ -80,7 +86,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       setNome("");
       setDescricao("");
       setArea(AREAS[0]);
-      setResponsavelId("__none__");
+      setResponsaveisIds(user?.id ? [user.id] : []);
       setMetricType("quantidade");
       setValorAlvo("");
       setUnidade("");
@@ -89,7 +95,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       setDataFim("");
       setIsInverse(false);
     }
-  }, [open, meta]);
+  }, [open, meta, user?.id]);
 
   const changeMetricType = (v: string) => {
     const t = v as MetricType;
@@ -123,6 +129,8 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
     if (!nome.trim()) return toast.error("Informe o nome da meta.");
     if (!area) return toast.error("Selecione uma área.");
     if (!metricType) return toast.error("Escolha como esta meta será medida.");
+    if (responsaveisIds.length === 0)
+      return toast.error("Selecione ao menos um responsável pela meta.");
     if (!projetoAutomatico && (!Number.isFinite(valor) || valor <= 0))
       return toast.error(`${cfg.alvoLabel} precisa ser um número positivo.`);
     if (!unidadeFinal)
@@ -134,7 +142,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       nome: nome.trim(),
       descricao: descricao.trim() || null,
       area,
-      responsavel_id: responsavelId === "__none__" ? null : responsavelId,
+      responsavel_id: responsaveisIds[0] ?? null,
       valor_alvo: valor,
       unidade: unidadeFinal,
       metric_type: metricType,
@@ -146,10 +154,18 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
 
     try {
       if (isEdit && meta) {
-        await updateMeta.mutateAsync({ id: meta.id as string, patch: payload });
+        await updateMeta.mutateAsync({
+          id: meta.id as string,
+          patch: payload,
+          responsaveis: responsaveisIds,
+        });
         toast.success("Meta atualizada com sucesso");
       } else {
-        await createMeta.mutateAsync({ ...payload, valor_atual: 0 });
+        await createMeta.mutateAsync({
+          ...payload,
+          valor_atual: 0,
+          responsaveis: responsaveisIds,
+        });
         toast.success("Meta criada com sucesso");
       }
       onOpenChange(false);
@@ -180,38 +196,35 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
             />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Área *</Label>
-              <Select value={area} onValueChange={setArea}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AREAS.map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-1.5">
+            <Label>Área *</Label>
+            <Select value={area} onValueChange={setArea}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AREAS.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <div>
+              <Label>Quem pode ver e executar esta meta? *</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Somente as pessoas selecionadas terão acesso. Administradores não enxergam
+                metas das quais não participam.
+              </p>
             </div>
-            <div className="space-y-1.5">
-              <Label>Responsável</Label>
-              <Select value={responsavelId} onValueChange={setResponsavelId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione…" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sem responsável</SelectItem>
-                  {membros.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <ResponsaveisPicker
+              membros={membros}
+              value={responsaveisIds}
+              onChange={setResponsaveisIds}
+            />
           </div>
 
           <div className="space-y-1.5">

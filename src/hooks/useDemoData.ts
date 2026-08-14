@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 /** Conta quantos registros de demonstração existem. */
 export function useDemoStatus() {
@@ -197,11 +198,28 @@ export function useLoadDemoData() {
         status: "verde" as const, // recalculado abaixo
       }));
 
-      const { data: createdMetas, error: mErr } = await supabase
+      const createdIds: string[] = [];
+      for (const row of metasRows) {
+        const { data: id, error } = await supabase.rpc("criar_meta_com_responsaveis", {
+          p_meta: row as unknown as Json,
+          p_responsaveis: [uid],
+        });
+        if (error) throw error;
+        createdIds.push(id);
+      }
+
+      const { data: fetchedMetas, error: mErr } = await supabase
         .from("metas")
-        .insert(metasRows)
-        .select();
+        .select("*")
+        .in("id", createdIds);
       if (mErr) throw mErr;
+      const createdMetas = createdIds.flatMap((id) => {
+        const meta = (fetchedMetas ?? []).find((item) => item.id === id);
+        return meta ? [meta] : [];
+      });
+      if (createdMetas.length !== metasRows.length) {
+        throw new Error("Não foi possível recuperar todas as metas de demonstração.");
+      }
 
       // Recalcula status de cada uma via RPC
       for (const meta of createdMetas) {

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,10 +20,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMetas } from "@/hooks/useMetas";
+import { useAuth } from "@/hooks/useAuth";
 import { useCreatePlano } from "@/hooks/usePlanos";
 import { FREQUENCIAS, FREQUENCIA_LABEL, type Frequencia } from "@/lib/execucao";
 import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
+import { ResponsavelSelect } from "@/components/shared/ResponsaveisPicker";
 import { configuracaoRecorrenciaCompleta, formatDuracao, labelMomentoRecorrencia } from "@/lib/agenda";
 
 type Props = {
@@ -42,9 +44,10 @@ type LinhaTarefa = {
   duracao: number | null;
   horario: string;
   dias: number[] | null;
+  responsavelId: string;
 };
 
-const linhaVazia = (): LinhaTarefa => ({
+const linhaVazia = (responsavelId = ""): LinhaTarefa => ({
   descricao: "",
   prazo: "",
   frequencia: "unica",
@@ -55,10 +58,12 @@ const linhaVazia = (): LinhaTarefa => ({
   duracao: null,
   horario: "",
   dias: null,
+  responsavelId,
 });
 
 export function NovoPlanoModal({ open, onOpenChange }: Props) {
   const { data: metas = [] } = useMetas();
+  const { user, profile } = useAuth();
   const create = useCreatePlano();
 
   const [titulo, setTitulo] = useState("");
@@ -68,15 +73,55 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
   const reset = () => {
     setTitulo("");
     setMetaId("__none__");
-    setTarefas([linhaVazia()]);
+    setTarefas([linhaVazia(user?.id ?? "")]);
   };
 
   const patch = (i: number, p: Partial<LinhaTarefa>) =>
     setTarefas((prev) => prev.map((v, j) => (j === i ? { ...v, ...p } : v)));
 
+  const membrosDoPlano = metaId === "__none__"
+    ? user?.id
+      ? [{ id: user.id, full_name: profile?.full_name ?? "Você", avatar_url: profile?.avatar_url ?? null }]
+      : []
+    : metas.find((meta) => meta.id === metaId)?.responsaveis ?? [];
+
+  const alterarMeta = (nextMetaId: string) => {
+    const opcoes = nextMetaId === "__none__"
+      ? user?.id
+        ? [{ id: user.id, full_name: profile?.full_name ?? "Você", avatar_url: profile?.avatar_url ?? null }]
+        : []
+      : metas.find((meta) => meta.id === nextMetaId)?.responsaveis ?? [];
+    const preferido = opcoes.find((membro) => membro.id === user?.id)?.id ?? opcoes[0]?.id ?? "";
+    setMetaId(nextMetaId);
+    setTarefas((atuais) =>
+      atuais.map((tarefa) => ({
+        ...tarefa,
+        responsavelId: opcoes.some((membro) => membro.id === tarefa.responsavelId)
+          ? tarefa.responsavelId
+          : preferido,
+      })),
+    );
+  };
+
+  useEffect(() => {
+    if (!open || !user?.id) return;
+    setTarefas((atuais) =>
+      atuais.map((tarefa) =>
+        tarefa.responsavelId ? tarefa : { ...tarefa, responsavelId: user.id },
+      ),
+    );
+  }, [open, user?.id]);
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!titulo.trim()) return toast.error("Informe o título do plano.");
+    const semResponsavel = tarefas.find(
+      (tarefa) => tarefa.descricao.trim() && !tarefa.responsavelId,
+    );
+    if (semResponsavel) {
+      return toast.error(`Defina quem fará a ação: ${semResponsavel.descricao}`);
+    }
+
     const recorrenciaIncompleta = tarefas.find(
       (t) =>
         t.descricao.trim() &&
@@ -103,6 +148,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           unidade: t.unidade,
           impacto: t.impacto,
           esforco: t.esforco,
+          responsavel_id: t.responsavelId || null,
           duracao_minutos: t.duracao,
           horario_preferencial: t.horario || null,
           dias_semana: t.frequencia !== "unica" ? t.dias : null,
@@ -141,7 +187,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
 
           <div className="space-y-1.5">
             <Label>Meta vinculada</Label>
-            <Select value={metaId} onValueChange={setMetaId}>
+            <Select value={metaId} onValueChange={alterarMeta}>
               <SelectTrigger>
                 <SelectValue placeholder="Sem meta vinculada" />
               </SelectTrigger>
@@ -183,6 +229,14 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                       <X className="h-4 w-4" />
                     </Button>
                   )}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Quem executará esta ação? *</Label>
+                  <ResponsavelSelect
+                    membros={membrosDoPlano}
+                    value={t.responsavelId}
+                    onChange={(responsavelId) => patch(i, { responsavelId })}
+                  />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Select
@@ -266,7 +320,16 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setTarefas((prev) => [...prev, linhaVazia()])}
+                onClick={() =>
+                  setTarefas((prev) => [
+                    ...prev,
+                    linhaVazia(
+                      membrosDoPlano.find((membro) => membro.id === user?.id)?.id ??
+                        membrosDoPlano[0]?.id ??
+                        "",
+                    ),
+                  ])
+                }
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Adicionar ação

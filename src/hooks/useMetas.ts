@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import type {
   Comentario,
   Lancamento,
@@ -7,10 +8,38 @@ import type {
   MetaInsert,
   MetaUpdate,
   MetaWithResponsavel,
+  MembroResumo,
   Status,
 } from "@/lib/metas";
 
 const METAS_KEY = ["metas"] as const;
+
+async function enriquecerMetas(
+  rows: Omit<MetaWithResponsavel, "responsaveis">[],
+): Promise<MetaWithResponsavel[]> {
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((row) => row.id).filter(Boolean) as string[];
+  const [{ data: vinculos, error: vinculosError }, { data: diretorio, error: diretorioError }] =
+    await Promise.all([
+      supabase.from("meta_responsaveis").select("meta_id, user_id").in("meta_id", ids),
+      supabase.rpc("get_team_directory"),
+    ]);
+
+  if (vinculosError) throw vinculosError;
+  if (diretorioError) throw diretorioError;
+
+  const membros = (diretorio ?? []) as MembroResumo[];
+  const membroPorId = new Map(membros.map((membro) => [membro.id, membro]));
+
+  return rows.map((row) => ({
+    ...row,
+    responsaveis: (vinculos ?? [])
+      .filter((vinculo) => vinculo.meta_id === row.id)
+      .map((vinculo) => membroPorId.get(vinculo.user_id))
+      .filter((membro): membro is MembroResumo => Boolean(membro)),
+  }));
+}
 
 export function useMetas() {
   return useQuery({
@@ -21,7 +50,9 @@ export function useMetas() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data as MetaWithResponsavel[]) ?? [];
+      return enriquecerMetas(
+        ((data ?? []) as Omit<MetaWithResponsavel, "responsaveis">[]),
+      );
     },
   });
 }
@@ -38,7 +69,11 @@ export function useMeta(id: string | undefined) {
         .eq("id", id)
         .maybeSingle();
       if (error) throw error;
-      return (data as MetaWithResponsavel) ?? null;
+      if (!data) return null;
+      const [meta] = await enriquecerMetas([
+        data as Omit<MetaWithResponsavel, "responsaveis">,
+      ]);
+      return meta ?? null;
     },
   });
 }
@@ -81,27 +116,32 @@ export function useComentarios(metaId: string | undefined) {
 export function useMembros() {
   return useQuery({
     queryKey: ["membros"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, avatar_url")
-        .eq("is_active", true)
-        .eq("is_approved", true)
-        .order("full_name", { ascending: true });
+    queryFn: async (): Promise<MembroResumo[]> => {
+      const { data, error } = await supabase.rpc("get_team_directory");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as MembroResumo[];
     },
   });
 }
 
+export type CriarMetaInput = Omit<MetaInsert, "criado_por" | "status"> & {
+  responsaveis?: string[];
+};
+
 export function useCreateMeta() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Omit<MetaInsert, "criado_por" | "status">) => {
-      const { data: user } = await supabase.auth.getUser();
-      const uid = user.user?.id;
+    mutationFn: async ({ responsaveis, ...input }: CriarMetaInput) => {
+      let responsaveisEfetivos = responsaveis?.filter(Boolean) ?? [];
+      if (responsaveisEfetivos.length === 0) {
+        const { data: authData } = await supabase.auth.getUser();
+        const fallback = input.responsavel_id ?? authData.user?.id;
+        if (fallback) responsaveisEfetivos = [fallback];
+      }
+      if (responsaveisEfetivos.length === 0) {
+        throw new Error("Selecione ao menos um responsável.");
+      }
 
-      // Calcula status inicial via RPC
       const { data: statusData, error: statusErr } = await supabase.rpc("calcular_status_meta", {
         p_valor_atual: input.valor_atual ?? 0,
         p_valor_alvo: input.valor_alvo,
@@ -115,20 +155,31 @@ export function useCreateMeta() {
         (input.metric_type === "projeto" || input.unidade === "etapas") &&
         Number(input.valor_alvo) === 0;
 
-      const { data, error } = await supabase
-        .from("metas")
-        .insert({
-          ...input,
-          criado_por: uid,
+      const { data: id, error } = await supabase.rpc("criar_meta_com_responsaveis", {
+        p_meta: {
+          nome: input.nome,
+          descricao: input.descricao ?? null,
+          area: input.area,
+          valor_alvo: input.valor_alvo,
+          valor_atual: input.valor_atual ?? 0,
+          unidade: input.unidade,
+          periodicidade: input.periodicidade,
+          data_inicio: input.data_inicio,
+          data_fim: input.data_fim,
+          is_inverse: input.is_inverse ?? false,
+          is_demo: input.is_demo ?? false,
+          metric_type: input.metric_type ?? "quantidade",
+          funil_ativo: input.funil_ativo ?? false,
           status: projetoSemEtapas ? "amarelo" : (statusData as Status) ?? "verde",
-        })
-        .select()
-        .single();
+        },
+        p_responsaveis: responsaveisEfetivos,
+      });
       if (error) throw error;
-      return data as Meta;
+      return { id } as Pick<Meta, "id">;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: METAS_KEY });
+      qc.invalidateQueries({ queryKey: ["planos"] });
     },
   });
 }
@@ -136,19 +187,35 @@ export function useCreateMeta() {
 export function useUpdateMeta() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: MetaUpdate }) => {
-      const { data, error } = await supabase
-        .from("metas")
-        .update(patch)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Meta;
+    mutationFn: async ({
+      id,
+      patch,
+      responsaveis,
+    }: {
+      id: string;
+      patch: MetaUpdate;
+      responsaveis?: string[];
+    }) => {
+      if (responsaveis) {
+        const { error } = await supabase.rpc("atualizar_meta_com_responsaveis", {
+          p_meta_id: id,
+          p_patch: patch as Json,
+          p_responsaveis: responsaveis,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("metas")
+          .update(patch)
+          .eq("id", id);
+        if (error) throw error;
+      }
+      return { id } as Pick<Meta, "id">;
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: METAS_KEY });
       qc.invalidateQueries({ queryKey: ["metas", vars.id] });
+      qc.invalidateQueries({ queryKey: ["planos"] });
     },
   });
 }
