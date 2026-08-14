@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Plano, Tarefa } from "@/lib/metas";
+import type { MembroResumo, Plano, Tarefa } from "@/lib/metas";
 import { execucaoPlano, type Execucao } from "@/lib/execucao";
 
 const PLANOS_KEY = ["planos"] as const;
@@ -12,6 +12,7 @@ export type PlanoWithMeta = Plano & {
     nome: string;
     status: "verde" | "amarelo" | "vermelho";
     area: string;
+    responsaveis: MembroResumo[];
   } | null;
   tarefas: Tarefa[];
 };
@@ -105,16 +106,41 @@ export function usePlanos() {
   return useQuery({
     queryKey: PLANOS_KEY,
     queryFn: async (): Promise<PlanoWithMeta[]> => {
-      const [{ data: planos, error: pErr }, { data: tarefas, error: tErr }, { data: metas }] =
-        await Promise.all([
-          supabase.from("planos_acao").select("*").order("created_at", { ascending: false }),
-          supabase.from("plano_tarefas").select("*").order("ordem", { ascending: true }),
-          supabase.from("metas").select("id, nome, status, area, metric_type, unidade"),
-        ]);
+      const [
+        { data: planos, error: pErr },
+        { data: tarefas, error: tErr },
+        { data: metas },
+        { data: vinculos, error: vinculosError },
+        { data: diretorio, error: diretorioError },
+      ] = await Promise.all([
+        supabase.from("planos_acao").select("*").order("created_at", { ascending: false }),
+        supabase.from("plano_tarefas").select("*").order("ordem", { ascending: true }),
+        supabase.from("metas").select("id, nome, status, area, metric_type, unidade"),
+        supabase.from("meta_responsaveis").select("meta_id, user_id"),
+        supabase.rpc("get_team_directory"),
+      ]);
       if (pErr) throw pErr;
       if (tErr) throw tErr;
+      if (vinculosError) throw vinculosError;
+      if (diretorioError) throw diretorioError;
 
-      const metaById = new Map((metas ?? []).map((m) => [m.id, m]));
+      const membroPorId = new Map(
+        ((diretorio ?? []) as MembroResumo[]).map((membro) => [membro.id, membro]),
+      );
+      const responsaveisPorMeta = new Map<string, MembroResumo[]>();
+      (vinculos ?? []).forEach((vinculo) => {
+        const membro = membroPorId.get(vinculo.user_id);
+        if (!membro) return;
+        const atuais = responsaveisPorMeta.get(vinculo.meta_id) ?? [];
+        atuais.push(membro);
+        responsaveisPorMeta.set(vinculo.meta_id, atuais);
+      });
+      const metaById = new Map(
+        (metas ?? []).map((meta) => [
+          meta.id,
+          { ...meta, responsaveis: responsaveisPorMeta.get(meta.id) ?? [] },
+        ]),
+      );
       const tarefasByPlano = new Map<string, Tarefa[]>();
       (tarefas ?? []).forEach((t) => {
         const arr = tarefasByPlano.get(t.plano_id) ?? [];
@@ -222,7 +248,7 @@ export function useCreatePlano() {
           unidade: t.unidade?.trim() ?? "",
           impacto: t.impacto ?? 5,
           esforco: t.esforco ?? 5,
-          responsavel_id: t.responsavel_id ?? null,
+          responsavel_id: t.responsavel_id ?? uid ?? null,
           data_inicio: t.data_inicio || null,
           data_fim: t.data_fim || null,
           duracao_minutos: t.duracao_minutos ?? null,
@@ -326,6 +352,8 @@ export function useAddTarefa() {
       ordem,
       ...t
     }: NovoTarefaInput & { planoId: string; ordem: number }) => {
+      const { data: user } = await supabase.auth.getUser();
+      const uid = user.user?.id;
       const { error } = await supabase.from("plano_tarefas").insert({
         plano_id: planoId,
         ordem,
@@ -336,7 +364,7 @@ export function useAddTarefa() {
         unidade: t.unidade?.trim() ?? "",
         impacto: t.impacto ?? 5,
         esforco: t.esforco ?? 5,
-        responsavel_id: t.responsavel_id ?? null,
+        responsavel_id: t.responsavel_id ?? uid ?? null,
         data_inicio: t.data_inicio || null,
         data_fim: t.data_fim || null,
         duracao_minutos: t.duracao_minutos ?? null,
@@ -378,13 +406,10 @@ export function useUpdateTarefa() {
     }) => {
       const { data: anterior, error: readError } = await supabase
         .from("plano_tarefas")
-        .select("frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana")
+        .select("frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana,responsavel_id")
         .eq("id", id)
         .single();
       if (readError) throw readError;
-
-      const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
-      if (error) throw error;
 
       const horaAnterior = anterior.horario_preferencial?.slice(0, 5) ?? null;
       const horaNova = patch.horario_preferencial?.slice(0, 5) ?? null;
@@ -397,6 +422,18 @@ export function useUpdateTarefa() {
         (patch.duracao_minutos !== undefined && patch.duracao_minutos !== anterior.duracao_minutos) ||
         (patch.horario_preferencial !== undefined && horaNova !== horaAnterior) ||
         (patch.dias_semana !== undefined && diasNovos !== diasAnteriores);
+      const responsavelMudou =
+        patch.responsavel_id !== undefined &&
+        patch.responsavel_id !== anterior.responsavel_id;
+
+      if (agendaMudou && responsavelMudou) {
+        throw new Error(
+          "Altere primeiro a rotina e salve. Depois, reabra a ação para trocar o responsável.",
+        );
+      }
+
+      const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
+      if (error) throw error;
 
       if (agendaMudou) {
         // Ocorrências futuras geradas automaticamente precisam refletir a

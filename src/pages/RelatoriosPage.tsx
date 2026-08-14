@@ -73,6 +73,14 @@ function csvEscape(value: unknown): string {
   return s;
 }
 
+function nomesResponsaveis(meta: MetaWithResponsavel) {
+  return (
+    meta.responsaveis?.map((responsavel) => responsavel.full_name).join(", ") ||
+    meta.responsavel_nome ||
+    ""
+  );
+}
+
 function downloadCSV(metas: MetaWithResponsavel[]) {
   const headers = [
     "Nome",
@@ -95,7 +103,7 @@ function downloadCSV(metas: MetaWithResponsavel[]) {
     return [
       m.nome,
       m.area,
-      m.responsavel_nome ?? "",
+      nomesResponsaveis(m),
       m.valor_atual,
       m.valor_alvo,
       m.unidade,
@@ -424,6 +432,7 @@ export default function RelatoriosPage() {
                     const s = m.status as Status;
                     const real = progressoReal(m.valor_atual, m.valor_alvo, m.is_inverse);
                     const desvio = desvioPercentual(m);
+                    const responsaveisNomes = nomesResponsaveis(m);
                     return (
                       <tr key={m.id} className="border-t hover:bg-muted/30">
                         <td className="px-4 py-3 font-medium">{m.nome}</td>
@@ -436,15 +445,15 @@ export default function RelatoriosPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          {m.responsavel_nome ? (
+                          {responsaveisNomes ? (
                             <span className="flex items-center gap-1.5 text-xs">
                               <span
                                 className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                                 style={{ backgroundColor: "var(--color-blue)" }}
                               >
-                                {initials(m.responsavel_nome)}
+                                {initials(responsaveisNomes)}
                               </span>
-                              {m.responsavel_nome}
+                              {responsaveisNomes}
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>

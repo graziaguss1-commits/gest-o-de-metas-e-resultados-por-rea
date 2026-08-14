@@ -40,6 +40,15 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
   const projetoPorEtapas = getMetricType(meta) === "projeto";
   const real = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
   const esperado = progressoEsperado(meta.data_inicio, meta.data_fim);
+  const responsaveis = meta.responsaveis?.length
+    ? meta.responsaveis
+    : meta.responsavel_id
+      ? [{
+          id: meta.responsavel_id,
+          full_name: meta.responsavel_nome ?? "Responsável",
+          avatar_url: meta.responsavel_avatar ?? null,
+        }]
+      : [];
 
   return (
     <div className="metasia-card overflow-hidden">
@@ -60,14 +69,24 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
             <StatusChip status={status} size="sm" />
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span
-                className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                style={{ backgroundColor: "var(--color-blue)" }}
-              >
-                {initials(meta.responsavel_nome)}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="flex -space-x-1">
+                {responsaveis.slice(0, 3).map((responsavel) => (
+                  <span
+                    key={responsavel.id}
+                    title={responsavel.full_name}
+                    className="flex h-5 w-5 items-center justify-center rounded-full border border-card text-[8px] font-bold text-white"
+                    style={{ backgroundColor: "var(--color-blue)" }}
+                  >
+                    {initials(responsavel.full_name)}
+                  </span>
+                ))}
               </span>
-              {meta.responsavel_nome ?? "Sem responsável"}
+              <span className="truncate">
+                {responsaveis.length
+                  ? responsaveis.map((responsavel) => responsavel.full_name).join(", ")
+                  : "Sem responsável"}
+              </span>
             </span>
             <span className="capitalize">• {meta.periodicidade}</span>
             <span className="flex items-center gap-1">

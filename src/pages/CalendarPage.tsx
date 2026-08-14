@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePlanos, useToggleTarefa, type PlanoWithMeta } from "@/hooks/usePlanos";
 import { useAgendamentos, useMaterializarRecorrencias, useReagendarTarefa, useRemoverAgendamento } from "@/hooks/useAgendamentos";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useAuth } from "@/hooks/useAuth";
 import { useCompromissos, useAtualizarCompromisso, useExcluirCompromisso } from "@/hooks/useCompromissos";
 import { useActions, useScheduleAction, useToggleAction, type ActionItem } from "@/hooks/useActions";
 import { NovoCompromissoModal } from "@/components/calendar/NovoCompromissoModal";
@@ -33,6 +34,7 @@ const addDays = (date: Date, amount: number) => { const d = new Date(date); d.se
 
 export default function CalendarPage() {
   const { data: planos, isLoading } = usePlanos();
+  const { user } = useAuth();
   const { data: settings } = useAppSettings();
   const { data: actions = [], isLoading: actionsLoading } = useActions();
   const toggle = useToggleTarefa();
@@ -57,7 +59,20 @@ export default function CalendarPage() {
   const [registrar, setRegistrar] = useState<{ tarefa: Tarefa; data: string } | null>(null);
 
   const capacidade = settings?.capacidade_diaria_minutos ?? 480;
-  const tasks = useMemo<CalendarTask[]>(() => (planos ?? []).flatMap((plano) => plano.tarefas.map((task) => ({ ...task, plano: plano.titulo, area: plano.meta?.area ?? "Sem área", meta: plano.meta?.nome ?? null }))), [planos]);
+  const tasks = useMemo<CalendarTask[]>(
+    () =>
+      (planos ?? []).flatMap((plano) =>
+        plano.tarefas
+          .filter((task) => task.responsavel_id === user?.id)
+          .map((task) => ({
+            ...task,
+            plano: plano.titulo,
+            area: plano.meta?.area ?? "Sem área",
+            meta: plano.meta?.nome ?? null,
+          })),
+      ),
+    [planos, user?.id],
+  );
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const taskIdsAgendadosNaSemana = useMemo(() => new Set(agendamentos.map((a) => a.tarefa_id)), [agendamentos]);
   const inicioSemana = iso(days[0]);
@@ -106,7 +121,7 @@ export default function CalendarPage() {
   }, [anchor, tasks.map((t) => `${t.id}:${t.frequencia}:${t.data_inicio}:${t.data_fim}:${t.horario_preferencial}:${t.duracao_minutos}:${(t.dias_semana ?? []).join(",")}`).join("|")]);
 
   return <AppShell><div className="performance-page space-y-6">
-    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="eyebrow mb-2">AGENDA E EXECUÇÃO</div><h1 className="font-display text-3xl font-semibold">Calendário estratégico</h1><p className="mt-1 text-sm text-muted-foreground">Ações, pendências e compromissos da semana em um só lugar.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setCompromissoData(iso(new Date())); setCompromissoOpen(true); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Novo compromisso</Button><Button onClick={() => setNovoOpen(true)} className="brand-button"><Plus className="mr-2 h-4 w-4" />Novo plano</Button></div></header>
+    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="eyebrow mb-2">AGENDA E EXECUÇÃO</div><h1 className="font-display text-3xl font-semibold">Meu calendário estratégico</h1><p className="mt-1 text-sm text-muted-foreground">Somente suas ações, pendências e compromissos aparecem nesta agenda.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setCompromissoData(iso(new Date())); setCompromissoOpen(true); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Novo compromisso</Button><Button onClick={() => setNovoOpen(true)} className="brand-button"><Plus className="mr-2 h-4 w-4" />Novo plano</Button></div></header>
 
     <section className="grid gap-3 sm:grid-cols-5">
       <CalendarMetric label="Ações agendadas" value={String(agendamentos.length + scheduledStandalone.length)} tone="primary" />

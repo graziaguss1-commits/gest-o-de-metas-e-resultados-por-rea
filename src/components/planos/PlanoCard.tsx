@@ -42,13 +42,17 @@ import {
   type Execucao,
   type Frequencia,
 } from "@/lib/execucao";
-import { todayISO, type Tarefa } from "@/lib/metas";
+import { todayISO, type MembroResumo, type Tarefa } from "@/lib/metas";
 import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida, formatDuracao, hhmm, labelMomentoRecorrencia } from "@/lib/agenda";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { EditarPlanoModal } from "@/components/planos/EditarPlanoModal";
 import { EditarTarefaModal } from "@/components/planos/EditarTarefaModal";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
+import {
+  nomeResponsavel,
+  ResponsavelSelect,
+} from "@/components/shared/ResponsaveisPicker";
 import { CalendarClock } from "lucide-react";
 
 export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
@@ -56,7 +60,20 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
   const addTarefa = useAddTarefa();
   const deletePlano = useDeletePlano();
   const { data: execucoes = [] } = useExecucoes();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, profile } = useAuth();
+  const responsaveis: MembroResumo[] = plano.meta?.responsaveis?.length
+    ? plano.meta.responsaveis
+    : user?.id
+      ? [{
+          id: user.id,
+          full_name: profile?.full_name ?? "Você",
+          avatar_url: profile?.avatar_url ?? null,
+        }]
+      : [];
+  const responsavelPadrao =
+    responsaveis.find((responsavel) => responsavel.id === user?.id)?.id ??
+    responsaveis[0]?.id ??
+    "";
   const [adding, setAdding] = useState(false);
   const [editarPlanoOpen, setEditarPlanoOpen] = useState(false);
   const [nova, setNova] = useState({
@@ -70,6 +87,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     duracao: null as number | null,
     horario: "",
     dias: null as number[] | null,
+    responsavelId: user?.id ?? "",
   });
 
   const total = plano.tarefas.length;
@@ -81,6 +99,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     e.preventDefault();
     const txt = nova.descricao.trim();
     if (!txt) return;
+    const responsavelId = nova.responsavelId || responsavelPadrao;
+    if (!responsavelId) return toast.error("Selecione quem executará esta ação.");
     if (
       nova.frequencia !== "unica" &&
       !configuracaoRecorrenciaCompleta(
@@ -105,6 +125,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         unidade: nova.unidade,
         impacto: nova.impacto,
         esforco: nova.esforco,
+        responsavel_id: responsavelId,
         duracao_minutos: nova.duracao,
         horario_preferencial: nova.horario || null,
         dias_semana: nova.frequencia !== "unica" ? nova.dias : null,
@@ -120,6 +141,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         duracao: null,
         horario: "",
         dias: null,
+        responsavelId: responsavelPadrao,
       });
       setAdding(false);
     } catch (err) {
@@ -234,6 +256,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
               tarefa={t}
               execucoes={execucoes}
               onToggle={(v) => toggleTarefa.mutate({ id: t.id, concluida: v })}
+              responsaveis={responsaveis}
+              currentUserId={user?.id ?? null}
             />
           ))}
         </ul>
@@ -249,6 +273,14 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             placeholder="Ex: Prospectar pessoas"
             className="h-8"
           />
+          <div className="space-y-1">
+            <span className="text-xs font-medium">Responsável pela execução *</span>
+            <ResponsavelSelect
+              membros={responsaveis}
+              value={nova.responsavelId || responsavelPadrao}
+              onChange={(responsavelId) => setNova({ ...nova, responsavelId })}
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             <Select
               value={nova.frequencia}
@@ -325,7 +357,13 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
           variant="ghost"
           size="sm"
           className="text-xs"
-          onClick={() => setAdding(true)}
+          onClick={() => {
+            setNova((atual) => ({
+              ...atual,
+              responsavelId: atual.responsavelId || responsavelPadrao,
+            }));
+            setAdding(true);
+          }}
         >
           <Plus className="h-3.5 w-3.5 mr-1" />
           Adicionar ação
@@ -345,10 +383,14 @@ function TarefaLinha({
   tarefa,
   execucoes,
   onToggle,
+  responsaveis,
+  currentUserId,
 }: {
   tarefa: Tarefa;
   execucoes: Execucao[];
   onToggle: (v: boolean) => void;
+  responsaveis: MembroResumo[];
+  currentUserId: string | null;
 }) {
   const registrar = useRegistrarExecucao();
   const [valor, setValor] = useState("");
@@ -359,6 +401,8 @@ function TarefaLinha({
   const diasRecorrencia = diasRecorrenciaPersistida(freq, tarefa.dias_semana);
   const momentoRecorrencia = labelMomentoRecorrencia(freq, diasRecorrencia);
   const mensuravel = freq !== "unica" || Number(tarefa.quantidade_planejada ?? 1) > 1 || !!tarefa.unidade;
+  const podeExecutar = !tarefa.responsavel_id || tarefa.responsavel_id === currentUserId;
+  const responsavelNome = nomeResponsavel(responsaveis, tarefa.responsavel_id);
 
   const salvar = async (e: FormEvent) => {
     e.preventDefault();
@@ -382,7 +426,9 @@ function TarefaLinha({
       <div className="flex items-start gap-2">
         <Checkbox
           checked={tarefa.concluida}
-          onCheckedChange={(v) => onToggle(v === true)}
+          onCheckedChange={(v) => podeExecutar && onToggle(v === true)}
+          disabled={!podeExecutar}
+          title={podeExecutar ? "Concluir ação" : `Somente ${responsavelNome} pode concluir`}
           className="mt-0.5"
         />
         <span
@@ -394,10 +440,11 @@ function TarefaLinha({
           type="button"
           variant="ghost"
           size="icon"
-          title="Editar ação"
+          title={podeExecutar ? "Editar ação" : `Ação de ${responsavelNome}`}
           aria-label="Editar ação"
+          disabled={!podeExecutar}
           className="h-7 w-7 text-muted-foreground"
-          onClick={() => setEditarOpen(true)}
+          onClick={() => podeExecutar && setEditarOpen(true)}
         >
           <Pencil className="h-3.5 w-3.5" />
         </Button>
@@ -405,9 +452,10 @@ function TarefaLinha({
           type="button"
           variant="ghost"
           size="icon"
-          title="Agendar no calendário"
+          title={podeExecutar ? "Agendar no calendário" : `Agenda de ${responsavelNome}`}
+          disabled={!podeExecutar}
           className="h-7 w-7 text-muted-foreground"
-          onClick={() => setAgendarOpen(true)}
+          onClick={() => podeExecutar && setAgendarOpen(true)}
         >
           <CalendarClock className="h-3.5 w-3.5" />
         </Button>
@@ -420,6 +468,12 @@ function TarefaLinha({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 pl-6 text-[11px] text-muted-foreground">
+        <span
+          className="rounded-full px-2 py-0.5 font-semibold"
+          style={{ backgroundColor: "var(--color-blue-soft)", color: "var(--color-blue)" }}
+        >
+          Responsável: {responsavelNome}
+        </span>
         {formatDuracao(tarefa.duracao_minutos) ? (
           <span className="rounded-full bg-muted px-2 py-0.5 font-medium">
             {formatDuracao(tarefa.duracao_minutos)} por execução
@@ -436,7 +490,12 @@ function TarefaLinha({
         )}
       </div>
 
-      <EditarTarefaModal open={editarOpen} onOpenChange={setEditarOpen} tarefa={tarefa} />
+      <EditarTarefaModal
+        open={editarOpen}
+        onOpenChange={setEditarOpen}
+        tarefa={tarefa}
+        responsaveis={responsaveis}
+      />
       <AgendarAcaoModal open={agendarOpen} onOpenChange={setAgendarOpen} tarefa={tarefa} dataInicial={todayISO()} />
 
       {mensuravel && (
@@ -445,18 +504,24 @@ function TarefaLinha({
             {exec.texto}
           </span>
           <span className="text-[10px] text-muted-foreground">({exec.periodoLabel})</span>
-          <form onSubmit={salvar} className="flex items-center gap-1 ml-auto">
-            <Input
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              placeholder="realizado"
-              inputMode="decimal"
-              className="h-7 w-[92px] text-xs"
-            />
-            <Button type="submit" size="sm" variant="outline" className="h-7 text-xs" disabled={!valor}>
-              Registrar
-            </Button>
-          </form>
+          {podeExecutar ? (
+            <form onSubmit={salvar} className="flex items-center gap-1 ml-auto">
+              <Input
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                placeholder="realizado"
+                inputMode="decimal"
+                className="h-7 w-[92px] text-xs"
+              />
+              <Button type="submit" size="sm" variant="outline" className="h-7 text-xs" disabled={!valor}>
+                Registrar
+              </Button>
+            </form>
+          ) : (
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              O registro será feito por {responsavelNome}
+            </span>
+          )}
         </div>
       )}
     </li>

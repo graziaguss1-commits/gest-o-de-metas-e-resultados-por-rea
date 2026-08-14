@@ -242,6 +242,35 @@ export type Database = {
           },
         ]
       }
+      meta_responsaveis: {
+        Row: {
+          adicionado_por: string | null
+          created_at: string
+          meta_id: string
+          user_id: string
+        }
+        Insert: {
+          adicionado_por?: string | null
+          created_at?: string
+          meta_id: string
+          user_id: string
+        }
+        Update: {
+          adicionado_por?: string | null
+          created_at?: string
+          meta_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_responsaveis_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "metas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metas: {
         Row: {
           area: string
@@ -666,6 +695,33 @@ export type Database = {
       }
     }
     Functions: {
+      can_access_meta: { Args: { p_meta_id: string }; Returns: boolean }
+      can_access_plan: { Args: { p_plano_id: string }; Returns: boolean }
+      can_access_task: { Args: { p_tarefa_id: string }; Returns: boolean }
+      criar_meta_com_responsaveis: {
+        Args: { p_meta: Json; p_responsaveis: string[] }
+        Returns: string
+      }
+      atualizar_meta_com_responsaveis: {
+        Args: { p_meta_id: string; p_patch: Json; p_responsaveis: string[] }
+        Returns: undefined
+      }
+      get_team_directory: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          full_name: string
+          id: string
+        }[]
+      }
+      is_meta_responsavel: {
+        Args: { p_meta_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      is_task_responsavel: {
+        Args: { p_tarefa_id: string }
+        Returns: boolean
+      }
       calcular_status_meta: {
         Args: {
           p_data_fim: string
