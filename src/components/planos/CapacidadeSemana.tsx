@@ -18,17 +18,19 @@ function inicioDaSemana(base = new Date()) {
 }
 
 /** Tempo planejado por dia e na semana, incluindo prioridades avulsas. */
-export function CapacidadeSemana() {
+export function CapacidadeSemana({ inicioSemana }: { inicioSemana?: string }) {
   const { data: settings } = useAppSettings();
   const { data: actions = [] } = useActions();
   const dias = useMemo(() => {
-    const start = inicioDaSemana();
+    const start = inicioSemana
+      ? new Date(`${inicioSemana}T12:00:00`)
+      : inicioDaSemana();
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
       return d;
     });
-  }, []);
+  }, [inicioSemana]);
   const { data: agendamentos = [] } = useAgendamentos(iso(dias[0]), iso(dias[6]));
   const { data: compromissos = [] } = useCompromissos(iso(dias[0]), iso(dias[6]));
   const capacidade = settings?.capacidade_diaria_minutos ?? 480;

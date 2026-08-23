@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Pencil, Plus, Trash2, BriefcaseBusiness } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -31,8 +32,15 @@ const startOfWeek = (date: Date) => {
 };
 const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const addDays = (date: Date, amount: number) => { const d = new Date(date); d.setDate(d.getDate() + amount); return d; };
+const weekFromParam = (value: string | null) => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return startOfWeek(new Date());
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? startOfWeek(new Date()) : startOfWeek(parsed);
+};
 
 export default function CalendarPage() {
+  const [searchParams] = useSearchParams();
+  const requestedWeek = searchParams.get("semana");
   const { data: planos, isLoading } = usePlanos();
   const { user } = useAuth();
   const { data: settings } = useAppSettings();
@@ -43,7 +51,7 @@ export default function CalendarPage() {
   const remover = useRemoverAgendamento();
   const reagendar = useReagendarTarefa();
   const materializar = useMaterializarRecorrencias();
-  const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
+  const [anchor, setAnchor] = useState(() => weekFromParam(requestedWeek));
   const [novoOpen, setNovoOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"horas"|"compacto">("horas");
   const [compromissoOpen, setCompromissoOpen] = useState(false);
@@ -114,6 +122,10 @@ export default function CalendarPage() {
   const minutosSemana = totalSemana(days.map(iso), agendamentos) + minutosAvulsos + minutosCompromissos;
 
   useEffect(() => {
+    if (requestedWeek) setAnchor(weekFromParam(requestedWeek));
+  }, [requestedWeek]);
+
+  useEffect(() => {
     if (!tasks.length) return;
     materializar.mutate({ tarefas: tasks, datas: days.map(iso) });
   // A semana e a configuração das tarefas determinam as ocorrências; o hook evita duplicatas.
@@ -131,12 +143,16 @@ export default function CalendarPage() {
       <CalendarMetric label="Sem agendamento" value={String(semAgendamento)} tone="accent" />
     </section>
 
+    <section className="performance-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div><div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Semana selecionada</div><div className="mt-1 font-display text-lg font-semibold capitalize">{weekLabel}</div><div className="text-xs text-muted-foreground">Capacidade diária configurada: {formatTotalHoras(capacidade)}</div></div>
+      <div className="flex items-center gap-1"><Button size="icon" variant="outline" onClick={() => setAnchor(addDays(anchor, -7))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" onClick={() => setAnchor(startOfWeek(new Date()))}>Hoje</Button><Button size="icon" variant="outline" onClick={() => setAnchor(addDays(anchor, 7))}><ChevronRight className="h-4 w-4" /></Button></div>
+    </section>
+
     <div className="flex justify-end gap-2"><Button size="sm" variant={calendarView==="horas"?"default":"outline"} onClick={()=>setCalendarView("horas")}>Por horário</Button><Button size="sm" variant={calendarView==="compacto"?"default":"outline"} onClick={()=>setCalendarView("compacto")}>Compacto</Button></div>
 
     {calendarView === "horas" && <HourlyCalendarGrid days={days} agendamentos={agendamentos} acoesAvulsas={actions} compromissos={compromissos} taskById={taskById} onOpenDay={(data)=>{setCompromissoData(data);setCompromissoOpen(true)}} onMoveAction={(id,data,hora)=>{const atual=agendamentos.find(a=>a.id===id);if(atual)reagendar.mutate({id,data,horaInicio:hora,duracaoMinutos:atual.duracao_minutos});}} onMoveStandaloneAction={(id,data,hora)=>{const action=actions.find(item=>item.id===id);if(action?.duracao_minutos)scheduleAction.mutate({id,data,horaInicio:hora,duracaoMinutos:action.duracao_minutos});}} onMoveCommitment={(id,data,hora)=>{const atual=compromissos.find(c=>c.id===id);if(!atual)return;const [hi,mi]=atual.hora_inicio.split(":").map(Number);const [hf,mf]=atual.hora_fim.split(":").map(Number);const duracao=hf*60+mf-hi*60-mi;const [nh,nm]=hora.split(":").map(Number);const fim=nh*60+nm+duracao;atualizarCompromisso.mutate({id,data,hora_inicio:hora,hora_fim:`${String(Math.floor(fim/60)).padStart(2,"0")}:${String(fim%60).padStart(2,"0")}`});}} />}
 
     <div className={`performance-card overflow-hidden ${calendarView === "compacto" ? "" : "hidden"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Semana selecionada</div><div className="mt-1 font-display text-lg font-semibold capitalize">{weekLabel}</div><div className="text-xs text-muted-foreground">Capacidade diária configurada: {formatTotalHoras(capacidade)}</div></div><div className="flex items-center gap-1"><Button size="icon" variant="outline" onClick={() => setAnchor(addDays(anchor, -7))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" onClick={() => setAnchor(startOfWeek(new Date()))}>Hoje</Button><Button size="icon" variant="outline" onClick={() => setAnchor(addDays(anchor, 7))}><ChevronRight className="h-4 w-4" /></Button></div></div>
       {isLoading || actionsLoading ? <Skeleton className="h-[440px] w-full" /> : <div className="grid min-w-[900px] grid-cols-7 divide-x overflow-x-auto">
         {days.map((day) => {
           const dia = iso(day);

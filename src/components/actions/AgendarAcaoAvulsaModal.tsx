@@ -24,6 +24,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   action: ActionItem | null;
   dataInicial?: string;
+  dataMin?: string;
+  dataMax?: string;
 };
 
 export function AgendarAcaoAvulsaModal({
@@ -31,6 +33,8 @@ export function AgendarAcaoAvulsaModal({
   onOpenChange,
   action,
   dataInicial,
+  dataMin,
+  dataMax,
 }: Props) {
   const schedule = useScheduleAction();
   const [data, setData] = useState("");
@@ -39,15 +43,24 @@ export function AgendarAcaoAvulsaModal({
 
   useEffect(() => {
     if (!open) return;
-    setData(action?.data_agendada ?? dataInicial ?? todayISO());
+    const dataExistente = action?.data_agendada;
+    const dentroDaSemana = Boolean(
+      dataExistente &&
+        (!dataMin || dataExistente >= dataMin) &&
+        (!dataMax || dataExistente <= dataMax),
+    );
+    setData(dentroDaSemana ? dataExistente! : dataInicial ?? dataMin ?? todayISO());
     setHora(hhmm(action?.hora_inicio ?? "") || "09:00");
     setDuracao(action?.duracao_minutos ?? null);
-  }, [open, action, dataInicial]);
+  }, [open, action, dataInicial, dataMin, dataMax]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!action) return;
     if (!data) return toast.error("Escolha o dia da execução.");
+    if ((dataMin && data < dataMin) || (dataMax && data > dataMax)) {
+      return toast.error("Escolha um dia dentro da semana que está sendo planejada.");
+    }
     if (!hora) return toast.error("Escolha o horário de início.");
     if (!duracao || duracao <= 0) {
       return toast.error("Informe quanto tempo esta ação deve ocupar.");
@@ -93,6 +106,8 @@ export function AgendarAcaoAvulsaModal({
                 id="avulsa-data"
                 type="date"
                 value={data}
+                min={dataMin}
+                max={dataMax}
                 onChange={(event) => setData(event.target.value)}
               />
             </div>
