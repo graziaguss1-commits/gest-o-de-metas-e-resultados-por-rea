@@ -23,6 +23,9 @@ type Props = {
   tarefa: Tarefa | null;
   /** Data pré-selecionada (YYYY-MM-DD). */
   dataInicial?: string;
+  /** Limita o agendamento à semana que está sendo planejada. */
+  dataMin?: string;
+  dataMax?: string;
   /** Quando informado, o modal reagenda a ocorrência existente. */
   agendamentoId?: string;
   horaInicial?: string;
@@ -34,6 +37,8 @@ export function AgendarAcaoModal({
   onOpenChange,
   tarefa,
   dataInicial,
+  dataMin,
+  dataMax,
   agendamentoId,
   horaInicial,
   duracaoInicial,
@@ -60,6 +65,9 @@ export function AgendarAcaoModal({
     e.preventDefault();
     if (!tarefa) return;
     if (!data) return toast.error("Escolha a data.");
+    if ((dataMin && data < dataMin) || (dataMax && data > dataMax)) {
+      return toast.error("Escolha um dia dentro da semana que está sendo planejada.");
+    }
     if (!hora) return toast.error("Escolha o horário de início.");
     if (!duracao || duracao <= 0) {
       return toast.error("Informe a duração estimada antes de posicionar em horário.");
@@ -107,7 +115,14 @@ export function AgendarAcaoModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="ag-data">Data</Label>
-              <Input id="ag-data" type="date" value={data} onChange={(e) => setData(e.target.value)} />
+              <Input
+                id="ag-data"
+                type="date"
+                value={data}
+                min={dataMin}
+                max={dataMax}
+                onChange={(e) => setData(e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ag-hora">Início</Label>
