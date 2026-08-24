@@ -1,4 +1,4 @@
-import { MoreHorizontal } from "lucide-react";
+import { Check, Loader2, MoreHorizontal } from "lucide-react";
 import type { Agendamento } from "@/lib/agenda";
 import type { Compromisso } from "@/hooks/useCompromissos";
 import type { ActionItem } from "@/hooks/useActions";
@@ -31,6 +31,8 @@ type Props = {
   acoesAvulsas: ActionItem[];
   compromissos: Compromisso[];
   taskById: Map<string, Tarefa & { area?: string; meta?: string | null }>;
+  completedActionIds: Set<string>;
+  completingActionId: string | null;
   onMoveAction: (id: string, data: string, hora: string) => void;
   onMoveStandaloneAction: (id: string, data: string, hora: string) => void;
   onMoveCommitment: (id: string, data: string, hora: string) => void;
@@ -38,6 +40,9 @@ type Props = {
   onOpenStandaloneAction: (id: string) => void;
   onOpenCommitment: (id: string) => void;
   onOpenDay: (data: string) => void;
+  onMarkActionDone: (id: string) => void;
+  onToggleStandaloneAction: (id: string, concluida: boolean) => void;
+  onToggleCommitment: (id: string, concluido: boolean) => void;
 };
 
 export function HourlyCalendarGrid({
@@ -46,6 +51,8 @@ export function HourlyCalendarGrid({
   acoesAvulsas,
   compromissos,
   taskById,
+  completedActionIds,
+  completingActionId,
   onMoveAction,
   onMoveStandaloneAction,
   onMoveCommitment,
@@ -53,6 +60,9 @@ export function HourlyCalendarGrid({
   onOpenStandaloneAction,
   onOpenCommitment,
   onOpenDay,
+  onMarkActionDone,
+  onToggleStandaloneAction,
+  onToggleCommitment,
 }: Props) {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const drag = (event: React.DragEvent, data: DragData) =>
@@ -82,8 +92,10 @@ export function HourlyCalendarGrid({
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
       <div
-        className="grid min-w-[1050px]"
-        style={{ gridTemplateColumns: "64px repeat(7,minmax(135px,1fr))" }}
+        className={`grid ${days.length <= 3 ? "min-w-[760px]" : "min-w-[1050px]"}`}
+        style={{
+          gridTemplateColumns: `64px repeat(${days.length}, minmax(${days.length <= 3 ? "220px" : "135px"}, 1fr))`,
+        }}
       >
         <div className="sticky left-0 z-20 border-b border-r bg-card" />
         {days.map((day) => (
@@ -143,6 +155,8 @@ export function HourlyCalendarGrid({
               {tasks.map((item) => {
                 const task = taskById.get(item.tarefa_id);
                 if (!task) return null;
+                const completed = completedActionIds.has(item.id);
+                const completing = completingActionId === item.id;
                 const top =
                   ((minutesOf(item.hora_inicio) - START * 60) / SLOT) *
                   SLOT_HEIGHT;
@@ -163,16 +177,44 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "acao", id: item.id })
                     }
                     key={item.id}
-                    className="absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)] p-2 pr-6 shadow-sm active:cursor-grabbing"
+                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border p-2 shadow-sm active:cursor-grabbing ${completed ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : "border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)]"} ${days.length <= 3 ? "pr-24" : "pr-12"}`}
                     style={{ top, height }}
                     title="Clique para editar ou excluir. Arraste para reagendar."
                   >
+                    <button
+                      type="button"
+                      draggable={false}
+                      disabled={completed || completing}
+                      aria-label={
+                        completed ? "Execução concluída" : "Marcar como feito"
+                      }
+                      title={
+                        completed ? "Execução concluída" : "Marcar como feito"
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onMarkActionDone(item.id);
+                      }}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      className={`absolute right-6 top-1 flex h-6 items-center gap-1 rounded-full border px-1.5 text-[9px] font-semibold ${completed ? "border-[var(--color-green)]/40 bg-white/70 text-[var(--color-green)]" : "border-border bg-card/90 text-foreground hover:border-[var(--color-green)]"}`}
+                    >
+                      {completing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Check className="h-3 w-3" />
+                      )}
+                      {days.length <= 3 && (
+                        <span>{completed ? "Feito" : "Marcar feito"}</span>
+                      )}
+                    </button>
                     <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--brand-primary)]">
                       {hhmm(item.hora_inicio)}–
                       {horaFim(hhmm(item.hora_inicio), item.duracao_minutos)}
                     </div>
-                    <div className="line-clamp-2 text-xs font-semibold">
+                    <div
+                      className={`line-clamp-2 text-xs font-semibold ${completed ? "line-through opacity-70" : ""}`}
+                    >
                       {task.descricao}
                     </div>
                   </div>
@@ -200,10 +242,31 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "acao-avulsa", id: action.id })
                     }
                     key={action.id}
-                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--color-green)]/35 bg-[var(--color-green-bg)] p-2 pr-6 shadow-sm active:cursor-grabbing ${action.concluida ? "opacity-60" : ""}`}
+                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--color-green)]/35 bg-[var(--color-green-bg)] p-2 shadow-sm active:cursor-grabbing ${days.length <= 3 ? "pr-24" : "pr-12"} ${action.concluida ? "opacity-60" : ""}`}
                     style={{ top, height }}
                     title="Clique para editar ou excluir. Arraste para reagendar."
                   >
+                    <button
+                      type="button"
+                      draggable={false}
+                      aria-label={
+                        action.concluida ? "Reabrir ação" : "Marcar como feito"
+                      }
+                      title={
+                        action.concluida ? "Reabrir ação" : "Marcar como feito"
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onToggleStandaloneAction(action.id, !action.concluida);
+                      }}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      className="absolute right-6 top-1 flex h-6 items-center gap-1 rounded-full border border-[var(--color-green)]/40 bg-card/90 px-1.5 text-[9px] font-semibold text-[var(--color-green)]"
+                    >
+                      <Check className="h-3 w-3" />
+                      {days.length <= 3 && (
+                        <span>{action.concluida ? "Feito" : "Marcar feito"}</span>
+                      )}
+                    </button>
                     <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--color-green)]">
                       {hhmm(start)}–{horaFim(hhmm(start), duration)}
@@ -243,15 +306,49 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "compromisso", id: commitment.id })
                     }
                     key={commitment.id}
-                    className="absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-2 pr-6 shadow-sm active:cursor-grabbing"
+                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-2 shadow-sm active:cursor-grabbing ${commitment.recorrencia === "nenhuma" ? (days.length <= 3 ? "pr-24" : "pr-12") : "pr-6"} ${commitment.concluido ? "opacity-60" : ""}`}
                     style={{ top, height }}
                     title="Clique para excluir. Arraste para reagendar."
                   >
+                    {commitment.recorrencia === "nenhuma" && (
+                      <button
+                        type="button"
+                        draggable={false}
+                        aria-label={
+                          commitment.concluido
+                            ? "Reabrir compromisso"
+                            : "Marcar como feito"
+                        }
+                        title={
+                          commitment.concluido
+                            ? "Reabrir compromisso"
+                            : "Marcar como feito"
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onToggleCommitment(
+                            commitment.id,
+                            !commitment.concluido,
+                          );
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        className="absolute right-6 top-1 flex h-6 items-center gap-1 rounded-full border border-[var(--brand-accent)]/40 bg-card/90 px-1.5 text-[9px] font-semibold text-[var(--brand-accent)]"
+                      >
+                        <Check className="h-3 w-3" />
+                        {days.length <= 3 && (
+                          <span>
+                            {commitment.concluido ? "Feito" : "Marcar feito"}
+                          </span>
+                        )}
+                      </button>
+                    )}
                     <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--brand-accent)]">
                       {hhmm(commitment.hora_inicio)}–{hhmm(commitment.hora_fim)}
                     </div>
-                    <div className="line-clamp-2 text-xs font-semibold">
+                    <div
+                      className={`line-clamp-2 text-xs font-semibold ${commitment.concluido ? "line-through" : ""}`}
+                    >
                       {commitment.titulo}
                     </div>
                     <div className="text-[9px] uppercase text-muted-foreground">
@@ -265,8 +362,8 @@ export function HourlyCalendarGrid({
         })}
       </div>
       <div className="border-t p-2 text-center text-[10px] text-muted-foreground">
-        Clique em um bloco para editar ou excluir. Arraste para outro dia ou
-        horário. Cada linha representa 30 minutos.
+        Marque uma execução como feita, clique no menu para editar ou excluir e
+        arraste para outro horário. Cada linha representa 30 minutos.
       </div>
     </div>
   );
