@@ -30,6 +30,7 @@ import {
 } from "@/lib/execucao";
 import {
   configuracaoRecorrenciaCompleta,
+  diasSemanaisCompletos,
   diasRecorrenciaPersistida,
 } from "@/lib/agenda";
 import { todayISO, type MembroResumo, type Tarefa } from "@/lib/metas";
@@ -115,6 +116,11 @@ export function EditarTarefaModal({
       )
     ) {
       return toast.error("Defina o dia, o horário e a duração da rotina.");
+    }
+    if (!diasSemanaisCompletos(form.frequencia, form.execucoes, form.dias)) {
+      return toast.error(
+        `Escolha ${form.execucoes} ${form.execucoes === 1 ? "dia" : "dias"} para esta rotina semanal.`,
+      );
     }
     if (
       form.frequencia !== "unica" &&
