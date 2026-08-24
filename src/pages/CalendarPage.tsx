@@ -25,6 +25,8 @@ import {
 } from "@/hooks/usePlanos";
 import {
   useAgendamentos,
+  useAlternarCronometroAgendamento,
+  useFinalizarCronometroAgendamento,
   useMaterializarRecorrencias,
   useReagendarTarefa,
 } from "@/hooks/useAgendamentos";
@@ -42,6 +44,7 @@ import {
 } from "@/hooks/useActions";
 import { NovoCompromissoModal } from "@/components/calendar/NovoCompromissoModal";
 import { HourlyCalendarGrid } from "@/components/calendar/HourlyCalendarGrid";
+import { TaskTimerButton } from "@/components/calendar/TaskTimerButton";
 import {
   EventoCalendarioModal,
   type EventoCalendarioSelecionado,
@@ -51,12 +54,16 @@ import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { AgendarAcaoAvulsaModal } from "@/components/actions/AgendarAcaoAvulsaModal";
 import {
   capacidadeDoDia,
+  comparativoTempo,
   configuracaoRecorrenciaCompleta,
   diasRecorrenciaPersistida,
   execucoesEsperadasNaSemana,
+  formatCronometro,
   formatTotalHoras,
   hhmm,
   horaFim,
+  minutosReaisDoCronometro,
+  segundosDoCronometro,
   totalSemana,
 } from "@/lib/agenda";
 import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
@@ -105,6 +112,8 @@ export default function CalendarPage() {
   const toggleAction = useToggleAction();
   const scheduleAction = useScheduleAction();
   const reagendar = useReagendarTarefa();
+  const alternarCronometro = useAlternarCronometroAgendamento();
+  const finalizarCronometro = useFinalizarCronometroAgendamento();
   const materializar = useMaterializarRecorrencias();
   const [anchor, setAnchor] = useState(() => dateFromParam(requestedWeek));
   const [calendarSpan, setCalendarSpan] = useState<3 | 7>(3);
@@ -152,6 +161,7 @@ export default function CalendarPage() {
   } | null>(null);
   const [agendarAvulsa, setAgendarAvulsa] = useState<ActionItem | null>(null);
   const [concluindoId, setConcluindoId] = useState<string | null>(null);
+  const [timerPendingId, setTimerPendingId] = useState<string | null>(null);
   const [eventoSelecionado, setEventoSelecionado] =
     useState<EventoCalendarioSelecionado | null>(null);
 
@@ -179,6 +189,16 @@ export default function CalendarPage() {
           .map((execucao) => [execucao.agendamento_id as string, execucao]),
       ),
     [execucoes],
+  );
+  const realMinutesByActionId = useMemo(
+    () =>
+      new Map(
+        [...execucaoPorAgendamento.entries()].map(([id, execucao]) => [
+          id,
+          execucao.tempo_real_minutos ?? null,
+        ]),
+      ),
+    [execucaoPorAgendamento],
   );
   const inicioSemana = iso(weekDays[0]);
   const fimSemana = iso(weekDays[6]);
@@ -346,17 +366,31 @@ export default function CalendarPage() {
 
     setConcluindoId(agendamentoId);
     try {
+      const segundosCronometrados = segundosDoCronometro(agendamento);
+      const tempoRealMinutos = minutosReaisDoCronometro(segundosCronometrados);
+      if (
+        agendamento.cronometro_iniciado_em ||
+        segundosCronometrados > 0
+      ) {
+        await finalizarCronometro.mutateAsync({
+          id: agendamento.id,
+          segundos: segundosCronometrados,
+        });
+      }
       await registrarExecucao.mutateAsync({
         tarefaId: tarefa.id,
         agendamentoId,
         quantidade: quantidadePorExecucao(tarefa),
         data: agendamento.data,
+        tempoRealMinutos,
       });
       if (getFrequencia(tarefa) === "unica" && !tarefa.concluida) {
         await toggle.mutateAsync({ id: tarefa.id, concluida: true });
       }
       toast.success(
-        "Execução registrada. O resultado da meta continua separado.",
+        tempoRealMinutos
+          ? `Tarefa finalizada em ${formatCronometro(segundosCronometrados)}. Execução registrada.`
+          : "Execução registrada. O resultado da meta continua separado.",
       );
     } catch (error) {
       toast.error(
@@ -366,6 +400,26 @@ export default function CalendarPage() {
       );
     } finally {
       setConcluindoId(null);
+    }
+  };
+
+  const alternarTimer = async (agendamento: (typeof agendamentos)[number]) => {
+    setTimerPendingId(agendamento.id);
+    try {
+      const resultado = await alternarCronometro.mutateAsync(agendamento);
+      toast.success(
+        resultado.ativo
+          ? "Cronômetro iniciado. Pode executar a tarefa."
+          : `Cronômetro pausado em ${formatCronometro(resultado.segundos)}.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o cronômetro.",
+      );
+    } finally {
+      setTimerPendingId(null);
     }
   };
 
@@ -511,7 +565,9 @@ export default function CalendarPage() {
             compromissos={compromissos}
             taskById={taskById}
             completedActionIds={new Set(execucaoPorAgendamento.keys())}
+            realMinutesByActionId={realMinutesByActionId}
             completingActionId={concluindoId}
+            timerPendingId={timerPendingId}
             onOpenDay={(data) => {
               setCompromissoData(data);
               setCompromissoOpen(true);
@@ -520,6 +576,7 @@ export default function CalendarPage() {
             onOpenStandaloneAction={abrirAcaoAvulsa}
             onOpenCommitment={abrirCompromisso}
             onMarkActionDone={marcarAgendamentoComoFeito}
+            onToggleTimer={alternarTimer}
             onToggleStandaloneAction={(id, concluida) =>
               toggleAction.mutate({ id, concluida })
             }
@@ -775,6 +832,7 @@ export default function CalendarPage() {
                         const task = taskById.get(bloco.tarefa_id);
                         if (!task) return null;
                         const concluido = execucaoPorAgendamento.has(bloco.id);
+                        const execucao = execucaoPorAgendamento.get(bloco.id);
                         return (
                           <div
                             key={bloco.id}
@@ -796,16 +854,47 @@ export default function CalendarPage() {
                               {task.area}
                               {task.meta ? ` · ${task.meta}` : ""}
                             </div>
+                            {concluido &&
+                              comparativoTempo(
+                                task.duracao_minutos,
+                                execucao?.tempo_real_minutos,
+                              ) && (
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  {comparativoTempo(
+                                    task.duracao_minutos,
+                                    execucao?.tempo_real_minutos,
+                                  )}
+                                </div>
+                              )}
                             <div className="mt-2 flex items-center gap-1">
+                              {!concluido && (
+                                <TaskTimerButton
+                                  agendamento={bloco}
+                                  pending={
+                                    timerPendingId === bloco.id ||
+                                    concluindoId === bloco.id
+                                  }
+                                  onToggle={alternarTimer}
+                                />
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="h-6 px-1.5 text-[10px]"
-                                disabled={concluido || concluindoId === bloco.id}
+                                disabled={
+                                  concluido ||
+                                  concluindoId === bloco.id ||
+                                  timerPendingId === bloco.id
+                                }
                                 onClick={() => marcarAgendamentoComoFeito(bloco.id)}
                               >
                                 <CheckCircle2 className="mr-1 h-3 w-3" />
-                                {concluido ? "Feito" : "Marcar feito"}
+                                {concluido
+                                  ? "Feito"
+                                  : bloco.cronometro_iniciado_em ||
+                                      Number(bloco.cronometro_segundos ?? 0) > 0
+                                    ? "Finalizar"
+                                    : "Marcar feito"}
                               </Button>
                               <Button
                                 size="icon"
