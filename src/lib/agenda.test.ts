@@ -7,6 +7,7 @@ import {
   diasRecorrenciaPersistida,
   execucoesEsperadasNaSemana,
   execucoesPlanejadasPorPeriodo,
+  formatCronometro,
   labelMomentoRecorrencia,
   formatDuracao,
   formatTotalHoras,
@@ -14,6 +15,8 @@ import {
   horaFim,
   intervalosConflitam,
   labelDiasSemana,
+  minutosReaisDoCronometro,
+  segundosDoCronometro,
   totalSemana,
   type Agendamento,
 } from "./agenda";
@@ -85,6 +88,20 @@ describe("agenda", () => {
     expect(comparativoTempo(45, 55)).toBe("Estimado 45 min · Real 55 min");
     expect(comparativoTempo(45, null)).toBe("Estimado 45 min");
     expect(comparativoTempo(null, null)).toBeNull();
+  });
+
+  it("mantém e formata o tempo real do cronômetro", () => {
+    const inicio = new Date("2026-08-24T12:00:00.000Z").getTime();
+    const agendamento = {
+      ...ag("timer", "2026-08-24", "09:00", 30),
+      cronometro_segundos: 120,
+      cronometro_iniciado_em: "2026-08-24T12:00:00.000Z",
+    };
+    const segundos = segundosDoCronometro(agendamento, inicio + 65_000);
+    expect(segundos).toBe(185);
+    expect(formatCronometro(segundos)).toBe("00:03:05");
+    expect(minutosReaisDoCronometro(segundos)).toBe(3);
+    expect(minutosReaisDoCronometro(10)).toBe(1);
   });
 
   it("rotula os dias de execução", () => {
