@@ -6,6 +6,7 @@ import {
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
   diasRecorrenciaPersistida,
+  segundosDoCronometro,
 } from "@/lib/agenda";
 
 const KEY = ["agendamentos"] as const;
@@ -21,7 +22,9 @@ export function useAgendamentos(inicio?: string, fim?: string) {
     queryFn: async (): Promise<Agendamento[]> => {
       let query = supabase
         .from("tarefa_agendamentos")
-        .select("id, tarefa_id, data, hora_inicio, duracao_minutos, observacao")
+        .select(
+          "id, tarefa_id, data, hora_inicio, duracao_minutos, observacao, cronometro_iniciado_em, cronometro_segundos, cronometro_usuario_id",
+        )
         .order("data", { ascending: true })
         .order("hora_inicio", { ascending: true });
       if (inicio) query = query.gte("data", inicio);
@@ -32,6 +35,88 @@ export function useAgendamentos(inicio?: string, fim?: string) {
         (item) => item.observacao !== OBSERVACAO_OCORRENCIA_CANCELADA,
       );
     },
+  });
+}
+
+/** Inicia, pausa ou continua o cronômetro persistente de uma ocorrência. */
+export function useAlternarCronometroAgendamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (agendamento: Agendamento) => {
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData.user?.id;
+      if (!uid) throw new Error("Sessão expirada — faça login novamente.");
+
+      if (agendamento.cronometro_iniciado_em) {
+        const segundos = segundosDoCronometro(agendamento);
+        const { error } = await supabase
+          .from("tarefa_agendamentos")
+          .update({
+            cronometro_iniciado_em: null,
+            cronometro_segundos: segundos,
+          })
+          .eq("id", agendamento.id);
+        if (error) throw error;
+        return { ativo: false, segundos };
+      }
+
+      const { data: ativos, error: ativosError } = await supabase
+        .from("tarefa_agendamentos")
+        .select("id")
+        .eq("cronometro_usuario_id", uid)
+        .not("cronometro_iniciado_em", "is", null)
+        .neq("id", agendamento.id)
+        .limit(1);
+      if (ativosError) throw ativosError;
+      if (ativos?.length) {
+        throw new Error(
+          "Você já tem outra tarefa em andamento. Pause-a antes de iniciar esta.",
+        );
+      }
+
+      const { error } = await supabase
+        .from("tarefa_agendamentos")
+        .update({
+          cronometro_iniciado_em: new Date().toISOString(),
+          cronometro_usuario_id: uid,
+        })
+        .eq("id", agendamento.id);
+      if (error?.code === "23505") {
+        throw new Error(
+          "Você já tem outra tarefa em andamento. Pause-a antes de iniciar esta.",
+        );
+      }
+      if (error) throw error;
+      return {
+        ativo: true,
+        segundos: Number(agendamento.cronometro_segundos ?? 0),
+      };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/** Consolida a sessão ativa antes de registrar a execução como concluída. */
+export function useFinalizarCronometroAgendamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      segundos,
+    }: {
+      id: string;
+      segundos: number;
+    }) => {
+      const { error } = await supabase
+        .from("tarefa_agendamentos")
+        .update({
+          cronometro_iniciado_em: null,
+          cronometro_segundos: Math.max(0, Math.floor(segundos)),
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 
