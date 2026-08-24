@@ -3,7 +3,8 @@ import type { Agendamento } from "@/lib/agenda";
 import type { Compromisso } from "@/hooks/useCompromissos";
 import type { ActionItem } from "@/hooks/useActions";
 import type { Tarefa } from "@/lib/metas";
-import { hhmm, horaFim } from "@/lib/agenda";
+import { formatDuracao, hhmm, horaFim } from "@/lib/agenda";
+import { TaskTimerButton } from "@/components/calendar/TaskTimerButton";
 
 const START = 6;
 const END = 22;
@@ -32,7 +33,9 @@ type Props = {
   compromissos: Compromisso[];
   taskById: Map<string, Tarefa & { area?: string; meta?: string | null }>;
   completedActionIds: Set<string>;
+  realMinutesByActionId: Map<string, number | null>;
   completingActionId: string | null;
+  timerPendingId: string | null;
   onMoveAction: (id: string, data: string, hora: string) => void;
   onMoveStandaloneAction: (id: string, data: string, hora: string) => void;
   onMoveCommitment: (id: string, data: string, hora: string) => void;
@@ -41,6 +44,7 @@ type Props = {
   onOpenCommitment: (id: string) => void;
   onOpenDay: (data: string) => void;
   onMarkActionDone: (id: string) => void;
+  onToggleTimer: (agendamento: Agendamento) => void;
   onToggleStandaloneAction: (id: string, concluida: boolean) => void;
   onToggleCommitment: (id: string, concluido: boolean) => void;
 };
@@ -52,7 +56,9 @@ export function HourlyCalendarGrid({
   compromissos,
   taskById,
   completedActionIds,
+  realMinutesByActionId,
   completingActionId,
+  timerPendingId,
   onMoveAction,
   onMoveStandaloneAction,
   onMoveCommitment,
@@ -61,6 +67,7 @@ export function HourlyCalendarGrid({
   onOpenCommitment,
   onOpenDay,
   onMarkActionDone,
+  onToggleTimer,
   onToggleStandaloneAction,
   onToggleCommitment,
 }: Props) {
@@ -156,6 +163,7 @@ export function HourlyCalendarGrid({
                 const task = taskById.get(item.tarefa_id);
                 if (!task) return null;
                 const completed = completedActionIds.has(item.id);
+                const realMinutes = realMinutesByActionId.get(item.id) ?? null;
                 const completing = completingActionId === item.id;
                 const top =
                   ((minutesOf(item.hora_inicio) - START * 60) / SLOT) *
@@ -177,36 +185,56 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "acao", id: item.id })
                     }
                     key={item.id}
-                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border p-2 shadow-sm active:cursor-grabbing ${completed ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : "border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)]"} ${days.length <= 3 ? "pr-24" : "pr-12"}`}
+                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border p-2 shadow-sm active:cursor-grabbing ${completed ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : "border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)]"} ${days.length <= 3 ? (completed ? "pr-32" : "pr-[250px]") : completed ? "pr-12" : "pr-[120px]"}`}
                     style={{ top, height }}
                     title="Clique para editar ou excluir. Arraste para reagendar."
                   >
-                    <button
-                      type="button"
-                      draggable={false}
-                      disabled={completed || completing}
-                      aria-label={
-                        completed ? "Execução concluída" : "Marcar como feito"
-                      }
-                      title={
-                        completed ? "Execução concluída" : "Marcar como feito"
-                      }
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onMarkActionDone(item.id);
-                      }}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      className={`absolute right-6 top-1 flex h-6 items-center gap-1 rounded-full border px-1.5 text-[9px] font-semibold ${completed ? "border-[var(--color-green)]/40 bg-white/70 text-[var(--color-green)]" : "border-border bg-card/90 text-foreground hover:border-[var(--color-green)]"}`}
-                    >
-                      {completing ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Check className="h-3 w-3" />
+                    <div className="absolute right-6 top-1 flex items-center gap-1">
+                      {!completed && (
+                        <TaskTimerButton
+                          agendamento={item}
+                          pending={timerPendingId === item.id || completing}
+                          showLabel={days.length <= 3}
+                          onToggle={onToggleTimer}
+                        />
                       )}
-                      {days.length <= 3 && (
-                        <span>{completed ? "Feito" : "Marcar feito"}</span>
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        draggable={false}
+                        disabled={
+                          completed || completing || timerPendingId === item.id
+                        }
+                        aria-label={
+                          completed ? "Execução concluída" : "Finalizar tarefa"
+                        }
+                        title={
+                          completed ? "Execução concluída" : "Finalizar tarefa"
+                        }
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onMarkActionDone(item.id);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        className={`flex h-6 items-center gap-1 rounded-full border px-1.5 text-[9px] font-semibold ${completed ? "border-[var(--color-green)]/40 bg-white/70 text-[var(--color-green)]" : "border-border bg-card/90 text-foreground hover:border-[var(--color-green)]"}`}
+                      >
+                        {completing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3" />
+                        )}
+                        {days.length <= 3 && (
+                          <span>
+                            {completed
+                              ? `Feito${realMinutes ? ` · ${formatDuracao(realMinutes)}` : ""}`
+                              : item.cronometro_iniciado_em ||
+                                  Number(item.cronometro_segundos ?? 0) > 0
+                                ? "Finalizar"
+                                : "Marcar feito"}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                     <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--brand-primary)]">
                       {hhmm(item.hora_inicio)}–
@@ -362,8 +390,9 @@ export function HourlyCalendarGrid({
         })}
       </div>
       <div className="border-t p-2 text-center text-[10px] text-muted-foreground">
-        Marque uma execução como feita, clique no menu para editar ou excluir e
-        arraste para outro horário. Cada linha representa 30 minutos.
+        Inicie o cronômetro ao começar, pause quando necessário e finalize para
+        registrar o tempo real. Também é possível arrastar o bloco para outro
+        horário.
       </div>
     </div>
   );
