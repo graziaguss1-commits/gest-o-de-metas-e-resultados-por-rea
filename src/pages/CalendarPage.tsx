@@ -217,9 +217,24 @@ export default function CalendarPage() {
     ["diaria", "semanal", "mensal"].includes(task.frequencia) &&
     (!task.data_inicio || task.data_inicio <= fimSemana) &&
     (!task.data_fim || task.data_fim >= inicioSemana);
-  const progressoAgenda = (task: Tarefa) => {
-    const agendadas = agendamentosPorTarefa.get(task.id) ?? 0;
-    const necessarias = execucoesEsperadasNaSemana(task, weekDates);
+  const progressoAgenda = (task: Tarefa, dataReferencia?: string) => {
+    const inicio = dataReferencia
+      ? startOfWeek(new Date(`${dataReferencia}T12:00:00`))
+      : weekStart;
+    const datas = Array.from({ length: 7 }, (_, index) =>
+      iso(addDays(inicio, index)),
+    );
+    const [primeiroDia, ultimoDia] = [datas[0], datas[6]];
+    const semanaAtual = primeiroDia === inicioSemana;
+    const agendadas = semanaAtual
+      ? (agendamentosPorTarefa.get(task.id) ?? 0)
+      : agendamentos.filter(
+          (item) =>
+            item.tarefa_id === task.id &&
+            item.data >= primeiroDia &&
+            item.data <= ultimoDia,
+        ).length;
+    const necessarias = execucoesEsperadasNaSemana(task, datas);
     return {
       agendadas,
       necessarias,
@@ -974,16 +989,20 @@ export default function CalendarPage() {
           onOpenChange={(v) => !v && setAgendar(null)}
           tarefa={agendar?.tarefa ?? null}
           dataInicial={agendar?.data}
-          dataMin={inicioSemana}
-          dataMax={fimSemana}
+          dataMin={queryStart}
+          dataMax={queryEnd}
           agendamentoId={agendar?.agendamentoId}
           horaInicial={agendar?.hora}
           duracaoInicial={agendar?.duracao}
           agendadasNaSemana={
-            agendar ? progressoAgenda(agendar.tarefa).agendadas : 0
+            agendar
+              ? progressoAgenda(agendar.tarefa, agendar.data).agendadas
+              : 0
           }
           execucoesNecessarias={
-            agendar ? progressoAgenda(agendar.tarefa).necessarias : 1
+            agendar
+              ? progressoAgenda(agendar.tarefa, agendar.data).necessarias
+              : 1
           }
         />
         <AgendarAcaoAvulsaModal
