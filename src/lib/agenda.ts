@@ -278,9 +278,27 @@ export function configuracaoRecorrenciaCompleta(
   const diasValidos = (dias ?? []).filter(
     (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7,
   );
-  return frequencia === "semanal"
-    ? diasValidos.length === 1
-    : diasValidos.length > 0;
+  return diasValidos.length > 0;
+}
+
+/**
+ * Em uma rotina semanal de até sete execuções, cada execução precisa de um
+ * dia preferido distinto. Acima disso, os blocos extras são posicionados no
+ * planejamento semanal.
+ */
+export function diasSemanaisCompletos(
+  frequencia: string,
+  execucoes: number,
+  dias?: number[] | null,
+): boolean {
+  if (frequencia !== "semanal") return true;
+  const quantidade = execucoesPlanejadasPorPeriodo({
+    execucoes_planejadas: execucoes,
+  });
+  const diasValidos = [...new Set(dias ?? [])].filter(
+    (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7,
+  ).length;
+  return quantidade <= 7 ? diasValidos === quantidade : diasValidos > 0;
 }
 
 /** Verifica se uma data pertence ao padrão diário, semanal ou mensal configurado. */
@@ -368,8 +386,15 @@ export function labelMomentoRecorrencia(
   }
 
   if (frequencia === "semanal") {
-    const dia = DIAS_SEMANA.find((item) => item.valor === dias?.[0]);
-    return dia ? `Toda ${dia.longo.toLowerCase()}` : null;
+    const diasValidos = [...new Set(dias ?? [])]
+      .filter((dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7)
+      .sort((a, b) => a - b);
+    if (diasValidos.length === 1) {
+      const dia = DIAS_SEMANA.find((item) => item.valor === diasValidos[0]);
+      return dia ? `Toda ${dia.longo.toLowerCase()}` : null;
+    }
+    const rotulo = labelDiasSemana(diasValidos);
+    return rotulo ? `Toda semana: ${rotulo}` : null;
   }
 
   if (frequencia === "diaria") return labelDiasSemana(dias);

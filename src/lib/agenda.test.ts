@@ -4,6 +4,7 @@ import {
   comparativoTempo,
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
+  diasSemanaisCompletos,
   diasRecorrenciaPersistida,
   execucoesEsperadasNaSemana,
   execucoesPlanejadasPorPeriodo,
@@ -121,6 +122,23 @@ describe("recorrências da agenda", () => {
       dataCorrespondeRecorrencia("semanal", new Date(2026, 7, 14), [4]),
     ).toBe(false);
     expect(labelMomentoRecorrencia("semanal", [4])).toBe("Toda quinta");
+  });
+
+  it("permite uma rotina em vários dias da mesma semana", () => {
+    expect(
+      dataCorrespondeRecorrencia("semanal", new Date(2026, 7, 24), [1, 2, 4, 6]),
+    ).toBe(true);
+    expect(
+      dataCorrespondeRecorrencia("semanal", new Date(2026, 7, 26), [1, 2, 4, 6]),
+    ).toBe(false);
+    expect(labelMomentoRecorrencia("semanal", [1, 2, 4, 6])).toBe(
+      "Toda semana: Seg, Ter, Qui, Sáb",
+    );
+    expect(
+      configuracaoRecorrenciaCompleta("semanal", 60, "09:00", [1, 2, 4, 6]),
+    ).toBe(true);
+    expect(diasSemanaisCompletos("semanal", 4, [1, 2, 4, 6])).toBe(true);
+    expect(diasSemanaisCompletos("semanal", 4, [1])).toBe(false);
   });
 
   it("agenda avaliar DRE todo mês no dia 10", () => {

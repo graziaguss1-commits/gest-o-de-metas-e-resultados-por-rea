@@ -291,7 +291,7 @@ export default function WeeklyPlanningPage() {
   const recurrenceSignature = recurringTasks
     .map(
       (task) =>
-        `${task.id}:${task.frequencia}:${task.data_inicio}:${task.data_fim}:${task.horario_preferencial}:${task.duracao_minutos}:${(task.dias_semana ?? []).join(",")}`,
+        `${task.id}:${task.frequencia}:${task.execucoes_planejadas}:${task.data_inicio}:${task.data_fim}:${task.horario_preferencial}:${task.duracao_minutos}:${(task.dias_semana ?? []).join(",")}`,
     )
     .join("|");
 

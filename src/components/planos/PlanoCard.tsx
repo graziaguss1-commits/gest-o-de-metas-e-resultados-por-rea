@@ -45,6 +45,7 @@ import {
 import { todayISO, type MembroResumo, type Tarefa } from "@/lib/metas";
 import {
   configuracaoRecorrenciaCompleta,
+  diasSemanaisCompletos,
   diasRecorrenciaPersistida,
   formatDuracao,
   hhmm,
@@ -121,6 +122,11 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
       )
     ) {
       return toast.error("Defina o dia, o horário e a duração da rotina.");
+    }
+    if (!diasSemanaisCompletos(nova.frequencia, nova.execucoes, nova.dias)) {
+      return toast.error(
+        `Escolha ${nova.execucoes} ${nova.execucoes === 1 ? "dia" : "dias"} para esta rotina semanal.`,
+      );
     }
     try {
       await addTarefa.mutateAsync({

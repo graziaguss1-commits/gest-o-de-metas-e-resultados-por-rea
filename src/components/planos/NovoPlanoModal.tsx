@@ -28,6 +28,7 @@ import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker"
 import { ResponsavelSelect } from "@/components/shared/ResponsaveisPicker";
 import {
   configuracaoRecorrenciaCompleta,
+  diasSemanaisCompletos,
   formatDuracao,
   labelMomentoRecorrencia,
 } from "@/lib/agenda";
@@ -163,6 +164,17 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
     if (recorrenciaIncompleta) {
       return toast.error(
         `Complete o dia, o horário e a duração da rotina: ${recorrenciaIncompleta.descricao}`,
+      );
+    }
+
+    const diasSemanaisIncompletos = tarefas.find(
+      (t) =>
+        t.descricao.trim() &&
+        !diasSemanaisCompletos(t.frequencia, t.execucoes, t.dias),
+    );
+    if (diasSemanaisIncompletos) {
+      return toast.error(
+        `Escolha ${diasSemanaisIncompletos.execucoes} dias para a rotina semanal: ${diasSemanaisIncompletos.descricao}`,
       );
     }
 
