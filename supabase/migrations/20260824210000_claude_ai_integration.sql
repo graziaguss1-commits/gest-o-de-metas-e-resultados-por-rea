@@ -238,6 +238,5 @@ grant execute on function public.resolve_active_api_key(text) to service_role;
 
 -- Legacy generic reader is no longer callable from the browser. Existing
 -- backend integrations continue to work with service_role.
-revoke execute on function public.read_vault_secret(text) from authenticated;
+revoke execute on function public.read_vault_secret(text) from public, anon, authenticated;
 grant execute on function public.read_vault_secret(text) to service_role;
-
