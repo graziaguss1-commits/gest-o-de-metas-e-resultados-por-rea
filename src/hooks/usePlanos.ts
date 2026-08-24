@@ -226,6 +226,7 @@ export type NovoTarefaInput = {
   prazo?: string | null;
   frequencia?: string;
   quantidade_planejada?: number;
+  execucoes_planejadas?: number;
   unidade?: string;
   impacto?: number;
   esforco?: number;
@@ -271,6 +272,7 @@ export function useCreatePlano() {
           ordem,
           frequencia: t.frequencia ?? "unica",
           quantidade_planejada: t.quantidade_planejada ?? 1,
+          execucoes_planejadas: t.execucoes_planejadas ?? 1,
           unidade: t.unidade?.trim() ?? "",
           impacto: t.impacto ?? 5,
           esforco: t.esforco ?? 5,
@@ -400,6 +402,7 @@ export function useAddTarefa() {
         prazo: t.prazo || null,
         frequencia: t.frequencia ?? "unica",
         quantidade_planejada: t.quantidade_planejada ?? 1,
+        execucoes_planejadas: t.execucoes_planejadas ?? 1,
         unidade: t.unidade?.trim() ?? "",
         impacto: t.impacto ?? 5,
         esforco: t.esforco ?? 5,
@@ -433,6 +436,7 @@ export function useUpdateTarefa() {
       prazo?: string | null;
       frequencia?: string;
       quantidade_planejada?: number;
+      execucoes_planejadas?: number;
       unidade?: string;
       impacto?: number;
       esforco?: number;
