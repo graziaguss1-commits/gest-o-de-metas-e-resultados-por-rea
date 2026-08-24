@@ -604,6 +604,7 @@ export type Database = {
       }
       tarefa_execucoes: {
         Row: {
+          agendamento_id: string | null
           created_at: string
           data_referencia: string
           id: string
@@ -615,6 +616,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agendamento_id?: string | null
           created_at?: string
           data_referencia: string
           id?: string
@@ -626,6 +628,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agendamento_id?: string | null
           created_at?: string
           data_referencia?: string
           id?: string
@@ -637,6 +640,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tarefa_execucoes_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: true
+            referencedRelation: "tarefa_agendamentos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tarefa_execucoes_tarefa_id_fkey"
             columns: ["tarefa_id"]

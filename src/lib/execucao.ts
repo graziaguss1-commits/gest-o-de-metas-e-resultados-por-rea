@@ -45,12 +45,32 @@ export type TarefaMensuravel = {
 export type Execucao = {
   id: string;
   tarefa_id: string;
+  /** Bloco da agenda que originou o registro, quando concluído pelo calendário. */
+  agendamento_id?: string | null;
   data_referencia: string;
   quantidade: number;
   observacao?: string | null;
   /** Tempo real gasto na execução (minutos), opcional. */
   tempo_real_minutos?: number | null;
 };
+
+/**
+ * Quantidade creditada quando um único bloco da agenda é marcado como feito.
+ * Ex.: 10 prospecções em 1 bloco = 10; 7 reels em 7 blocos = 1 por bloco.
+ */
+export function quantidadePorExecucao(
+  tarefa: Pick<
+    TarefaMensuravel,
+    "quantidade_planejada" | "execucoes_planejadas"
+  >,
+): number {
+  const planejado = Number(tarefa.quantidade_planejada ?? 1);
+  const blocos = Math.max(
+    1,
+    Math.round(Number(tarefa.execucoes_planejadas ?? 1) || 1),
+  );
+  return (Number.isFinite(planejado) && planejado > 0 ? planejado : 1) / blocos;
+}
 
 function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

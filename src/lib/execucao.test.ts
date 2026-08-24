@@ -7,6 +7,7 @@ import {
   gargaloFunil,
   periodoCorrente,
   prazoConsumido,
+  quantidadePorExecucao,
   taxasFunil,
   type Execucao,
   type TarefaMensuravel,
@@ -30,6 +31,19 @@ function tarefa(over: Partial<TarefaMensuravel> = {}): TarefaMensuravel {
 }
 
 describe("execução dos planos", () => {
+  it("divide o resultado planejado entre os blocos do calendário", () => {
+    expect(
+      quantidadePorExecucao(
+        tarefa({ quantidade_planejada: 7, execucoes_planejadas: 7 }),
+      ),
+    ).toBe(1);
+    expect(
+      quantidadePorExecucao(
+        tarefa({ quantidade_planejada: 10, execucoes_planejadas: 1 }),
+      ),
+    ).toBe(10);
+  });
+
   it("mostra 7 de 10 pessoas prospectadas · 70%", () => {
     const execs: Execucao[] = [
       { id: "e1", tarefa_id: "t1", data_referencia: "2026-08-13", quantidade: 7 },
