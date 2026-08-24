@@ -8,8 +8,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  Plus,
   RotateCcw,
   Save,
+  Star,
   Target,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -41,6 +43,7 @@ type PlanningState = {
   lesson: string;
   focus: string;
   priorityIds: string[];
+  complementaryIds: string[];
   savedAt?: string;
 };
 
@@ -97,6 +100,7 @@ const emptyState = (): PlanningState => ({
   lesson: "",
   focus: "",
   priorityIds: [],
+  complementaryIds: [],
 });
 
 const iso = (date: Date) =>
@@ -138,15 +142,19 @@ function readPlanningState(...keys: Array<string | undefined>): PlanningState {
   for (const key of keys) {
     if (!key) continue;
     try {
-      const parsed = JSON.parse(localStorage.getItem(key) ?? "null") as
-        | PlanningState
-        | null;
+      const parsed = JSON.parse(
+        localStorage.getItem(key) ?? "null",
+      ) as PlanningState | null;
       if (parsed) {
+        const priorityIds = Array.isArray(parsed.priorityIds)
+          ? parsed.priorityIds
+          : [];
         return {
           ...emptyState(),
           ...parsed,
-          priorityIds: Array.isArray(parsed.priorityIds)
-            ? parsed.priorityIds
+          priorityIds,
+          complementaryIds: Array.isArray(parsed.complementaryIds)
+            ? parsed.complementaryIds.filter((id) => !priorityIds.includes(id))
             : [],
         };
       }
@@ -203,10 +211,7 @@ export default function WeeklyPlanningPage() {
     block?: Agendamento;
   } | null>(null);
 
-  const { data: agendamentos = [] } = useAgendamentos(
-    weekStartISO,
-    weekEndISO,
-  );
+  const { data: agendamentos = [] } = useAgendamentos(weekStartISO, weekEndISO);
 
   useEffect(() => {
     setState(
@@ -229,9 +234,7 @@ export default function WeeklyPlanningPage() {
   const tasks = useMemo<PlanningTask[]>(() => {
     const planned = (planos ?? []).flatMap((plano) =>
       plano.tarefas
-        .filter(
-          (task) => !task.concluida && task.responsavel_id === user?.id,
-        )
+        .filter((task) => !task.concluida && task.responsavel_id === user?.id)
         .map((task): PlanPlanningTask => {
           const impacto = Number(task.impacto ?? 5);
           const esforco = Number(task.esforco ?? 5);
@@ -250,25 +253,23 @@ export default function WeeklyPlanningPage() {
 
     const standalone = (actions ?? [])
       .filter((action) => !action.concluida)
-      .map(
-        (action): StandalonePlanningTask => ({
-          id: action.id,
-          descricao: action.descricao,
-          prazo: action.prazo,
-          concluida: action.concluida,
-          origem: "avulsa",
-          plano: "Ação avulsa",
-          area: action.area,
-          meta: null,
-          impacto: Number(action.impacto),
-          esforco: Number(action.esforco),
-          priorityScore: actionScore(action),
-          data_agendada: action.data_agendada,
-          hora_inicio: action.hora_inicio,
-          duracao_minutos: action.duracao_minutos,
-          action,
-        }),
-      );
+      .map((action): StandalonePlanningTask => ({
+        id: action.id,
+        descricao: action.descricao,
+        prazo: action.prazo,
+        concluida: action.concluida,
+        origem: "avulsa",
+        plano: "Ação avulsa",
+        area: action.area,
+        meta: null,
+        impacto: Number(action.impacto),
+        esforco: Number(action.esforco),
+        priorityScore: actionScore(action),
+        data_agendada: action.data_agendada,
+        hora_inicio: action.hora_inicio,
+        duracao_minutos: action.duracao_minutos,
+        action,
+      }));
 
     return [...planned, ...standalone].sort(
       (a, b) =>
@@ -278,7 +279,8 @@ export default function WeeklyPlanningPage() {
   }, [planos, actions, user?.id]);
 
   const recurringTasks = useMemo(
-    () => tasks.filter((task): task is PlanPlanningTask => task.origem === "plano"),
+    () =>
+      tasks.filter((task): task is PlanPlanningTask => task.origem === "plano"),
     [tasks],
   );
   const recurrenceSignature = recurringTasks
@@ -295,9 +297,13 @@ export default function WeeklyPlanningPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStartISO, recurrenceSignature]);
 
-  const selectedTasks = state.priorityIds
+  const topPriorityTasks = state.priorityIds
     .map((id) => tasks.find((task) => task.id === id))
     .filter((task): task is PlanningTask => Boolean(task));
+  const complementaryTasks = state.complementaryIds
+    .map((id) => tasks.find((task) => task.id === id))
+    .filter((task): task is PlanningTask => Boolean(task));
+  const selectedTasks = [...topPriorityTasks, ...complementaryTasks];
 
   const blocksByTask = useMemo(() => {
     const map = new Map<string, Agendamento[]>();
@@ -322,14 +328,14 @@ export default function WeeklyPlanningPage() {
     }
     return Boolean(
       task.data_agendada &&
-        task.hora_inicio &&
-        task.duracao_minutos &&
-        task.data_agendada >= weekStartISO &&
-        task.data_agendada <= weekEndISO,
+      task.hora_inicio &&
+      task.duracao_minutos &&
+      task.data_agendada >= weekStartISO &&
+      task.data_agendada <= weekEndISO,
     );
   };
 
-  const prioritiesWithoutSchedule = selectedTasks.filter(
+  const actionsWithoutSchedule = selectedTasks.filter(
     (task) => !isScheduledInWeek(task),
   );
 
@@ -339,9 +345,11 @@ export default function WeeklyPlanningPage() {
   const all = ownPlanTasks.length + (actions ?? []).length;
   const execution = all ? Math.round((completed / all) * 100) : 0;
 
-  const selectPriority = (id: string) => {
+  const selectTopPriority = (id: string) => {
     if (!state.priorityIds.includes(id) && state.priorityIds.length >= 3) {
-      toast.error("Escolha no máximo três prioridades para a semana.");
+      toast.error(
+        "Você já definiu as 3 prioridades top. Retire uma delas ou adicione esta ação como complementar.",
+      );
       return;
     }
     setState((current) => ({
@@ -349,18 +357,48 @@ export default function WeeklyPlanningPage() {
       priorityIds: current.priorityIds.includes(id)
         ? current.priorityIds.filter((item) => item !== id)
         : [...current.priorityIds, id],
+      complementaryIds: current.complementaryIds.filter((item) => item !== id),
     }));
   };
 
+  const selectComplementary = (id: string) => {
+    setState((current) => ({
+      ...current,
+      priorityIds: current.priorityIds.filter((item) => item !== id),
+      complementaryIds: current.complementaryIds.includes(id)
+        ? current.complementaryIds.filter((item) => item !== id)
+        : [...current.complementaryIds, id],
+    }));
+  };
+
+  const toggleFromMatrix = (id: string) => {
+    if (state.priorityIds.includes(id)) {
+      selectTopPriority(id);
+      return;
+    }
+    if (state.complementaryIds.includes(id)) {
+      selectComplementary(id);
+      return;
+    }
+    if (state.priorityIds.length < 3) {
+      selectTopPriority(id);
+      return;
+    }
+    selectComplementary(id);
+  };
+
   const save = () => {
-    if (prioritiesWithoutSchedule.length > 0) {
+    if (actionsWithoutSchedule.length > 0) {
       toast.error(
-        "Defina dia, horário e duração de todas as prioridades antes de confirmar.",
+        "Defina dia, horário e duração de todas as ações escolhidas antes de confirmar.",
       );
       return;
     }
     const next = { ...state, savedAt: new Date().toISOString() };
-    localStorage.setItem(planningStorageKey(weekStartISO), JSON.stringify(next));
+    localStorage.setItem(
+      planningStorageKey(weekStartISO),
+      JSON.stringify(next),
+    );
     setState(next);
     toast.success("Planejamento salvo e horários enviados ao calendário");
     setStep(4);
@@ -392,8 +430,8 @@ export default function WeeklyPlanningPage() {
           <MiniMetric label="Execução atual" value={`${execution}%`} />
           <MiniMetric label="Ações concluídas" value={`${completed}/${all}`} />
           <MiniMetric
-            label="Prioridades definidas"
-            value={`${state.priorityIds.length}/3`}
+            label="Plano da semana"
+            value={`${state.priorityIds.length}/3 top · +${state.complementaryIds.length}`}
           />
         </div>
 
@@ -486,41 +524,76 @@ export default function WeeklyPlanningPage() {
               ) : (
                 <ImpactMatrix
                   tasks={tasks}
-                  selectedIds={state.priorityIds}
-                  onToggle={selectPriority}
+                  topIds={state.priorityIds}
+                  complementaryIds={state.complementaryIds}
+                  onToggle={toggleFromMatrix}
                 />
               )}
             </Panel>
 
             <Panel
               icon={<Target className="h-5 w-5" />}
-              title="Escolha três prioridades"
-              subtitle="O ranking usa impacto × (11 − esforço). Selecione até três ações; na próxima etapa você definirá os horários."
+              title="Defina as prioridades e complete a semana"
+              subtitle="Escolha até 3 prioridades top e acrescente outras ações complementares. Na próxima etapa, você reservará os horários de todas elas."
             >
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-[var(--brand-accent)]/30 bg-[var(--brand-accent-soft)] p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-[var(--brand-primary)]">
+                    <Star className="h-4 w-4 fill-current" />
+                    Prioridades top
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {state.priorityIds.length}/3 escolhidas · proteja primeiro
+                    os horários que mais movem o resultado.
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Plus className="h-4 w-4" />
+                    Ações complementares
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {state.complementaryIds.length} escolhidas · adicione o que
+                    couber no tempo disponível da semana.
+                  </p>
+                </div>
+              </div>
               <div className="grid gap-2 md:grid-cols-2">
                 {tasks.map((task, index) => {
-                  const selected = state.priorityIds.includes(task.id);
+                  const isTop = state.priorityIds.includes(task.id);
+                  const isComplementary = state.complementaryIds.includes(
+                    task.id,
+                  );
                   const quadrant = actionQuadrant(task);
                   const style = QUADRANT_STYLE[quadrant];
                   return (
-                    <button
+                    <div
                       key={task.id}
-                      onClick={() => selectPriority(task.id)}
                       className={`rounded-xl border p-4 text-left transition ${
-                        selected
+                        isTop
                           ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]"
-                          : "bg-card hover:border-[var(--brand-primary)]/40"
+                          : isComplementary
+                            ? "border-[var(--brand-primary)]/30 bg-[var(--brand-light)]"
+                            : "bg-card hover:border-[var(--brand-primary)]/40"
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <span
                           className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${
-                            selected
+                            isTop
                               ? "border-[var(--brand-accent)] bg-[var(--brand-accent)] text-white"
-                              : ""
+                              : isComplementary
+                                ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
+                                : ""
                           }`}
                         >
-                          {selected ? <Check className="h-3 w-3" /> : index + 1}
+                          {isTop ? (
+                            <Star className="h-3 w-3 fill-current" />
+                          ) : isComplementary ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            index + 1
+                          )}
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold">
@@ -538,7 +611,10 @@ export default function WeeklyPlanningPage() {
                             </span>
                             <span
                               className="rounded-full px-2 py-1"
-                              style={{ color: style.color, background: style.soft }}
+                              style={{
+                                color: style.color,
+                                background: style.soft,
+                              }}
                             >
                               {quadrant}
                             </span>
@@ -546,15 +622,46 @@ export default function WeeklyPlanningPage() {
                               Score {task.priorityScore}
                             </span>
                           </div>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={isTop ? "default" : "outline"}
+                              onClick={() => selectTopPriority(task.id)}
+                              className={isTop ? "brand-button" : ""}
+                            >
+                              <Star
+                                className={`mr-1.5 h-3.5 w-3.5 ${
+                                  isTop ? "fill-current" : ""
+                                }`}
+                              />
+                              {isTop ? "Prioridade top" : "Marcar como top"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={isComplementary ? "secondary" : "ghost"}
+                              onClick={() => selectComplementary(task.id)}
+                            >
+                              {isComplementary ? (
+                                <Check className="mr-1.5 h-3.5 w-3.5" />
+                              ) : (
+                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              {isComplementary
+                                ? "Complementar escolhida"
+                                : "Adicionar à semana"}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
             </Panel>
             <Next
-              disabled={state.priorityIds.length === 0}
+              disabled={selectedTasks.length === 0}
               onClick={() => setStep(3)}
             />
           </div>
@@ -572,101 +679,149 @@ export default function WeeklyPlanningPage() {
 
             <Panel
               icon={<CalendarClock className="h-5 w-5" />}
-              title="Reserve os horários das prioridades"
-              subtitle="A semana só pode ser confirmada quando cada prioridade tiver pelo menos um bloco no calendário."
+              title="Reserve os horários da semana"
+              subtitle="Cada prioridade top e ação complementar precisa ter pelo menos um bloco no calendário."
             >
-              <div className="space-y-3">
-                {selectedTasks.map((task, index) => {
-                  const scheduled = isScheduledInWeek(task);
-                  const blocks =
-                    task.origem === "plano"
-                      ? blocksByTask.get(task.id) ?? []
-                      : [];
-                  return (
-                    <div
-                      key={task.id}
-                      className={`rounded-xl border p-4 ${
-                        scheduled
-                          ? "border-[var(--color-green)]/30 bg-[var(--color-green-bg)]/35"
-                          : "border-[var(--brand-accent)]/40"
-                      }`}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex min-w-0 gap-3">
-                          <span className="font-display text-lg text-[var(--brand-accent)]">
-                            0{index + 1}
-                          </span>
-                          <div>
-                            <div className="text-sm font-semibold">
-                              {task.descricao}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {task.plano} · {actionQuadrant(task)}
-                            </div>
-                          </div>
+              <div className="space-y-6">
+                {[
+                  {
+                    title: "Prioridades top",
+                    description:
+                      "Os compromissos mais importantes da semana entram primeiro na agenda.",
+                    tasks: topPriorityTasks,
+                    isTop: true,
+                  },
+                  {
+                    title: "Ações complementares",
+                    description:
+                      "Use o restante da capacidade para avançar outras ações relevantes.",
+                    tasks: complementaryTasks,
+                    isTop: false,
+                  },
+                ]
+                  .filter((group) => group.tasks.length > 0)
+                  .map((group) => (
+                    <div key={group.title}>
+                      <div className="mb-3 flex items-start gap-2">
+                        {group.isTop ? (
+                          <Star className="mt-0.5 h-4 w-4 fill-current text-[var(--brand-accent)]" />
+                        ) : (
+                          <Plus className="mt-0.5 h-4 w-4 text-[var(--brand-primary)]" />
+                        )}
+                        <div>
+                          <h3 className="text-sm font-semibold">
+                            {group.title}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            {group.description}
+                          </p>
                         </div>
-
-                        {task.origem === "avulsa" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={scheduled ? "outline" : "default"}
-                            onClick={() => setAgendarAvulsa(task.action)}
-                          >
-                            <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                            {scheduled ? "Alterar horário" : "Definir dia e horário"}
-                          </Button>
-                        )}
-
-                        {task.origem === "plano" && blocks.length === 0 && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => setAgendarPlano({ task })}
-                          >
-                            <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                            Definir dia e horário
-                          </Button>
-                        )}
                       </div>
-
-                      {task.origem === "avulsa" && scheduled && (
-                        <div className="mt-3 rounded-lg bg-background/80 px-3 py-2 text-xs font-medium">
-                          {new Date(`${task.data_agendada}T12:00:00`).toLocaleDateString(
-                            "pt-BR",
-                            { weekday: "short", day: "2-digit", month: "2-digit" },
-                          )}{" "}
-                          às {hhmm(task.hora_inicio)} · {formatDuracao(task.duracao_minutos)}
-                        </div>
-                      )}
-
-                      {task.origem === "plano" && blocks.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {blocks.map((block) => (
-                            <button
-                              key={block.id}
-                              type="button"
-                              onClick={() => setAgendarPlano({ task, block })}
-                              className="rounded-lg border bg-background/80 px-3 py-2 text-left text-xs font-medium transition hover:border-[var(--brand-accent)]"
-                              title="Clique para ajustar este horário"
+                      <div className="space-y-3">
+                        {group.tasks.map((task, index) => {
+                          const scheduled = isScheduledInWeek(task);
+                          const blocks =
+                            task.origem === "plano"
+                              ? (blocksByTask.get(task.id) ?? [])
+                              : [];
+                          return (
+                            <div
+                              key={task.id}
+                              className={`rounded-xl border p-4 ${
+                                scheduled
+                                  ? "border-[var(--color-green)]/30 bg-[var(--color-green-bg)]/35"
+                                  : "border-[var(--brand-accent)]/40"
+                              }`}
                             >
-                              {scheduleLabel(block)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex min-w-0 gap-3">
+                                  <span className="font-display text-lg text-[var(--brand-accent)]">
+                                    {group.isTop ? `0${index + 1}` : "+"}
+                                  </span>
+                                  <div>
+                                    <div className="text-sm font-semibold">
+                                      {task.descricao}
+                                    </div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                      {task.plano} · {actionQuadrant(task)}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {task.origem === "avulsa" && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={scheduled ? "outline" : "default"}
+                                    onClick={() =>
+                                      setAgendarAvulsa(task.action)
+                                    }
+                                  >
+                                    <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
+                                    {scheduled
+                                      ? "Alterar horário"
+                                      : "Definir dia e horário"}
+                                  </Button>
+                                )}
+
+                                {task.origem === "plano" &&
+                                  blocks.length === 0 && (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      onClick={() => setAgendarPlano({ task })}
+                                    >
+                                      <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
+                                      Definir dia e horário
+                                    </Button>
+                                  )}
+                              </div>
+
+                              {task.origem === "avulsa" && scheduled && (
+                                <div className="mt-3 rounded-lg bg-background/80 px-3 py-2 text-xs font-medium">
+                                  {new Date(
+                                    `${task.data_agendada}T12:00:00`,
+                                  ).toLocaleDateString("pt-BR", {
+                                    weekday: "short",
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                  })}{" "}
+                                  às {hhmm(task.hora_inicio)} ·{" "}
+                                  {formatDuracao(task.duracao_minutos)}
+                                </div>
+                              )}
+
+                              {task.origem === "plano" && blocks.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {blocks.map((block) => (
+                                    <button
+                                      key={block.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setAgendarPlano({ task, block })
+                                      }
+                                      className="rounded-lg border bg-background/80 px-3 py-2 text-left text-xs font-medium transition hover:border-[var(--brand-accent)]"
+                                      title="Clique para ajustar este horário"
+                                    >
+                                      {scheduleLabel(block)}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
               </div>
 
-              {prioritiesWithoutSchedule.length > 0 && (
+              {actionsWithoutSchedule.length > 0 && (
                 <div className="mt-4 rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-3 text-xs text-[var(--brand-primary)]">
-                  Faltam horários para {prioritiesWithoutSchedule.length}{" "}
-                  {prioritiesWithoutSchedule.length === 1
-                    ? "prioridade"
-                    : "prioridades"}
-                  . Defina os blocos acima para liberar a confirmação.
+                  Faltam horários para {actionsWithoutSchedule.length}{" "}
+                  {actionsWithoutSchedule.length === 1 ? "ação" : "ações"} do
+                  planejamento. Defina os blocos acima para liberar a
+                  confirmação.
                 </div>
               )}
             </Panel>
@@ -689,7 +844,7 @@ export default function WeeklyPlanningPage() {
                 onClick={save}
                 className="brand-button"
                 disabled={
-                  !state.focus.trim() || prioritiesWithoutSchedule.length > 0
+                  !state.focus.trim() || actionsWithoutSchedule.length > 0
                 }
               >
                 <Save className="mr-2 h-4 w-4" />
@@ -708,10 +863,21 @@ export default function WeeklyPlanningPage() {
               Semana planejada e agendada
             </h2>
             <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-              Você definiu {selectedTasks.length} prioridades para {weekLabel(
-                weekDays[0],
-                weekDays[6],
-              )} e todas possuem horário protegido no calendário.
+              Você definiu {topPriorityTasks.length}{" "}
+              {topPriorityTasks.length === 1
+                ? "prioridade top"
+                : "prioridades top"}
+              {complementaryTasks.length > 0 && (
+                <>
+                  {" "}
+                  e {complementaryTasks.length}{" "}
+                  {complementaryTasks.length === 1
+                    ? "ação complementar"
+                    : "ações complementares"}
+                </>
+              )}{" "}
+              para {weekLabel(weekDays[0], weekDays[6])}. Todas possuem horário
+              protegido no calendário.
             </p>
             <div className="mt-6 w-full max-w-xl rounded-xl bg-[var(--brand-light)] p-5 text-left">
               <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--brand-accent)]">
@@ -800,11 +966,13 @@ function WeekSelector({
 
 function ImpactMatrix({
   tasks,
-  selectedIds,
+  topIds,
+  complementaryIds,
   onToggle,
 }: {
   tasks: PlanningTask[];
-  selectedIds: string[];
+  topIds: string[];
+  complementaryIds: string[];
   onToggle: (id: string) => void;
 }) {
   return (
@@ -840,7 +1008,9 @@ function ImpactMatrix({
         </span>
 
         {tasks.map((task, index) => {
-          const selected = selectedIds.includes(task.id);
+          const isTop = topIds.includes(task.id);
+          const isComplementary = complementaryIds.includes(task.id);
+          const selected = isTop || isComplementary;
           const quadrant = actionQuadrant(task);
           const style = QUADRANT_STYLE[quadrant];
           return (
@@ -848,13 +1018,15 @@ function ImpactMatrix({
               key={task.id}
               type="button"
               aria-pressed={selected}
-              aria-label={`${task.descricao}. Impacto ${task.impacto}, esforço ${task.esforco}, ${quadrant}`}
-              title={`${task.descricao} · impacto ${task.impacto} · esforço ${task.esforco} · ${quadrant}`}
+              aria-label={`${task.descricao}. Impacto ${task.impacto}, esforço ${task.esforco}, ${quadrant}${isTop ? ", prioridade top" : isComplementary ? ", ação complementar" : ""}`}
+              title={`${task.descricao} · impacto ${task.impacto} · esforço ${task.esforco} · ${quadrant}${isTop ? " · prioridade top" : isComplementary ? " · ação complementar" : ""}`}
               onClick={() => onToggle(task.id)}
               className={`absolute flex h-9 w-9 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border-2 text-xs font-bold text-white shadow-lg transition hover:z-20 hover:scale-125 ${
-                selected
-                  ? "z-10 scale-110 border-[var(--brand-dark)] ring-4 ring-[var(--brand-accent)]/25"
-                  : "border-white"
+                isTop
+                  ? "z-10 scale-110 border-[var(--brand-dark)] ring-4 ring-[var(--brand-accent)]/30"
+                  : isComplementary
+                    ? "z-10 border-[var(--brand-dark)] ring-4 ring-[var(--brand-primary)]/15"
+                    : "border-white"
               }`}
               style={{
                 left: `${6 + task.esforco * 8.8}%`,
@@ -868,8 +1040,10 @@ function ImpactMatrix({
         })}
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Clique nos pontos ou no ranking abaixo para escolher as prioridades.
-        Verde indica alto impacto com menor esforço.
+        Clique nos pontos para adicioná-los ao planejamento: os 3 primeiros
+        entram como prioridades top e os seguintes como complementares. No
+        ranking abaixo, você pode trocar a categoria. Verde indica alto impacto
+        com menor esforço.
       </p>
     </div>
   );
