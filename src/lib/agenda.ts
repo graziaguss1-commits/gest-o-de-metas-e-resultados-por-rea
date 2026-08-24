@@ -54,13 +54,83 @@ export function formatTotalHoras(minutos: number): string {
 /** "09:00" + 45 => "09:45" (limitado a 23:59). */
 export function horaFim(horaInicio: string, duracaoMinutos: number): string {
   const [h, m] = horaInicio.split(":").map(Number);
-  const total = Math.min(h * 60 + m + Math.max(0, duracaoMinutos), 23 * 60 + 59);
+  const total = Math.min(
+    h * 60 + m + Math.max(0, duracaoMinutos),
+    23 * 60 + 59,
+  );
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 /** "09:00:00" -> "09:00" */
 export function hhmm(hora?: string | null): string {
   return (hora ?? "").slice(0, 5);
+}
+
+/** Converte "09:30" em minutos desde 00:00. */
+export function horarioEmMinutos(hora: string): number {
+  const [h, m] = hhmm(hora).split(":").map(Number);
+  if (
+    !Number.isInteger(h) ||
+    !Number.isInteger(m) ||
+    h < 0 ||
+    h > 23 ||
+    m < 0 ||
+    m > 59
+  ) {
+    return Number.NaN;
+  }
+  return h * 60 + m;
+}
+
+/** Converte minutos desde 00:00 em "09:30". */
+export function minutosEmHorario(minutos: number): string {
+  const total = Math.min(23 * 60 + 59, Math.max(0, Math.round(minutos)));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export type IntervaloHorario = {
+  inicio: string;
+  fim: string;
+};
+
+/** Intervalos que apenas se encostam (09:00–10:00 e 10:00–11:00) não conflitam. */
+export function intervalosConflitam(
+  inicioA: string,
+  fimA: string,
+  inicioB: string,
+  fimB: string,
+): boolean {
+  const aInicio = horarioEmMinutos(inicioA);
+  const aFim = horarioEmMinutos(fimA);
+  const bInicio = horarioEmMinutos(inicioB);
+  const bFim = horarioEmMinutos(fimB);
+  if (![aInicio, aFim, bInicio, bFim].every(Number.isFinite)) return false;
+  return aInicio < bFim && aFim > bInicio;
+}
+
+/** Retorna todos os inícios livres, em passos de 30 minutos, dentro do expediente visual. */
+export function horariosLivres(
+  duracaoMinutos: number,
+  ocupados: IntervaloHorario[],
+  inicioDia = "06:00",
+  fimDia = "22:00",
+  passo = 30,
+): string[] {
+  if (!Number.isFinite(duracaoMinutos) || duracaoMinutos <= 0) return [];
+  const inicio = horarioEmMinutos(inicioDia);
+  const fim = horarioEmMinutos(fimDia);
+  if (![inicio, fim].every(Number.isFinite) || inicio >= fim) return [];
+
+  const livres: string[] = [];
+  for (let minuto = inicio; minuto + duracaoMinutos <= fim; minuto += passo) {
+    const horaInicio = minutosEmHorario(minuto);
+    const horaFinal = minutosEmHorario(minuto + duracaoMinutos);
+    const conflito = ocupados.some((bloco) =>
+      intervalosConflitam(horaInicio, horaFinal, bloco.inicio, bloco.fim),
+    );
+    if (!conflito) livres.push(horaInicio);
+  }
+  return livres;
 }
 
 export type Agendamento = {
@@ -99,7 +169,10 @@ export function capacidadeDoDia(
 }
 
 /** Total de minutos agendados no conjunto de dias informado. */
-export function totalSemana(datas: string[], agendamentos: Agendamento[]): number {
+export function totalSemana(
+  datas: string[],
+  agendamentos: Agendamento[],
+): number {
   const set = new Set(datas);
   return agendamentos
     .filter((a) => set.has(a.data))
@@ -123,13 +196,13 @@ export function labelDiasSemana(dias?: number[] | null): string | null {
   if (!dias || dias.length === 0) return null;
   const ord = [...new Set(dias)].sort((a, b) => a - b);
   if (ord.length === 7) return "Todos os dias";
-  if (ord.length === 5 && ord.every((d) => d <= 5)) return "Seg–Sex (dias úteis)";
+  if (ord.length === 5 && ord.every((d) => d <= 5))
+    return "Seg–Sex (dias úteis)";
   return ord
     .map((d) => DIAS_SEMANA.find((x) => x.valor === d)?.curto)
     .filter(Boolean)
     .join(", ");
 }
-
 
 /** Dia mensal armazenado em `dias_semana[0]` para manter compatibilidade sem migration. */
 export function diaMesRecorrencia(dias?: number[] | null): number | null {
@@ -159,14 +232,17 @@ export function configuracaoRecorrenciaCompleta(
   dias?: number[] | null,
 ): boolean {
   if (!["diaria", "semanal", "mensal"].includes(frequencia ?? "")) return true;
-  if (!duracaoMinutos || duracaoMinutos <= 0 || !horarioPreferencial) return false;
+  if (!duracaoMinutos || duracaoMinutos <= 0 || !horarioPreferencial)
+    return false;
 
   if (frequencia === "mensal") return diaMesRecorrencia(dias) != null;
 
   const diasValidos = (dias ?? []).filter(
     (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7,
   );
-  return frequencia === "semanal" ? diasValidos.length === 1 : diasValidos.length > 0;
+  return frequencia === "semanal"
+    ? diasValidos.length === 1
+    : diasValidos.length > 0;
 }
 
 /** Verifica se uma data pertence ao padrão diário, semanal ou mensal configurado. */
@@ -178,7 +254,11 @@ export function dataCorrespondeRecorrencia(
   if (frequencia === "mensal") {
     const diaDesejado = diaMesRecorrencia(dias);
     if (!diaDesejado) return false;
-    const ultimoDia = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    const ultimoDia = new Date(
+      date.getFullYear(),
+      date.getMonth() + 1,
+      0,
+    ).getDate();
     return date.getDate() === Math.min(diaDesejado, ultimoDia);
   }
 
