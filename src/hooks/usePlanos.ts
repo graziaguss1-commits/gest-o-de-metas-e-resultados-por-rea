@@ -423,6 +423,41 @@ export function useAddTarefa() {
   });
 }
 
+/**
+ * Exclui uma ação e todo o histórico vinculado a ela. As tabelas de execução
+ * e agenda usam ON DELETE CASCADE; depois recalculamos a etapa da meta.
+ */
+export function useDeleteTarefa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: tarefa, error: readError } = await supabase
+        .from("plano_tarefas")
+        .select("plano_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!tarefa) throw new Error("A ação não foi encontrada.");
+
+      const metaId = await metaIdDoPlano(tarefa.plano_id);
+      const { error } = await supabase
+        .from("plano_tarefas")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+
+      await sincronizarEtapasDaMeta(metaId);
+      return id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: EXEC_KEY });
+      qc.invalidateQueries({ queryKey: ["agendamentos"] });
+      qc.invalidateQueries({ queryKey: ["metas"] });
+    },
+  });
+}
+
 /** Atualiza campos de uma ação existente (inclui duração/horário/dias). */
 export function useUpdateTarefa() {
   const qc = useQueryClient();
