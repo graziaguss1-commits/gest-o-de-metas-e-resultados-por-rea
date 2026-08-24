@@ -28,7 +28,10 @@ import {
   getFrequencia,
   type Frequencia,
 } from "@/lib/execucao";
-import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida } from "@/lib/agenda";
+import {
+  configuracaoRecorrenciaCompleta,
+  diasRecorrenciaPersistida,
+} from "@/lib/agenda";
 import { todayISO, type MembroResumo, type Tarefa } from "@/lib/metas";
 
 type Props = {
@@ -42,6 +45,7 @@ type FormState = {
   descricao: string;
   frequencia: Frequencia;
   quantidade: string;
+  execucoes: number;
   unidade: string;
   prazo: string;
   dataInicio: string;
@@ -59,8 +63,10 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     descricao: tarefa.descricao,
     frequencia,
     quantidade: String(tarefa.quantidade_planejada ?? 1),
+    execucoes: Number(tarefa.execucoes_planejadas ?? 1),
     unidade: tarefa.unidade ?? "",
-    prazo: frequencia === "unica" ? tarefa.prazo ?? "" : tarefa.data_fim ?? "",
+    prazo:
+      frequencia === "unica" ? (tarefa.prazo ?? "") : (tarefa.data_fim ?? ""),
     dataInicio: tarefa.data_inicio ?? todayISO(),
     duracao: tarefa.duracao_minutos ?? null,
     horario: tarefa.horario_preferencial?.slice(0, 5) ?? "",
@@ -71,10 +77,16 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
   };
 };
 
-export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: Props) {
+export function EditarTarefaModal({
+  open,
+  onOpenChange,
+  tarefa,
+  responsaveis,
+}: Props) {
   const update = useUpdateTarefa();
   const [form, setForm] = useState<FormState>(() => estadoDaTarefa(tarefa));
-  const patch = (values: Partial<FormState>) => setForm((current) => ({ ...current, ...values }));
+  const patch = (values: Partial<FormState>) =>
+    setForm((current) => ({ ...current, ...values }));
 
   useEffect(() => {
     if (open) setForm(estadoDaTarefa(tarefa));
@@ -83,17 +95,16 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
   const alterarFrequencia = (frequencia: Frequencia) => {
     patch({
       frequencia,
-      dias:
-        frequencia === "diaria"
-          ? [1, 2, 3, 4, 5]
-          : null,
+      dias: frequencia === "diaria" ? [1, 2, 3, 4, 5] : null,
     });
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!form.descricao.trim()) return toast.error("Informe a descrição da ação.");
-    if (!form.responsavelId) return toast.error("Selecione quem executará esta ação.");
+    if (!form.descricao.trim())
+      return toast.error("Informe a descrição da ação.");
+    if (!form.responsavelId)
+      return toast.error("Selecione quem executará esta ação.");
     if (
       form.frequencia !== "unica" &&
       !configuracaoRecorrenciaCompleta(
@@ -111,7 +122,9 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
       form.dataInicio &&
       form.prazo < form.dataInicio
     ) {
-      return toast.error("O término da rotina não pode ser anterior ao início.");
+      return toast.error(
+        "O término da rotina não pode ser anterior ao início.",
+      );
     }
 
     try {
@@ -120,9 +133,11 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
         descricao: form.descricao.trim(),
         frequencia: form.frequencia,
         quantidade_planejada: Number(form.quantidade.replace(",", ".")) || 1,
+        execucoes_planejadas: form.execucoes,
         unidade: form.unidade.trim(),
         prazo: form.frequencia === "unica" ? form.prazo || null : null,
-        data_inicio: form.frequencia === "unica" ? null : form.dataInicio || todayISO(),
+        data_inicio:
+          form.frequencia === "unica" ? null : form.dataInicio || todayISO(),
         data_fim: form.frequencia === "unica" ? null : form.prazo || null,
         duracao_minutos: form.duracao,
         horario_preferencial: form.horario || null,
@@ -134,7 +149,9 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
       toast.success("Ação atualizada e agenda recalculada");
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao atualizar a ação");
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao atualizar a ação",
+      );
     }
   };
 
@@ -178,9 +195,13 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
               <Label>Frequência</Label>
               <Select
                 value={form.frequencia}
-                onValueChange={(value) => alterarFrequencia(value as Frequencia)}
+                onValueChange={(value) =>
+                  alterarFrequencia(value as Frequencia)
+                }
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {FREQUENCIAS.map((frequencia) => (
                     <SelectItem key={frequencia} value={frequencia}>
@@ -217,12 +238,18 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
                 <Input
                   type="date"
                   value={form.dataInicio}
-                  onChange={(event) => patch({ dataInicio: event.target.value })}
+                  onChange={(event) =>
+                    patch({ dataInicio: event.target.value })
+                  }
                 />
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>{recorrente ? "Rotina ativa até (opcional)" : "Prazo (opcional)"}</Label>
+              <Label>
+                {recorrente
+                  ? "Rotina ativa até (opcional)"
+                  : "Prazo (opcional)"}
+              </Label>
               <Input
                 type="date"
                 value={form.prazo}
@@ -234,10 +261,12 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
 
           <RecorrenciaAgendaFields
             frequencia={form.frequencia}
+            execucoes={form.execucoes}
             duracao={form.duracao}
             horario={form.horario}
             dias={form.dias}
             onDuracaoChange={(duracao) => patch({ duracao })}
+            onExecucoesChange={(execucoes) => patch({ execucoes })}
             onHorarioChange={(horario) => patch({ horario })}
             onDiasChange={(dias) => patch({ dias })}
           />
@@ -250,7 +279,11 @@ export function EditarTarefaModal({ open, onOpenChange, tarefa, responsaveis }: 
           />
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={update.isPending}>
