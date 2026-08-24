@@ -63,9 +63,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return json({ error: "LOVABLE_API_KEY não configurada no projeto." }, 500);
+      return json({ error: "ANTHROPIC_API_KEY não configurada no projeto." }, 500);
     }
 
     const input = (await req.json()) as Input;
