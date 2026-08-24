@@ -45,12 +45,32 @@ export type TarefaMensuravel = {
 export type Execucao = {
   id: string;
   tarefa_id: string;
+  /** Bloco da agenda que originou o registro, quando concluído pelo calendário. */
+  agendamento_id?: string | null;
   data_referencia: string;
   quantidade: number;
   observacao?: string | null;
   /** Tempo real gasto na execução (minutos), opcional. */
   tempo_real_minutos?: number | null;
 };
+
+/**
+ * Quantidade creditada quando um único bloco da agenda é marcado como feito.
+ * Ex.: 10 prospecções em 1 bloco = 10; 7 reels em 7 blocos = 1 por bloco.
+ */
+export function quantidadePorExecucao(
+  tarefa: Pick<
+    TarefaMensuravel,
+    "quantidade_planejada" | "execucoes_planejadas"
+  >,
+): number {
+  const planejado = Number(tarefa.quantidade_planejada ?? 1);
+  const blocos = Math.max(
+    1,
+    Math.round(Number(tarefa.execucoes_planejadas ?? 1) || 1),
+  );
+  return (Number.isFinite(planejado) && planejado > 0 ? planejado : 1) / blocos;
+}
 
 function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -81,7 +101,9 @@ export function periodoCorrente(
   return { inicio: "0000-01-01", fim: "9999-12-31", label: "no total" };
 }
 
-export function getFrequencia(t: Pick<TarefaMensuravel, "frequencia">): Frequencia {
+export function getFrequencia(
+  t: Pick<TarefaMensuravel, "frequencia">,
+): Frequencia {
   const f = (t.frequencia ?? "unica") as Frequencia;
   return (FREQUENCIAS as readonly string[]).includes(f) ? f : "unica";
 }
@@ -108,10 +130,16 @@ export function execucaoTarefa(
   const { inicio, fim, label } = periodoCorrente(freq, hoje);
   const planejado = Number(tarefa.quantidade_planejada ?? 1) || 1;
   const doPeriodo = execucoes.filter(
-    (e) => e.tarefa_id === tarefa.id && e.data_referencia >= inicio && e.data_referencia <= fim,
+    (e) =>
+      e.tarefa_id === tarefa.id &&
+      e.data_referencia >= inicio &&
+      e.data_referencia <= fim,
   );
 
-  const realizado = doPeriodo.reduce((acc, e) => acc + Number(e.quantidade || 0), 0);
+  const realizado = doPeriodo.reduce(
+    (acc, e) => acc + Number(e.quantidade || 0),
+    0,
+  );
   const semRegistro = doPeriodo.length === 0;
   const pct = semRegistro
     ? tarefa.concluida
@@ -120,9 +148,10 @@ export function execucaoTarefa(
     : Math.max(0, Math.min(1, realizado / planejado));
 
   const unidade = (tarefa.unidade ?? "").trim();
-  const texto = semRegistro && tarefa.concluida && !unidade
-    ? "Concluída"
-    : `${fmt(realizado)} de ${fmt(planejado)}${unidade ? ` ${unidade}` : ""} · ${Math.round(pct * 100)}%`;
+  const texto =
+    semRegistro && tarefa.concluida && !unidade
+      ? "Concluída"
+      : `${fmt(realizado)} de ${fmt(planejado)}${unidade ? ` ${unidade}` : ""} · ${Math.round(pct * 100)}%`;
 
   return { planejado, realizado, pct, periodoLabel: label, texto };
 }
@@ -158,12 +187,18 @@ export function execucaoResponsavel(
   responsavelId: string,
   hoje: Date = new Date(),
 ): number | null {
-  const atribuidas = tarefas.filter((tarefa) => tarefa.responsavel_id === responsavelId);
+  const atribuidas = tarefas.filter(
+    (tarefa) => tarefa.responsavel_id === responsavelId,
+  );
   return atribuidas.length ? execucaoPlano(atribuidas, execucoes, hoje) : null;
 }
 
 /** Fração do prazo consumida entre início e fim (0..1). */
-export function prazoConsumido(dataInicio: string, dataFim: string, hoje: Date = new Date()): number {
+export function prazoConsumido(
+  dataInicio: string,
+  dataFim: string,
+  hoje: Date = new Date(),
+): number {
   const ini = new Date(`${dataInicio}T00:00:00`).getTime();
   const fim = new Date(`${dataFim}T23:59:59`).getTime();
   const now = hoje.getTime();
@@ -207,7 +242,8 @@ export function diagnosticar(
       chave: "na_rota",
       titulo: "Na rota",
       frase: "Resultado acompanha o prazo e o plano está sendo executado.",
-      recomendacao: "Mantenha a rotina atual e registre os resultados semanalmente.",
+      recomendacao:
+        "Mantenha a rotina atual e registre os resultados semanalmente.",
       tom: "verde",
     };
   }
@@ -215,8 +251,10 @@ export function diagnosticar(
     return {
       chave: "falta_execucao",
       titulo: "Falta execução",
-      frase: "O resultado está atrasado porque o plano não está sendo cumprido.",
-      recomendacao: "Reduza o número de ações e proteja horários fixos para as de maior impacto.",
+      frase:
+        "O resultado está atrasado porque o plano não está sendo cumprido.",
+      recomendacao:
+        "Reduza o número de ações e proteja horários fixos para as de maior impacto.",
       tom: "vermelho",
     };
   }
@@ -224,8 +262,10 @@ export function diagnosticar(
     return {
       chave: "revisar_estrategia",
       titulo: "Revisar estratégia",
-      frase: "Você está executando bem, mas as ações não estão gerando resultado.",
-      recomendacao: "Troque ou ajuste as ações: revise oferta, público e etapa do funil com maior perda.",
+      frase:
+        "Você está executando bem, mas as ações não estão gerando resultado.",
+      recomendacao:
+        "Troque ou ajuste as ações: revise oferta, público e etapa do funil com maior perda.",
       tom: "amarelo",
     };
   }
@@ -233,16 +273,27 @@ export function diagnosticar(
     chave: "resultado_insustentavel",
     titulo: "Resultado pouco sustentável",
     frase: "O resultado veio, mas sem execução consistente do plano.",
-    recomendacao: "Padronize as ações que funcionaram para não depender de acaso no próximo período.",
+    recomendacao:
+      "Padronize as ações que funcionaram para não depender de acaso no próximo período.",
     tom: "amarelo",
   };
 }
 
 /* ---------------------------- Funil de conversão --------------------------- */
 
-export const FUNIL_PADRAO = ["Prospectados", "Reuniões", "Propostas", "Convertidos"] as const;
+export const FUNIL_PADRAO = [
+  "Prospectados",
+  "Reuniões",
+  "Propostas",
+  "Convertidos",
+] as const;
 
-export type EtapaFunil = { id: string; nome: string; ordem: number; valor: number };
+export type EtapaFunil = {
+  id: string;
+  nome: string;
+  ordem: number;
+  valor: number;
+};
 
 export type TaxaFunil = { de: string; para: string; taxa: number };
 
@@ -252,7 +303,11 @@ export function taxasFunil(etapas: EtapaFunil[]): TaxaFunil[] {
   for (let i = 1; i < ord.length; i++) {
     const anterior = Number(ord[i - 1].valor || 0);
     const atual = Number(ord[i].valor || 0);
-    out.push({ de: ord[i - 1].nome, para: ord[i].nome, taxa: anterior === 0 ? 0 : atual / anterior });
+    out.push({
+      de: ord[i - 1].nome,
+      para: ord[i].nome,
+      taxa: anterior === 0 ? 0 : atual / anterior,
+    });
   }
   return out;
 }
