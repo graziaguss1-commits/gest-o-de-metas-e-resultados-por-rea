@@ -1,91 +1,54 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-async function getUser(req: Request, admin: any) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return null;
-  const { data } = await admin.auth.getUser(authHeader.replace("Bearer ", ""));
-  return data?.user ?? null;
-}
+import {
+  authenticateRequest,
+  errorResponse,
+  jsonResponse,
+  normalizeService,
+  optionsResponse,
+  readJsonBody,
+  HttpError,
+} from "../_shared/common.ts";
+import {
+  ANTHROPIC_MODEL,
+  ANTHROPIC_MODEL_LABEL,
+  validateAnthropicKey,
+} from "../_shared/anthropic.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return optionsResponse();
+  if (req.method !== "POST") return jsonResponse({ error: "Método não permitido" }, 405);
 
   try {
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-    const user = await getUser(req, admin);
-    if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const { userClient } = await authenticateRequest(req, true);
+    const body = await readJsonBody(req);
+    const service = normalizeService(body.service_name);
+    const apiKey = String(body.api_key ?? "").trim();
 
-    const { service_name, api_key, label } = await req.json();
-    if (!service_name || !api_key || typeof service_name !== "string" || typeof api_key !== "string") {
-      return new Response(JSON.stringify({ error: "Parâmetros inválidos" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (apiKey.length < 20) {
+      throw new HttpError(400, "Informe uma chave da Anthropic válida.", "invalid_key_format");
     }
 
-    const secretName = `${service_name}_${user.id}`;
+    // Do not persist a typo or revoked key.
+    await validateAnthropicKey(apiKey);
 
-    // Try to update existing vault secret if registry has one
-    const { data: existing } = await admin
-      .from("api_keys_registry")
-      .select("vault_secret_id")
-      .eq("user_id", user.id)
-      .eq("service_name", service_name)
-      .maybeSingle();
+    const { error } = await userClient.rpc("store_own_api_key", {
+      p_service_name: service,
+      p_secret_value: apiKey,
+      p_label: "Claude (Anthropic)",
+    });
 
-    let vaultSecretId: string;
-
-    if (existing?.vault_secret_id) {
-      const { error: updErr } = await admin.rpc("vault_update_secret" as any, {
-        secret_id: existing.vault_secret_id, new_secret: api_key,
-      } as any).select?.() ?? { error: null };
-      // Fallback: direct call via raw SQL not available — rely on insert+swap
-      vaultSecretId = existing.vault_secret_id;
-      // Best-effort: Supabase client lacks a Vault RPC; we replace by deleting + creating
-      try {
-        await admin.from("vault.secrets" as any).delete().eq("id", existing.vault_secret_id);
-      } catch (_) { /* ignore */ }
-      const { data: ins } = await admin.rpc("create_secret" as any, {
-        new_secret: api_key, new_name: secretName, new_description: label ?? service_name,
-      } as any);
-      if (ins) vaultSecretId = ins as unknown as string;
-    } else {
-      const { data: ins, error: insErr } = await admin.rpc("create_secret" as any, {
-        new_secret: api_key, new_name: secretName, new_description: label ?? service_name,
-      } as any);
-      if (insErr || !ins) {
-        return new Response(JSON.stringify({ error: "Falha ao salvar no Vault", details: insErr?.message }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      vaultSecretId = ins as unknown as string;
+    if (error) {
+      throw new HttpError(500, "Não foi possível armazenar a chave com segurança.", "vault_store_failed");
     }
 
-    await admin.from("api_keys_registry").upsert({
-      user_id: user.id,
-      service_name,
-      vault_secret_id: vaultSecretId,
-      label: label ?? null,
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,service_name" });
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return jsonResponse({
+      success: true,
+      status: "valid",
+      provider: service,
+      model: ANTHROPIC_MODEL,
+      model_label: ANTHROPIC_MODEL_LABEL,
     });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message ?? "Erro" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    return errorResponse(error, "Não foi possível salvar a chave da Anthropic.");
   }
 });
+

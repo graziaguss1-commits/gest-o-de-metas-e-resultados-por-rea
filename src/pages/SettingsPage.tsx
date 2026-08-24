@@ -95,7 +95,7 @@ export default function SettingsPage() {
               <IntegracoesSettings />
               <div className="border-t pt-6">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                  Chaves de API avançadas
+                  Inteligência artificial
                 </h3>
                 <ApiKeysSettings />
               </div>

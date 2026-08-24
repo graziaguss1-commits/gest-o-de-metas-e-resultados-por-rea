@@ -53,6 +53,23 @@ function initials(name?: string | null) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
 }
 
+function aiModelLabel(model?: string) {
+  if (!model) return "Claude";
+  if (model === "claude-sonnet-5" || model.startsWith("claude-sonnet-5-")) {
+    return "Claude Sonnet 5";
+  }
+  return model;
+}
+
+function formatUsd(value?: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  }).format(value ?? 0);
+}
+
 export default function AnaliseMetaPage() {
   const { id } = useParams<{ id: string }>();
   
@@ -69,6 +86,12 @@ export default function AnaliseMetaPage() {
   );
   const planoAlvo = planosDaMeta[0] ?? null; // mais recente (lista já vem desc)
   const [addedIdx, setAddedIdx] = useState<Set<number>>(new Set());
+
+  const gerarAnalise = () => {
+    if (!meta) return;
+    setAddedIdx(new Set());
+    analise.mutate({ meta, lancamentos });
+  };
 
   const adicionarAcao = async (idx: number, acao: { titulo: string; contexto: string }) => {
     const descricao = acao.contexto ? `${acao.titulo}\n${acao.contexto}` : acao.titulo;
@@ -304,20 +327,27 @@ export default function AnaliseMetaPage() {
 
           <div className="space-y-4">
             <div className="metasia-card p-5 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" style={{ color: "var(--color-blue)" }} />
                   <h3 className="font-bold text-sm uppercase tracking-wider">
                     Análise de Saúde
                   </h3>
                 </div>
-                {analise.data && (
-                  <span
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: "var(--color-green-bg)", color: "var(--color-green)" }}
-                  >
-                    Atualizada agora
-                  </span>
+                {analise.data?.model && (
+                  <div className="text-right shrink-0">
+                    <span
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full inline-block"
+                      style={{ backgroundColor: "var(--color-green-bg)", color: "var(--color-green)" }}
+                    >
+                      {aiModelLabel(analise.data.model)}
+                    </span>
+                    {analise.data.gerado_em && (
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {new Date(analise.data.gerado_em).toLocaleString("pt-BR")}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -336,10 +366,16 @@ export default function AnaliseMetaPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => analise.mutate({ meta, lancamentos })}
+                    onClick={gerarAnalise}
                   >
                     Tentar novamente
                   </Button>
+                  {analise.error instanceof Error
+                    && analise.error.message.includes("Configurações") && (
+                      <Button asChild size="sm" variant="ghost">
+                        <Link to="/configuracoes/integrations">Configurar Claude</Link>
+                      </Button>
+                    )}
                 </div>
               ) : analise.data ? (
                 <>
@@ -373,6 +409,13 @@ export default function AnaliseMetaPage() {
                     <div className="text-sm leading-relaxed text-foreground whitespace-pre-line">
                       {analise.data.diagnostico}
                     </div>
+                    {analise.data.provider === "anthropic" && analise.data.usage && (
+                      <div className="text-[10px] text-muted-foreground">
+                        Gerado pela API da Anthropic ·{" "}
+                        {(analise.data.usage.input_tokens + analise.data.usage.output_tokens).toLocaleString("pt-BR")} tokens ·{" "}
+                        custo estimado {formatUsd(analise.data.usage.custo_estimado_usd)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2 pt-2 border-t">
@@ -524,7 +567,7 @@ export default function AnaliseMetaPage() {
                     </div>
                   </div>
                   <Button
-                    onClick={() => analise.mutate({ meta, lancamentos })}
+                    onClick={gerarAnalise}
                     style={{ backgroundColor: "var(--color-blue)", color: "white" }}
                     className="w-full hover:opacity-90"
                   >

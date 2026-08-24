@@ -5,167 +5,293 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Eye, EyeOff, Plus, ExternalLink } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { getEdgeFunctionErrorMessage } from "@/lib/edgeFunctions";
 
-interface RegistryRow { service_name: string; label: string | null; is_active: boolean | null; }
-interface Status { [service: string]: "valid" | "invalid" | "unconfigured" | "checking"; }
+interface RegistryRow {
+  service_name: string;
+  label: string | null;
+  is_active: boolean | null;
+  updated_at: string | null;
+}
 
-const TUTORIAL_LINKS: Record<string, { label: string; url: string }> = {
-  openai: { label: "OpenAI", url: "https://platform.openai.com/docs/api-reference/authentication" },
-  anthropic: { label: "Anthropic", url: "https://docs.anthropic.com/en/api/getting-started" },
-  google: { label: "Google AI", url: "https://ai.google.dev/gemini-api/docs/api-key" },
-  gemini: { label: "Google Gemini", url: "https://ai.google.dev/gemini-api/docs/api-key" },
-  perplexity: { label: "Perplexity", url: "https://docs.perplexity.ai/guides/getting-started" },
-  groq: { label: "Groq", url: "https://console.groq.com/docs/quickstart" },
-  mistral: { label: "Mistral", url: "https://docs.mistral.ai/getting-started/quickstart/" },
-  cohere: { label: "Cohere", url: "https://docs.cohere.com/docs/the-cohere-platform" },
-  stripe: { label: "Stripe", url: "https://docs.stripe.com/keys" },
-  resend: { label: "Resend", url: "https://resend.com/docs/dashboard/api-keys/introduction" },
-  sendgrid: { label: "SendGrid", url: "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys" },
-  twilio: { label: "Twilio", url: "https://www.twilio.com/docs/iam/api-keys" },
-  pipedrive: { label: "Pipedrive", url: "https://pipedrive.readme.io/docs/how-to-find-the-api-token" },
-  hubspot: { label: "HubSpot", url: "https://developers.hubspot.com/docs/api/private-apps" },
-};
+type ConnectionStatus = "valid" | "invalid" | "unconfigured" | "checking";
 
-const tutorialFor = (name: string) => {
-  const key = name.trim().toLowerCase();
-  if (!key) return null;
-  if (TUTORIAL_LINKS[key]) return TUTORIAL_LINKS[key];
-  const partial = Object.keys(TUTORIAL_LINKS).find((k) => key.includes(k));
-  return partial ? TUTORIAL_LINKS[partial] : { label: name, url: `https://www.google.com/search?q=${encodeURIComponent(`${name} API key documentation`)}` };
-};
+const SERVICE_NAME = "anthropic";
+const SERVICE_LABEL = "Claude (Anthropic)";
 
 export default function ApiKeysSettings() {
   const [services, setServices] = useState<RegistryRow[]>([]);
-  const [status, setStatus] = useState<Status>({});
+  const [status, setStatus] = useState<Record<string, ConnectionStatus>>({});
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [serviceName, setServiceName] = useState("");
+  const [editing, setEditing] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase.from("api_keys_registry").select("service_name, label, is_active");
+    const { data, error } = await supabase
+      .from("api_keys_registry")
+      .select("service_name, label, is_active, updated_at")
+      .eq("service_name", SERVICE_NAME)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      toast.error("Não foi possível carregar a integração com o Claude");
+      return;
+    }
     setServices(data ?? []);
   };
-  useEffect(() => { load(); }, []);
 
-  const openNew = () => { setEditing(null); setServiceName(""); setApiKey(""); setShowKey(false); setOpen(true); };
-  const openEdit = (s: string) => { setEditing(s); setServiceName(s); setApiKey(""); setShowKey(false); setOpen(true); };
+  useEffect(() => { void load(); }, []);
+
+  const openForm = (isEditing: boolean) => {
+    setEditing(isEditing);
+    setApiKey("");
+    setShowKey(false);
+    setOpen(true);
+  };
 
   const save = async () => {
-    const sn = serviceName.trim();
-    if (!sn || !apiKey) { toast.error("Preencha serviço e chave"); return; }
-    const { data, error } = await supabase.functions.invoke("store-api-key", {
-      body: { service_name: sn, api_key: apiKey, label: sn },
-    });
-    setApiKey(""); // clear immediately
-    if (error || !data?.success) { toast.error("Falha ao salvar chave"); return; }
-    toast.success("Chave armazenada com segurança");
-    setOpen(false);
-    load();
+    if (!apiKey.trim()) {
+      toast.error("Informe a chave da Anthropic");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("store-api-key", {
+        body: {
+          service_name: SERVICE_NAME,
+          api_key: apiKey.trim(),
+          label: SERVICE_LABEL,
+        },
+      });
+
+      if (error || !data?.success) {
+        const message = await getEdgeFunctionErrorMessage(
+          error,
+          data,
+          "Não foi possível salvar a chave da Anthropic.",
+        );
+        toast.error(message);
+        return;
+      }
+
+      setApiKey("");
+      setStatus((previous) => ({ ...previous, [SERVICE_NAME]: "valid" }));
+      setOpen(false);
+      await load();
+      toast.success("Claude conectado e validado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a chave da Anthropic.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const remove = async (s: string) => {
-    const { error } = await supabase.functions.invoke("delete-api-key", { body: { service_name: s } });
-    if (error) { toast.error("Falha ao remover"); return; }
-    toast.success("Chave removida");
-    setConfirmDel(null);
-    load();
+  const remove = async () => {
+    setRemoving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-api-key", {
+        body: { service_name: SERVICE_NAME },
+      });
+
+      if (error || !data?.success) {
+        const message = await getEdgeFunctionErrorMessage(
+          error,
+          data,
+          "Não foi possível remover a chave da Anthropic.",
+        );
+        toast.error(message);
+        return;
+      }
+
+      setStatus((previous) => ({ ...previous, [SERVICE_NAME]: "unconfigured" }));
+      setConfirmDel(false);
+      await load();
+      toast.success("Chave removida do Vault");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível remover a chave da Anthropic.");
+    } finally {
+      setRemoving(false);
+    }
   };
 
-  const test = async (s: string) => {
-    setStatus((p) => ({ ...p, [s]: "checking" }));
-    const { data } = await supabase.functions.invoke("validate-api-key", { body: { service_name: s } });
-    setStatus((p) => ({ ...p, [s]: (data?.status as any) ?? "invalid" }));
-    if (data?.status === "valid") toast.success("Chave válida");
-    else toast.error("Chave inválida");
+  const test = async () => {
+    setStatus((previous) => ({ ...previous, [SERVICE_NAME]: "checking" }));
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-api-key", {
+        body: { service_name: SERVICE_NAME },
+      });
+
+      if (error) {
+        const message = await getEdgeFunctionErrorMessage(
+          error,
+          data,
+          "Não foi possível testar a conexão com a Anthropic.",
+        );
+        setStatus((previous) => ({ ...previous, [SERVICE_NAME]: "invalid" }));
+        toast.error(message);
+        return;
+      }
+
+      const nextStatus = (data?.status as ConnectionStatus | undefined) ?? "invalid";
+      setStatus((previous) => ({ ...previous, [SERVICE_NAME]: nextStatus }));
+      if (nextStatus === "valid") toast.success("Conexão com o Claude funcionando");
+      else toast.error(data?.error ?? "A chave da Anthropic não é válida");
+      await load();
+    } catch (error) {
+      setStatus((previous) => ({ ...previous, [SERVICE_NAME]: "invalid" }));
+      toast.error(error instanceof Error ? error.message : "Não foi possível testar a conexão com a Anthropic.");
+    }
   };
+
+  const configured = services[0] ?? null;
+  const effectiveStatus = status[SERVICE_NAME]
+    ?? (configured?.is_active ? "valid" : configured ? "invalid" : "unconfigured");
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end items-center">
-        <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova chave</Button>
-      </div>
-
-
-      {services.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma chave configurada.</CardContent></Card>
+    <div className="space-y-4 max-w-2xl">
+      {!configured ? (
+        <Card>
+          <CardContent className="py-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div
+              className="h-11 w-11 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: "var(--color-blue-soft)", color: "var(--color-blue)" }}
+            >
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold">Conectar Claude</h4>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Use sua chave da Anthropic para gerar diagnósticos e ações nas metas.
+              </p>
+            </div>
+            <Button onClick={() => openForm(false)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Conectar
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {services.map((s) => {
-            const st = status[s.service_name];
-            return (
-              <Card key={s.service_name}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{s.label ?? s.service_name}</span>
-                    {st === "valid" ? <Badge className="bg-success text-success-foreground">Ativa</Badge>
-                      : st === "invalid" ? <Badge variant="destructive">Inválida</Badge>
-                      : <Badge variant="secondary">Não verificada</Badge>}
-                  </CardTitle>
-                  <CardDescription>{s.service_name}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(s.service_name)}>Alterar chave</Button>
-                  <Button size="sm" variant="outline" onClick={() => test(s.service_name)}>Testar conexão</Button>
-                  <Button size="sm" variant="destructive" onClick={() => setConfirmDel(s.service_name)}>Remover</Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-start justify-between gap-3">
+              <span className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5" style={{ color: "var(--color-blue)" }} />
+                {configured.label ?? SERVICE_LABEL}
+              </span>
+              {effectiveStatus === "checking" ? (
+                <Badge variant="secondary"><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Testando</Badge>
+              ) : effectiveStatus === "valid" ? (
+                <Badge className="bg-success text-success-foreground">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
+                </Badge>
+              ) : (
+                <Badge variant="destructive">Conexão inválida</Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Usada em: Análise de Saúde das metas · modelo Claude Sonnet 5
+              {configured.updated_at && (
+                <> · atualizada em {new Date(configured.updated_at).toLocaleDateString("pt-BR")}</>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => openForm(true)}>Alterar chave</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={test}
+              disabled={effectiveStatus === "checking"}
+            >
+              {effectiveStatus === "checking" ? "Testando…" : "Testar conexão"}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => setConfirmDel(true)}>Remover</Button>
+          </CardContent>
+        </Card>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+        <KeyRound className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        A chave fica criptografada no Vault. Ao gerar uma análise, os dados daquela meta são enviados à API da Anthropic.
+      </p>
+
+      <Dialog open={open} onOpenChange={(nextOpen) => !saving && setOpen(nextOpen)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? "Alterar chave" : "Nova chave"}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? "Alterar chave da Anthropic" : "Conectar Claude"}</DialogTitle>
+            <DialogDescription>
+              A conexão será testada antes de a chave ser armazenada.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Serviço</Label>
-              <Input value={serviceName} onChange={(e) => setServiceName(e.target.value)} disabled={!!editing} placeholder="ex: openai" />
+              <Input value={SERVICE_LABEL} disabled />
             </div>
             <div className="space-y-2">
-              <Label>Chave de API</Label>
+              <Label htmlFor="anthropic-api-key">Chave de API da Anthropic</Label>
               <div className="relative">
-                <Input type={showKey ? "text" : "password"} value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="pr-10" />
-                <button type="button" onClick={() => setShowKey((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <Input
+                  id="anthropic-api-key"
+                  type={showKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  className="pr-10"
+                  placeholder="sk-ant-…"
+                  autoComplete="off"
+                  disabled={saving}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((visible) => !visible)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  aria-label={showKey ? "Ocultar chave" : "Mostrar chave"}
+                  disabled={saving}
+                >
                   {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
-            {(() => {
-              const tip = tutorialFor(serviceName);
-              if (!tip) return null;
-              return (
-                <a href={tip.url} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                  <ExternalLink className="h-3.5 w-3.5" /> Como obter a chave de {tip.label}
-                </a>
-              );
-            })()}
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Abrir chaves da Anthropic
+            </a>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={save}>Salvar</Button>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} disabled={saving || !apiKey.trim()}>
+              {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              {saving ? "Validando…" : "Validar e salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!confirmDel} onOpenChange={(o) => !o && setConfirmDel(null)}>
+      <AlertDialog open={confirmDel} onOpenChange={(nextOpen) => !removing && setConfirmDel(nextOpen)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover chave?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita. A chave será removida do Vault.</AlertDialogDescription>
+            <AlertDialogTitle>Remover a conexão com o Claude?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A chave será apagada do Vault e novas análises ficarão indisponíveis até outra chave ser conectada.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmDel && remove(confirmDel)}>Remover</AlertDialogAction>
+            <AlertDialogCancel disabled={removing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={remove} disabled={removing}>
+              {removing ? "Removendo…" : "Remover"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

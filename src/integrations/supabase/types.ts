@@ -62,6 +62,59 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_execucoes: {
+        Row: {
+          created_at: string
+          custo_estimado_usd: number
+          erro: string | null
+          id: string
+          input_tokens: number
+          meta_id: string | null
+          model: string
+          output_tokens: number
+          provider: string
+          recurso: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          custo_estimado_usd?: number
+          erro?: string | null
+          id?: string
+          input_tokens?: number
+          meta_id?: string | null
+          model: string
+          output_tokens?: number
+          provider: string
+          recurso: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          custo_estimado_usd?: number
+          erro?: string | null
+          id?: string
+          input_tokens?: number
+          meta_id?: string | null
+          model?: string
+          output_tokens?: number
+          provider?: string
+          recurso?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_execucoes_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "metas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys_registry: {
         Row: {
           created_at: string | null
@@ -858,6 +911,26 @@ export type Database = {
         Returns: boolean
       }
       is_task_responsavel: { Args: { p_tarefa_id: string }; Returns: boolean }
+      delete_own_api_key: {
+        Args: { p_service_name: string }
+        Returns: boolean
+      }
+      read_user_api_key: {
+        Args: { p_service_name: string; p_user_id: string }
+        Returns: string
+      }
+      resolve_active_api_key: {
+        Args: { p_service_name: string }
+        Returns: Json
+      }
+      store_own_api_key: {
+        Args: {
+          p_label?: string
+          p_secret_value: string
+          p_service_name: string
+        }
+        Returns: string
+      }
       read_vault_secret: { Args: { p_key: string }; Returns: string }
       store_vault_secret: {
         Args: { p_key: string; p_value: string }
