@@ -63,9 +63,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return json({ error: "LOVABLE_API_KEY não configurada no projeto." }, 500);
+      return json({ error: "ANTHROPIC_API_KEY não configurada no projeto." }, 500);
     }
 
     const input = (await req.json()) as Input;
@@ -119,39 +119,47 @@ Hoje é ${new Date().toISOString().slice(0, 10)}.
 Gere a análise no formato JSON especificado, comentando no diagnóstico se os planos atuais estão cobrindo as alavancas certas.`;
 
 
-    const model = Deno.env.get("LOVABLE_AI_MODEL") ?? "google/gemini-2.5-flash";
+    const model = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-5";
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
+        max_tokens: 2000,
         temperature: 0.4,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userPrompt }],
       }),
     });
 
     if (!aiResp.ok) {
       const text = await aiResp.text();
+      if (aiResp.status === 401 || aiResp.status === 403) {
+        return json({ error: "Chave da Anthropic inválida ou sem permissão — revise a ANTHROPIC_API_KEY." }, 401);
+      }
       if (aiResp.status === 429) {
-        return json({ error: "Limite de requisições atingido — tente novamente em alguns segundos." }, 429);
+        return json({ error: "Limite de requisições da Anthropic atingido — tente novamente em alguns segundos." }, 429);
       }
-      if (aiResp.status === 402) {
-        return json({ error: "Créditos do Lovable AI Gateway esgotados." }, 402);
+      if (aiResp.status === 400 && /credit|balance/i.test(text)) {
+        return json({ error: "Sua conta da Anthropic está sem créditos." }, 402);
       }
-      return json({ error: `AI Gateway falhou: ${text.slice(0, 200)}` }, 502);
+      return json({ error: `Anthropic falhou (${aiResp.status}): ${text.slice(0, 200)}` }, 502);
     }
 
     const data = await aiResp.json();
-    const raw = data?.choices?.[0]?.message?.content;
-    if (typeof raw !== "string") {
-      return json({ error: "Resposta vazia do AI Gateway." }, 502);
+    const raw = Array.isArray(data?.content)
+      ? data.content
+          .filter((b: { type?: string }) => b?.type === "text")
+          .map((b: { text?: string }) => b.text ?? "")
+          .join("")
+      : null;
+    if (typeof raw !== "string" || !raw.trim()) {
+      return json({ error: "Resposta vazia da Claude." }, 502);
     }
 
     const parsed = parseJson(raw);
