@@ -140,7 +140,45 @@ export type Agendamento = {
   hora_inicio: string;
   duracao_minutos: number;
   observacao?: string | null;
+  /** Momento da sessão ativa; nulo quando o cronômetro está pausado. */
+  cronometro_iniciado_em?: string | null;
+  /** Total já consolidado nas pausas anteriores. */
+  cronometro_segundos?: number | null;
+  /** Usuário que iniciou o cronômetro desta ocorrência. */
+  cronometro_usuario_id?: string | null;
 };
+
+/** Total do cronômetro, incluindo a sessão ainda em andamento. */
+export function segundosDoCronometro(
+  agendamento: Pick<
+    Agendamento,
+    "cronometro_iniciado_em" | "cronometro_segundos"
+  >,
+  agoraMs: number = Date.now(),
+): number {
+  const acumulado = Math.max(0, Number(agendamento.cronometro_segundos ?? 0));
+  if (!agendamento.cronometro_iniciado_em) return Math.floor(acumulado);
+  const inicio = new Date(agendamento.cronometro_iniciado_em).getTime();
+  if (!Number.isFinite(inicio)) return Math.floor(acumulado);
+  return Math.floor(acumulado + Math.max(0, agoraMs - inicio) / 1000);
+}
+
+/** Exibe o cronômetro em HH:MM:SS. */
+export function formatCronometro(segundos: number): string {
+  const total = Math.max(0, Math.floor(Number(segundos) || 0));
+  const horas = Math.floor(total / 3600);
+  const minutos = Math.floor((total % 3600) / 60);
+  const restante = total % 60;
+  return [horas, minutos, restante]
+    .map((valor) => String(valor).padStart(2, "0"))
+    .join(":");
+}
+
+/** Minutos reais gravados na execução; qualquer uso positivo registra ao menos 1 min. */
+export function minutosReaisDoCronometro(segundos: number): number | null {
+  if (!Number.isFinite(segundos) || segundos <= 0) return null;
+  return Math.max(1, Math.round(segundos / 60));
+}
 
 export type CapacidadeDia = {
   data: string;
