@@ -51,6 +51,7 @@ import {
   capacidadeDoDia,
   configuracaoRecorrenciaCompleta,
   diasRecorrenciaPersistida,
+  execucoesEsperadasNaSemana,
   formatTotalHoras,
   hhmm,
   horaFim,
@@ -111,6 +112,7 @@ export default function CalendarPage() {
     () => Array.from({ length: 7 }, (_, i) => addDays(anchor, i)),
     [anchor],
   );
+  const weekDates = useMemo(() => days.map(iso), [days]);
   const { data: agendamentos = [] } = useAgendamentos(
     iso(days[0]),
     iso(days[6]),
@@ -151,8 +153,15 @@ export default function CalendarPage() {
     [planos, user?.id],
   );
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
-  const taskIdsAgendadosNaSemana = useMemo(
-    () => new Set(agendamentos.map((a) => a.tarefa_id)),
+  const agendamentosPorTarefa = useMemo(
+    () =>
+      agendamentos.reduce((map, agendamento) => {
+        map.set(
+          agendamento.tarefa_id,
+          (map.get(agendamento.tarefa_id) ?? 0) + 1,
+        );
+        return map;
+      }, new Map<string, number>()),
     [agendamentos],
   );
   const inicioSemana = iso(days[0]);
@@ -167,12 +176,23 @@ export default function CalendarPage() {
     ["diaria", "semanal", "mensal"].includes(task.frequencia) &&
     (!task.data_inicio || task.data_inicio <= fimSemana) &&
     (!task.data_fim || task.data_fim >= inicioSemana);
-  const availableToSchedule = tasks.filter(
-    (task) =>
+  const progressoAgenda = (task: Tarefa) => {
+    const agendadas = agendamentosPorTarefa.get(task.id) ?? 0;
+    const necessarias = execucoesEsperadasNaSemana(task, weekDates);
+    return {
+      agendadas,
+      necessarias,
+      faltam: Math.max(0, necessarias - agendadas),
+    };
+  };
+  const availableToSchedule = tasks.filter((task) => {
+    const progresso = progressoAgenda(task);
+    return (
       !task.concluida &&
-      !taskIdsAgendadosNaSemana.has(task.id) &&
-      !temRotinaAutomaticaAtiva(task),
-  );
+      progresso.faltam > 0 &&
+      (!temRotinaAutomaticaAtiva(task) || progresso.agendadas > 0)
+    );
+  });
   const scheduledStandalone = actions.filter((action) =>
     Boolean(
       action.data_agendada &&
@@ -238,6 +258,13 @@ export default function CalendarPage() {
   const abrirCompromisso = (compromissoId: string) => {
     const compromisso = compromissos.find((item) => item.id === compromissoId);
     if (compromisso) setEventoSelecionado({ tipo: "compromisso", compromisso });
+  };
+  const dataSugeridaParaTarefa = (taskId: string) => {
+    const blocos = agendamentos.filter((item) => item.tarefa_id === taskId);
+    if (blocos.length === 0) return inicioSemana;
+    const ultimaData = blocos[blocos.length - 1].data;
+    const proxima = iso(addDays(new Date(`${ultimaData}T12:00:00`), 1));
+    return proxima <= fimSemana ? proxima : ultimaData;
   };
 
   return (
@@ -739,34 +766,44 @@ export default function CalendarPage() {
               têm um bloco protegido.
             </p>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {availableToSchedule.slice(0, 8).map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border p-3"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {t.descricao}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {t.plano} ·{" "}
-                      {t.duracao_minutos
-                        ? `${t.duracao_minutos} min por execução`
-                        : "sem duração estimada"}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setAgendar({ tarefa: t, data: iso(new Date()) })
-                    }
+              {availableToSchedule.slice(0, 8).map((t) => {
+                const progresso = progressoAgenda(t);
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border p-3"
                   >
-                    <CalendarClock className="mr-1 h-3.5 w-3.5" />
-                    Agendar
-                  </Button>
-                </div>
-              ))}
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {t.descricao}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {t.plano} ·{" "}
+                        {t.duracao_minutos
+                          ? `${t.duracao_minutos} min por execução`
+                          : "sem duração estimada"}
+                      </div>
+                      <div className="mt-1 text-[11px] font-semibold text-[var(--brand-primary)]">
+                        {progresso.agendadas} de {progresso.necessarias}{" "}
+                        agendadas · faltam {progresso.faltam}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setAgendar({
+                          tarefa: t,
+                          data: dataSugeridaParaTarefa(t.id),
+                        })
+                      }
+                    >
+                      <CalendarClock className="mr-1 h-3.5 w-3.5" />
+                      Agendar próxima
+                    </Button>
+                  </div>
+                );
+              })}
               {standaloneToSchedule.slice(0, 8).map((action) => (
                 <div
                   key={action.id}
@@ -816,9 +853,17 @@ export default function CalendarPage() {
           onOpenChange={(v) => !v && setAgendar(null)}
           tarefa={agendar?.tarefa ?? null}
           dataInicial={agendar?.data}
+          dataMin={inicioSemana}
+          dataMax={fimSemana}
           agendamentoId={agendar?.agendamentoId}
           horaInicial={agendar?.hora}
           duracaoInicial={agendar?.duracao}
+          agendadasNaSemana={
+            agendar ? progressoAgenda(agendar.tarefa).agendadas : 0
+          }
+          execucoesNecessarias={
+            agendar ? progressoAgenda(agendar.tarefa).necessarias : 1
+          }
         />
         <AgendarAcaoAvulsaModal
           open={!!agendarAvulsa}

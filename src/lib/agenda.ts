@@ -269,6 +269,55 @@ export function dataCorrespondeRecorrencia(
   return false;
 }
 
+export type ConfiguracaoExecucoesAgenda = {
+  frequencia?: string | null;
+  execucoes_planejadas?: number | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  dias_semana?: number[] | null;
+};
+
+/** Quantidade de blocos configurada por período, sempre entre 1 e 100. */
+export function execucoesPlanejadasPorPeriodo(
+  tarefa: Pick<ConfiguracaoExecucoesAgenda, "execucoes_planejadas">,
+): number {
+  const quantidade = Math.round(Number(tarefa.execucoes_planejadas ?? 1));
+  if (!Number.isFinite(quantidade)) return 1;
+  return Math.min(100, Math.max(1, quantidade));
+}
+
+/**
+ * Converte a configuração da ação na quantidade de blocos exigida pelo
+ * planejamento semanal. Em ações diárias, o total é por dia escolhido; nas
+ * demais frequências, é o total do próprio período.
+ */
+export function execucoesEsperadasNaSemana(
+  tarefa: ConfiguracaoExecucoesAgenda,
+  datasDaSemana: string[],
+): number {
+  const porPeriodo = execucoesPlanejadasPorPeriodo(tarefa);
+  if (tarefa.frequencia !== "diaria") return porPeriodo;
+
+  const dias = diasRecorrenciaPersistida(tarefa.frequencia, tarefa.dias_semana);
+  const diasAtivos = datasDaSemana.filter((data) => {
+    if (
+      (tarefa.data_inicio && data < tarefa.data_inicio) ||
+      (tarefa.data_fim && data > tarefa.data_fim)
+    ) {
+      return false;
+    }
+    return dataCorrespondeRecorrencia(
+      tarefa.frequencia ?? "diaria",
+      new Date(`${data}T12:00:00`),
+      dias,
+    );
+  }).length;
+
+  // Se a ação foi escolhida manualmente fora da vigência, ainda exige um
+  // bloco; assim ela nunca é confirmada sem horário por acidente.
+  return Math.max(1, diasAtivos) * porPeriodo;
+}
+
 /** Rótulo gerencial do momento escolhido: "Toda terça" ou "Todo dia 10". */
 export function labelMomentoRecorrencia(
   frequencia?: string | null,

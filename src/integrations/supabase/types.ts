@@ -389,6 +389,7 @@ export type Database = {
           dias_semana: number[] | null
           duracao_minutos: number | null
           esforco: number
+          execucoes_planejadas: number
           frequencia: string
           horario_preferencial: string | null
           id: string
@@ -409,6 +410,7 @@ export type Database = {
           dias_semana?: number[] | null
           duracao_minutos?: number | null
           esforco?: number
+          execucoes_planejadas?: number
           frequencia?: string
           horario_preferencial?: string | null
           id?: string
@@ -429,6 +431,7 @@ export type Database = {
           dias_semana?: number[] | null
           duracao_minutos?: number | null
           esforco?: number
+          execucoes_planejadas?: number
           frequencia?: string
           horario_preferencial?: string | null
           id?: string

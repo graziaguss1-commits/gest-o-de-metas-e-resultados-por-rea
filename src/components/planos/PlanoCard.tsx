@@ -43,7 +43,13 @@ import {
   type Frequencia,
 } from "@/lib/execucao";
 import { todayISO, type MembroResumo, type Tarefa } from "@/lib/metas";
-import { configuracaoRecorrenciaCompleta, diasRecorrenciaPersistida, formatDuracao, hhmm, labelMomentoRecorrencia } from "@/lib/agenda";
+import {
+  configuracaoRecorrenciaCompleta,
+  diasRecorrenciaPersistida,
+  formatDuracao,
+  hhmm,
+  labelMomentoRecorrencia,
+} from "@/lib/agenda";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { EditarPlanoModal } from "@/components/planos/EditarPlanoModal";
@@ -64,11 +70,13 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
   const responsaveis: MembroResumo[] = plano.meta?.responsaveis?.length
     ? plano.meta.responsaveis
     : user?.id
-      ? [{
-          id: user.id,
-          full_name: profile?.full_name ?? "Você",
-          avatar_url: profile?.avatar_url ?? null,
-        }]
+      ? [
+          {
+            id: user.id,
+            full_name: profile?.full_name ?? "Você",
+            avatar_url: profile?.avatar_url ?? null,
+          },
+        ]
       : [];
   const responsavelPadrao =
     responsaveis.find((responsavel) => responsavel.id === user?.id)?.id ??
@@ -81,6 +89,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     prazo: "",
     frequencia: "unica" as Frequencia,
     quantidade: "1",
+    execucoes: 1,
     unidade: "",
     impacto: 5,
     esforco: 5,
@@ -100,7 +109,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     const txt = nova.descricao.trim();
     if (!txt) return;
     const responsavelId = nova.responsavelId || responsavelPadrao;
-    if (!responsavelId) return toast.error("Selecione quem executará esta ação.");
+    if (!responsavelId)
+      return toast.error("Selecione quem executará esta ação.");
     if (
       nova.frequencia !== "unica" &&
       !configuracaoRecorrenciaCompleta(
@@ -117,11 +127,12 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         planoId: plano.id,
         descricao: txt,
         ordem: total,
-        prazo: nova.frequencia === "unica" ? (nova.prazo || null) : null,
+        prazo: nova.frequencia === "unica" ? nova.prazo || null : null,
         data_inicio: nova.frequencia !== "unica" ? todayISO() : null,
-        data_fim: nova.frequencia !== "unica" ? (nova.prazo || null) : null,
+        data_fim: nova.frequencia !== "unica" ? nova.prazo || null : null,
         frequencia: nova.frequencia,
         quantidade_planejada: Number(nova.quantidade.replace(",", ".")) || 1,
+        execucoes_planejadas: nova.execucoes,
         unidade: nova.unidade,
         impacto: nova.impacto,
         esforco: nova.esforco,
@@ -135,6 +146,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         prazo: "",
         frequencia: "unica",
         quantidade: "1",
+        execucoes: 1,
         unidade: "",
         impacto: 5,
         esforco: 5,
@@ -145,7 +157,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
       });
       setAdding(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao adicionar ação";
+      const message =
+        err instanceof Error ? err.message : "Erro ao adicionar ação";
       toast.error(message);
     }
   };
@@ -160,7 +173,10 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
               <Link
                 to={`/metas/${plano.meta.id}/analise`}
                 className="text-[10px] font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 hover:opacity-80"
-                style={{ backgroundColor: "var(--color-blue-soft)", color: "var(--color-blue)" }}
+                style={{
+                  backgroundColor: "var(--color-blue-soft)",
+                  color: "var(--color-blue)",
+                }}
               >
                 {plano.meta.nome}
                 <ExternalLink className="h-2.5 w-2.5" />
@@ -187,40 +203,47 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             <Pencil className="h-4 w-4" />
           </Button>
           {isAdmin && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Excluir plano "{plano.titulo}"?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Todas as ações vinculadas e seus registros de execução serão removidos. Esta
-                  ação não pode ser desfeita.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    try {
-                      await deletePlano.mutateAsync(plano.id);
-                      toast.success("Plano excluído");
-                    } catch (e) {
-                      const message = e instanceof Error ? e.message : "Erro ao excluir";
-                      toast.error(message);
-                    }
-                  }}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
                 >
-                  Excluir
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Excluir plano "{plano.titulo}"?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Todas as ações vinculadas e seus registros de execução serão
+                    removidos. Esta ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      try {
+                        await deletePlano.mutateAsync(plano.id);
+                        toast.success("Plano excluído");
+                      } catch (e) {
+                        const message =
+                          e instanceof Error ? e.message : "Erro ao excluir";
+                        toast.error(message);
+                      }
+                    }}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -234,7 +257,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             className="h-full transition-all"
             style={{
               width: `${pct}%`,
-              backgroundColor: pct === 100 ? "var(--color-green)" : "var(--color-amber)",
+              backgroundColor:
+                pct === 100 ? "var(--color-green)" : "var(--color-amber)",
             }}
           />
         </div>
@@ -274,7 +298,9 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             className="h-8"
           />
           <div className="space-y-1">
-            <span className="text-xs font-medium">Responsável pela execução *</span>
+            <span className="text-xs font-medium">
+              Responsável pela execução *
+            </span>
             <ResponsavelSelect
               membros={responsaveis}
               value={nova.responsavelId || responsavelPadrao}
@@ -334,10 +360,12 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
           />
           <RecorrenciaAgendaFields
             frequencia={nova.frequencia}
+            execucoes={nova.execucoes}
             duracao={nova.duracao}
             horario={nova.horario}
             dias={nova.dias}
             onDuracaoChange={(duracao) => setNova({ ...nova, duracao })}
+            onExecucoesChange={(execucoes) => setNova({ ...nova, execucoes })}
             onHorarioChange={(horario) => setNova({ ...nova, horario })}
             onDiasChange={(dias) => setNova({ ...nova, dias })}
             compact
@@ -346,7 +374,12 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             <Button type="submit" size="sm" disabled={!nova.descricao.trim()}>
               Adicionar
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setAdding(false)}
+            >
               Cancelar
             </Button>
           </div>
@@ -400,8 +433,13 @@ function TarefaLinha({
   const exec = execucaoTarefa(tarefa, execucoes);
   const diasRecorrencia = diasRecorrenciaPersistida(freq, tarefa.dias_semana);
   const momentoRecorrencia = labelMomentoRecorrencia(freq, diasRecorrencia);
-  const mensuravel = freq !== "unica" || Number(tarefa.quantidade_planejada ?? 1) > 1 || !!tarefa.unidade;
-  const podeExecutar = !tarefa.responsavel_id || tarefa.responsavel_id === currentUserId;
+  const execucoesAgenda = Math.max(1, Number(tarefa.execucoes_planejadas ?? 1));
+  const mensuravel =
+    freq !== "unica" ||
+    Number(tarefa.quantidade_planejada ?? 1) > 1 ||
+    !!tarefa.unidade;
+  const podeExecutar =
+    !tarefa.responsavel_id || tarefa.responsavel_id === currentUserId;
   const responsavelNome = nomeResponsavel(responsaveis, tarefa.responsavel_id);
 
   const salvar = async (e: FormEvent) => {
@@ -428,7 +466,11 @@ function TarefaLinha({
           checked={tarefa.concluida}
           onCheckedChange={(v) => podeExecutar && onToggle(v === true)}
           disabled={!podeExecutar}
-          title={podeExecutar ? "Concluir ação" : `Somente ${responsavelNome} pode concluir`}
+          title={
+            podeExecutar
+              ? "Concluir ação"
+              : `Somente ${responsavelNome} pode concluir`
+          }
           className="mt-0.5"
         />
         <span
@@ -452,7 +494,11 @@ function TarefaLinha({
           type="button"
           variant="ghost"
           size="icon"
-          title={podeExecutar ? "Agendar no calendário" : `Agenda de ${responsavelNome}`}
+          title={
+            podeExecutar
+              ? "Agendar no calendário"
+              : `Agenda de ${responsavelNome}`
+          }
           disabled={!podeExecutar}
           className="h-7 w-7 text-muted-foreground"
           onClick={() => podeExecutar && setAgendarOpen(true)}
@@ -470,7 +516,10 @@ function TarefaLinha({
       <div className="flex flex-wrap items-center gap-2 pl-6 text-[11px] text-muted-foreground">
         <span
           className="rounded-full px-2 py-0.5 font-semibold"
-          style={{ backgroundColor: "var(--color-blue-soft)", color: "var(--color-blue)" }}
+          style={{
+            backgroundColor: "var(--color-blue-soft)",
+            color: "var(--color-blue)",
+          }}
         >
           Responsável: {responsavelNome}
         </span>
@@ -479,13 +528,23 @@ function TarefaLinha({
             {formatDuracao(tarefa.duracao_minutos)} por execução
           </span>
         ) : (
-          <span className="rounded-full bg-muted px-2 py-0.5">Sem duração estimada</span>
+          <span className="rounded-full bg-muted px-2 py-0.5">
+            Sem duração estimada
+          </span>
         )}
-        {hhmm(tarefa.horario_preferencial) && <span>Horário {hhmm(tarefa.horario_preferencial)}</span>}
+        {hhmm(tarefa.horario_preferencial) && (
+          <span>Horário {hhmm(tarefa.horario_preferencial)}</span>
+        )}
         {momentoRecorrencia && <span>{momentoRecorrencia}</span>}
+        {execucoesAgenda > 1 && (
+          <span className="rounded-full bg-[var(--brand-accent-soft)] px-2 py-0.5 font-semibold text-[var(--brand-primary)]">
+            {execucoesAgenda} execuções {FREQUENCIA_LABEL[freq].toLowerCase()}
+          </span>
+        )}
         {tarefa.prazo && (
           <span>
-            Prazo final {new Date(`${tarefa.prazo}T12:00:00`).toLocaleDateString("pt-BR")}
+            Prazo final{" "}
+            {new Date(`${tarefa.prazo}T12:00:00`).toLocaleDateString("pt-BR")}
           </span>
         )}
       </div>
@@ -496,14 +555,24 @@ function TarefaLinha({
         tarefa={tarefa}
         responsaveis={responsaveis}
       />
-      <AgendarAcaoModal open={agendarOpen} onOpenChange={setAgendarOpen} tarefa={tarefa} dataInicial={todayISO()} />
+      <AgendarAcaoModal
+        open={agendarOpen}
+        onOpenChange={setAgendarOpen}
+        tarefa={tarefa}
+        dataInicial={todayISO()}
+      />
 
       {mensuravel && (
         <div className="flex items-center gap-2 pl-6 flex-wrap">
-          <span className="text-xs font-medium" style={{ color: "var(--color-amber)" }}>
+          <span
+            className="text-xs font-medium"
+            style={{ color: "var(--color-amber)" }}
+          >
             {exec.texto}
           </span>
-          <span className="text-[10px] text-muted-foreground">({exec.periodoLabel})</span>
+          <span className="text-[10px] text-muted-foreground">
+            ({exec.periodoLabel})
+          </span>
           {podeExecutar ? (
             <form onSubmit={salvar} className="flex items-center gap-1 ml-auto">
               <Input
@@ -513,7 +582,13 @@ function TarefaLinha({
                 inputMode="decimal"
                 className="h-7 w-[92px] text-xs"
               />
-              <Button type="submit" size="sm" variant="outline" className="h-7 text-xs" disabled={!valor}>
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={!valor}
+              >
                 Registrar
               </Button>
             </form>

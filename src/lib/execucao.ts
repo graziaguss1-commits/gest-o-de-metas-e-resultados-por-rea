@@ -26,6 +26,8 @@ export type TarefaMensuravel = {
   concluida: boolean;
   frequencia?: string | null;
   quantidade_planejada?: number | null;
+  /** Quantidade de blocos necessários no calendário por período. */
+  execucoes_planejadas?: number | null;
   unidade?: string | null;
   impacto?: number | null;
   esforco?: number | null;

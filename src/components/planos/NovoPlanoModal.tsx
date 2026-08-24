@@ -26,7 +26,11 @@ import { FREQUENCIAS, FREQUENCIA_LABEL, type Frequencia } from "@/lib/execucao";
 import { RecorrenciaAgendaFields } from "@/components/planos/RecorrenciaAgendaFields";
 import { ImpactoEsforcoPicker } from "@/components/actions/ImpactoEsforcoPicker";
 import { ResponsavelSelect } from "@/components/shared/ResponsaveisPicker";
-import { configuracaoRecorrenciaCompleta, formatDuracao, labelMomentoRecorrencia } from "@/lib/agenda";
+import {
+  configuracaoRecorrenciaCompleta,
+  formatDuracao,
+  labelMomentoRecorrencia,
+} from "@/lib/agenda";
 
 type Props = {
   open: boolean;
@@ -38,6 +42,7 @@ type LinhaTarefa = {
   prazo: string;
   frequencia: Frequencia;
   quantidade: string;
+  execucoes: number;
   unidade: string;
   impacto: number;
   esforco: number;
@@ -52,6 +57,7 @@ const linhaVazia = (responsavelId = ""): LinhaTarefa => ({
   prazo: "",
   frequencia: "unica",
   quantidade: "1",
+  execucoes: 1,
   unidade: "",
   impacto: 5,
   esforco: 5,
@@ -79,24 +85,43 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
   const patch = (i: number, p: Partial<LinhaTarefa>) =>
     setTarefas((prev) => prev.map((v, j) => (j === i ? { ...v, ...p } : v)));
 
-  const membrosDoPlano = metaId === "__none__"
-    ? user?.id
-      ? [{ id: user.id, full_name: profile?.full_name ?? "Você", avatar_url: profile?.avatar_url ?? null }]
-      : []
-    : metas.find((meta) => meta.id === metaId)?.responsaveis ?? [];
+  const membrosDoPlano =
+    metaId === "__none__"
+      ? user?.id
+        ? [
+            {
+              id: user.id,
+              full_name: profile?.full_name ?? "Você",
+              avatar_url: profile?.avatar_url ?? null,
+            },
+          ]
+        : []
+      : (metas.find((meta) => meta.id === metaId)?.responsaveis ?? []);
 
   const alterarMeta = (nextMetaId: string) => {
-    const opcoes = nextMetaId === "__none__"
-      ? user?.id
-        ? [{ id: user.id, full_name: profile?.full_name ?? "Você", avatar_url: profile?.avatar_url ?? null }]
-        : []
-      : metas.find((meta) => meta.id === nextMetaId)?.responsaveis ?? [];
-    const preferido = opcoes.find((membro) => membro.id === user?.id)?.id ?? opcoes[0]?.id ?? "";
+    const opcoes =
+      nextMetaId === "__none__"
+        ? user?.id
+          ? [
+              {
+                id: user.id,
+                full_name: profile?.full_name ?? "Você",
+                avatar_url: profile?.avatar_url ?? null,
+              },
+            ]
+          : []
+        : (metas.find((meta) => meta.id === nextMetaId)?.responsaveis ?? []);
+    const preferido =
+      opcoes.find((membro) => membro.id === user?.id)?.id ??
+      opcoes[0]?.id ??
+      "";
     setMetaId(nextMetaId);
     setTarefas((atuais) =>
       atuais.map((tarefa) => ({
         ...tarefa,
-        responsavelId: opcoes.some((membro) => membro.id === tarefa.responsavelId)
+        responsavelId: opcoes.some(
+          (membro) => membro.id === tarefa.responsavelId,
+        )
           ? tarefa.responsavelId
           : preferido,
       })),
@@ -119,14 +144,21 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
       (tarefa) => tarefa.descricao.trim() && !tarefa.responsavelId,
     );
     if (semResponsavel) {
-      return toast.error(`Defina quem fará a ação: ${semResponsavel.descricao}`);
+      return toast.error(
+        `Defina quem fará a ação: ${semResponsavel.descricao}`,
+      );
     }
 
     const recorrenciaIncompleta = tarefas.find(
       (t) =>
         t.descricao.trim() &&
         t.frequencia !== "unica" &&
-        !configuracaoRecorrenciaCompleta(t.frequencia, t.duracao, t.horario, t.dias),
+        !configuracaoRecorrenciaCompleta(
+          t.frequencia,
+          t.duracao,
+          t.horario,
+          t.dias,
+        ),
     );
     if (recorrenciaIncompleta) {
       return toast.error(
@@ -140,11 +172,15 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
         meta_id: metaId === "__none__" ? null : metaId,
         tarefas: tarefas.map((t) => ({
           descricao: t.descricao,
-          prazo: t.frequencia === "unica" ? (t.prazo || null) : null,
-          data_inicio: t.frequencia !== "unica" ? new Date().toISOString().slice(0, 10) : null,
-          data_fim: t.frequencia !== "unica" ? (t.prazo || null) : null,
+          prazo: t.frequencia === "unica" ? t.prazo || null : null,
+          data_inicio:
+            t.frequencia !== "unica"
+              ? new Date().toISOString().slice(0, 10)
+              : null,
+          data_fim: t.frequencia !== "unica" ? t.prazo || null : null,
           frequencia: t.frequencia,
           quantidade_planejada: Number(t.quantidade.replace(",", ".")) || 1,
+          execucoes_planejadas: t.execucoes,
           unidade: t.unidade,
           impacto: t.impacto,
           esforco: t.esforco,
@@ -158,7 +194,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
       reset();
       onOpenChange(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao criar plano";
+      const message =
+        err instanceof Error ? err.message : "Erro ao criar plano";
       toast.error(message);
     }
   };
@@ -169,7 +206,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Novo plano de ação</DialogTitle>
           <DialogDescription>
-            Vincule a uma meta (opcional) e adicione até 5 tarefas iniciais. Tarefas vazias serão descartadas.
+            Vincule a uma meta (opcional) e adicione até 5 tarefas iniciais.
+            Tarefas vazias serão descartadas.
           </DialogDescription>
         </DialogHeader>
 
@@ -206,8 +244,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
             <div>
               <Label>Ações do plano</Label>
               <p className="text-xs text-muted-foreground">
-                Defina o que será feito, com que frequência e quanto é o planejado. Ex.:
-                "Prospectar" · por dia · 10 · pessoas prospectadas.
+                Defina o que será feito, com que frequência e quanto é o
+                planejado. Ex.: "Prospectar" · por dia · 10 · pessoas
+                prospectadas.
               </p>
             </div>
             {tarefas.map((t, i) => (
@@ -224,7 +263,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      onClick={() => setTarefas((prev) => prev.filter((_, j) => j !== i))}
+                      onClick={() =>
+                        setTarefas((prev) => prev.filter((_, j) => j !== i))
+                      }
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -245,10 +286,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                       const frequencia = value as Frequencia;
                       patch(i, {
                         frequencia,
-                        dias:
-                          frequencia === "diaria"
-                            ? [1, 2, 3, 4, 5]
-                            : null,
+                        dias: frequencia === "diaria" ? [1, 2, 3, 4, 5] : null,
                       });
                     }}
                   >
@@ -278,7 +316,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     placeholder="pessoas prospectadas, Reels, reuniões…"
                   />
                   <label className="min-w-[150px] flex-1 text-[10px] font-semibold text-muted-foreground">
-                    {t.frequencia === "unica" ? "Prazo" : "Rotina ativa até (opcional)"}
+                    {t.frequencia === "unica"
+                      ? "Prazo"
+                      : "Rotina ativa até (opcional)"}
                     <Input
                       type="date"
                       className="mt-1 w-full"
@@ -289,10 +329,12 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                 </div>
                 <RecorrenciaAgendaFields
                   frequencia={t.frequencia}
+                  execucoes={t.execucoes}
                   duracao={t.duracao}
                   horario={t.horario}
                   dias={t.dias}
                   onDuracaoChange={(duracao) => patch(i, { duracao })}
+                  onExecucoesChange={(execucoes) => patch(i, { execucoes })}
                   onHorarioChange={(horario) => patch(i, { horario })}
                   onDiasChange={(dias) => patch(i, { dias })}
                   compact
@@ -303,8 +345,13 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                   {labelMomentoRecorrencia(t.frequencia, t.dias)
                     ? ` · ${labelMomentoRecorrencia(t.frequencia, t.dias)}`
                     : ""}
-                  {t.duracao ? ` · ${formatDuracao(t.duracao)} por execução` : " · sem duração estimada"}
-                  {t.prazo ? ` · rotina ativa até ${t.prazo.split("-").reverse().join("/")}` : ""}
+                  {` · ${t.execucoes} ${t.execucoes === 1 ? "bloco" : "blocos"} no calendário`}
+                  {t.duracao
+                    ? ` · ${formatDuracao(t.duracao)} por execução`
+                    : " · sem duração estimada"}
+                  {t.prazo
+                    ? ` · rotina ativa até ${t.prazo.split("-").reverse().join("/")}`
+                    : ""}
                 </p>
                 <ImpactoEsforcoPicker
                   impacto={t.impacto}
@@ -324,7 +371,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                   setTarefas((prev) => [
                     ...prev,
                     linhaVazia(
-                      membrosDoPlano.find((membro) => membro.id === user?.id)?.id ??
+                      membrosDoPlano.find((membro) => membro.id === user?.id)
+                        ?.id ??
                         membrosDoPlano[0]?.id ??
                         "",
                     ),
@@ -337,9 +385,12 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
             )}
           </div>
 
-
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancelar
             </Button>
             <Button

@@ -37,6 +37,9 @@ type Props = {
   agendamentoId?: string;
   horaInicial?: string;
   duracaoInicial?: number | null;
+  /** Progresso dos blocos exigidos pelo planejamento semanal. */
+  agendadasNaSemana?: number;
+  execucoesNecessarias?: number;
 };
 
 export function AgendarAcaoModal({
@@ -49,6 +52,8 @@ export function AgendarAcaoModal({
   agendamentoId,
   horaInicial,
   duracaoInicial,
+  agendadasNaSemana = 0,
+  execucoesNecessarias = 1,
 }: Props) {
   const agendar = useAgendarTarefa();
   const reagendar = useReagendarTarefa();
@@ -58,6 +63,7 @@ export function AgendarAcaoModal({
   const [hora, setHora] = useState(horaInicial ?? "09:00");
   const [duracao, setDuracao] = useState<number | null>(duracaoInicial ?? null);
   const [salvarNaAcao, setSalvarNaAcao] = useState(false);
+  const [execucaoAtual, setExecucaoAtual] = useState(1);
   const { blocos, isLoading: agendaLoading } = useAgendaDoDia(data, {
     excluirAgendamentoId: agendamentoId,
   });
@@ -80,10 +86,18 @@ export function AgendarAcaoModal({
     const d = duracaoInicial ?? tarefa?.duracao_minutos ?? null;
     setDuracao(d);
     setSalvarNaAcao(!tarefa?.duracao_minutos);
-  }, [open, dataInicial, horaInicial, duracaoInicial, tarefa]);
+    setExecucaoAtual(Math.min(execucoesNecessarias, agendadasNaSemana + 1));
+  }, [
+    open,
+    dataInicial,
+    horaInicial,
+    duracaoInicial,
+    tarefa,
+    agendadasNaSemana,
+    execucoesNecessarias,
+  ]);
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const salvar = async (fecharDepois: boolean) => {
     if (!tarefa) return;
     if (!data) return toast.error("Escolha a data.");
     if ((dataMin && data < dataMin) || (dataMax && data > dataMax)) {
@@ -125,11 +139,39 @@ export function AgendarAcaoModal({
           duracao_minutos: duracao,
         });
       }
-      toast.success(agendamentoId ? "Ocorrência reagendada" : "Ação agendada");
+      const podeContinuar =
+        !agendamentoId && execucaoAtual < execucoesNecessarias;
+      if (!fecharDepois && podeContinuar) {
+        const proximaExecucao = execucaoAtual + 1;
+        setExecucaoAtual(proximaExecucao);
+        if (data) {
+          const proximaData = new Date(`${data}T12:00:00`);
+          proximaData.setDate(proximaData.getDate() + 1);
+          const proximaISO = `${proximaData.getFullYear()}-${String(
+            proximaData.getMonth() + 1,
+          ).padStart(
+            2,
+            "0",
+          )}-${String(proximaData.getDate()).padStart(2, "0")}`;
+          if (!dataMax || proximaISO <= dataMax) setData(proximaISO);
+        }
+        toast.success(
+          `Execução ${execucaoAtual} agendada. Agora defina a ${proximaExecucao}ª.`,
+        );
+        return;
+      }
+      toast.success(
+        agendamentoId ? "Ocorrência reagendada" : "Execução agendada",
+      );
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao agendar");
     }
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void salvar(true);
   };
 
   const pending = agendar.isPending || reagendar.isPending;
@@ -139,11 +181,18 @@ export function AgendarAcaoModal({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[920px]">
         <DialogHeader>
           <DialogTitle>
-            {agendamentoId ? "Reagendar ocorrência" : "Agendar no calendário"}
+            {agendamentoId
+              ? "Reagendar ocorrência"
+              : execucoesNecessarias > 1
+                ? `Agendar execução ${execucaoAtual} de ${execucoesNecessarias}`
+                : "Agendar no calendário"}
           </DialogTitle>
           <DialogDescription>
             {tarefa?.descricao} — escolha a data e veja sua agenda antes de
             definir o melhor horário.
+            {!agendamentoId && execucoesNecessarias > 1
+              ? ` Faltam ${Math.max(0, execucoesNecessarias - execucaoAtual + 1)} blocos nesta semana.`
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -232,12 +281,28 @@ export function AgendarAcaoModal({
             >
               Cancelar
             </Button>
+            {!agendamentoId && execucaoAtual < execucoesNecessarias && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending || agendaLoading || Boolean(conflito)}
+                onClick={() => void salvar(false)}
+              >
+                {pending ? "Salvando…" : "Agendar e continuar"}
+              </Button>
+            )}
             <Button
               type="submit"
               disabled={pending || agendaLoading || Boolean(conflito)}
               className="brand-button"
             >
-              {pending ? "Salvando…" : agendamentoId ? "Reagendar" : "Agendar"}
+              {pending
+                ? "Salvando…"
+                : agendamentoId
+                  ? "Reagendar"
+                  : execucoesNecessarias > 1
+                    ? "Agendar e fechar"
+                    : "Agendar"}
             </Button>
           </DialogFooter>
         </form>
