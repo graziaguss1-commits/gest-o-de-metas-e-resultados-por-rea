@@ -562,6 +562,9 @@ export type Database = {
         Row: {
           created_at: string
           criado_por: string | null
+          cronometro_iniciado_em: string | null
+          cronometro_segundos: number
+          cronometro_usuario_id: string | null
           data: string
           duracao_minutos: number
           hora_inicio: string
@@ -573,6 +576,9 @@ export type Database = {
         Insert: {
           created_at?: string
           criado_por?: string | null
+          cronometro_iniciado_em?: string | null
+          cronometro_segundos?: number
+          cronometro_usuario_id?: string | null
           data: string
           duracao_minutos?: number
           hora_inicio: string
@@ -584,6 +590,9 @@ export type Database = {
         Update: {
           created_at?: string
           criado_por?: string | null
+          cronometro_iniciado_em?: string | null
+          cronometro_segundos?: number
+          cronometro_usuario_id?: string | null
           data?: string
           duracao_minutos?: number
           hora_inicio?: string
