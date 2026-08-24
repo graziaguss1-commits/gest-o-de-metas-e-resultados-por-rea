@@ -27,6 +27,7 @@ import { StatusChip } from "@/components/metas/StatusChip";
 import {
   useAddTarefa,
   useDeletePlano,
+  useDeleteTarefa,
   useExecucoes,
   useRegistrarExecucao,
   useToggleTarefa,
@@ -83,6 +84,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     responsaveis.find((responsavel) => responsavel.id === user?.id)?.id ??
     responsaveis[0]?.id ??
     "";
+  const podeGerenciarPlano = isAdmin || plano.criado_por === user?.id;
   const [adding, setAdding] = useState(false);
   const [editarPlanoOpen, setEditarPlanoOpen] = useState(false);
   const [nova, setNova] = useState({
@@ -208,7 +210,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
           >
             <Pencil className="h-4 w-4" />
           </Button>
-          {isAdmin && (
+          {podeGerenciarPlano && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -288,6 +290,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
               onToggle={(v) => toggleTarefa.mutate({ id: t.id, concluida: v })}
               responsaveis={responsaveis}
               currentUserId={user?.id ?? null}
+              podeExcluir={podeGerenciarPlano}
             />
           ))}
         </ul>
@@ -424,14 +427,17 @@ function TarefaLinha({
   onToggle,
   responsaveis,
   currentUserId,
+  podeExcluir,
 }: {
   tarefa: Tarefa;
   execucoes: Execucao[];
   onToggle: (v: boolean) => void;
   responsaveis: MembroResumo[];
   currentUserId: string | null;
+  podeExcluir: boolean;
 }) {
   const registrar = useRegistrarExecucao();
+  const deleteTarefa = useDeleteTarefa();
   const [valor, setValor] = useState("");
   const [agendarOpen, setAgendarOpen] = useState(false);
   const [editarOpen, setEditarOpen] = useState(false);
@@ -511,6 +517,54 @@ function TarefaLinha({
         >
           <CalendarClock className="h-3.5 w-3.5" />
         </Button>
+        {podeExcluir && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                title="Excluir ação"
+                aria-label="Excluir ação"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Excluir a ação “{tarefa.descricao}”?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Os horários do calendário e os registros de execução desta
+                  ação também serão excluídos. O plano continuará existindo.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={deleteTarefa.isPending}
+                  onClick={async () => {
+                    try {
+                      await deleteTarefa.mutateAsync(tarefa.id);
+                      toast.success("Ação excluída");
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Não foi possível excluir a ação",
+                      );
+                    }
+                  }}
+                >
+                  {deleteTarefa.isPending ? "Excluindo…" : "Excluir ação"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
         <span className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
           {FREQUENCIA_LABEL[freq]}
           {tarefa.prazo
