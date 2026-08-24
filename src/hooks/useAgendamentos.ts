@@ -2,9 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agendamento } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
-import { configuracaoRecorrenciaCompleta, dataCorrespondeRecorrencia, diasRecorrenciaPersistida } from "@/lib/agenda";
+import {
+  configuracaoRecorrenciaCompleta,
+  dataCorrespondeRecorrencia,
+  diasRecorrenciaPersistida,
+} from "@/lib/agenda";
 
 const KEY = ["agendamentos"] as const;
+export const OBSERVACAO_OCORRENCIA_CANCELADA = "Ocorrência cancelada";
 
 /**
  * Ocorrências agendadas. Buscamos apenas a janela visível (semana atual +
@@ -23,7 +28,9 @@ export function useAgendamentos(inicio?: string, fim?: string) {
       if (fim) query = query.lte("data", fim);
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as Agendamento[];
+      return ((data ?? []) as Agendamento[]).filter(
+        (item) => item.observacao !== OBSERVACAO_OCORRENCIA_CANCELADA,
+      );
     },
   });
 }
@@ -71,7 +78,11 @@ export function useReagendarTarefa() {
     }) => {
       const { error } = await supabase
         .from("tarefa_agendamentos")
-        .update({ data, hora_inicio: horaInicio, duracao_minutos: duracaoMinutos })
+        .update({
+          data,
+          hora_inicio: horaInicio,
+          duracao_minutos: duracaoMinutos,
+        })
         .eq("id", id);
       if (error) throw error;
     },
@@ -83,13 +94,33 @@ export function useRemoverAgendamento() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tarefa_agendamentos").delete().eq("id", id);
+      const { error } = await supabase
+        .from("tarefa_agendamentos")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 
+/**
+ * Mantém uma exceção invisível para que a recorrência não seja recriada ao
+ * atualizar a página ou materializar novamente a semana.
+ */
+export function useCancelarOcorrencia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("tarefa_agendamentos")
+        .update({ observacao: OBSERVACAO_OCORRENCIA_CANCELADA })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
 
 /**
  * Cria somente as ocorrências recorrentes que faltam na semana visível.
@@ -98,16 +129,29 @@ export function useRemoverAgendamento() {
 export function useMaterializarRecorrencias() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tarefas, datas }: { tarefas: Tarefa[]; datas: string[] }) => {
+    mutationFn: async ({
+      tarefas,
+      datas,
+    }: {
+      tarefas: Tarefa[];
+      datas: string[];
+    }) => {
       if (!datas.length) return 0;
-      const inicio = datas[0], fim = datas[datas.length - 1];
+      const inicio = datas[0],
+        fim = datas[datas.length - 1];
       const ids = tarefas.map((t) => t.id);
       if (!ids.length) return 0;
       const { data: existentes, error: readError } = await supabase
-        .from("tarefa_agendamentos").select("tarefa_id,data").in("tarefa_id", ids).gte("data", inicio).lte("data", fim);
+        .from("tarefa_agendamentos")
+        .select("tarefa_id,data")
+        .in("tarefa_id", ids)
+        .gte("data", inicio)
+        .lte("data", fim);
       if (readError) throw readError;
-      const chaves = new Set((existentes ?? []).map((a) => `${a.tarefa_id}|${a.data}`));
-      const hoje = new Date().toISOString().slice(0,10);
+      const chaves = new Set(
+        (existentes ?? []).map((a) => `${a.tarefa_id}|${a.data}`),
+      );
+      const hoje = new Date().toISOString().slice(0, 10);
       const { data: user } = await supabase.auth.getUser();
       const rows = tarefas.flatMap((t) => {
         const dias = diasRecorrenciaPersistida(t.frequencia, t.dias_semana);
@@ -122,25 +166,30 @@ export function useMaterializarRecorrencias() {
           return [];
         }
 
-        return datas.filter((data) => {
-          if (
-            data < hoje ||
-            (t.data_inicio && data < t.data_inicio) ||
-            (t.data_fim && data > t.data_fim)
-          ) {
-            return false;
-          }
+        return datas
+          .filter((data) => {
+            if (
+              data < hoje ||
+              (t.data_inicio && data < t.data_inicio) ||
+              (t.data_fim && data > t.data_fim)
+            ) {
+              return false;
+            }
 
-          const date = new Date(`${data}T12:00:00`);
-          return (
-            dataCorrespondeRecorrencia(t.frequencia, date, dias) &&
-            !chaves.has(`${t.id}|${data}`)
-          );
-        }).map((data) => ({
-          tarefa_id: t.id, data, hora_inicio: t.horario_preferencial!,
-          duracao_minutos: t.duracao_minutos!, criado_por: user.user?.id ?? null,
-          observacao: "Gerado pela recorrência",
-        }));
+            const date = new Date(`${data}T12:00:00`);
+            return (
+              dataCorrespondeRecorrencia(t.frequencia, date, dias) &&
+              !chaves.has(`${t.id}|${data}`)
+            );
+          })
+          .map((data) => ({
+            tarefa_id: t.id,
+            data,
+            hora_inicio: t.horario_preferencial!,
+            duracao_minutos: t.duracao_minutos!,
+            criado_por: user.user?.id ?? null,
+            observacao: "Gerado pela recorrência",
+          }));
       });
       if (!rows.length) return 0;
       const { error } = await supabase.from("tarefa_agendamentos").insert(rows);
