@@ -33,7 +33,12 @@ import { AgendarAcaoAvulsaModal } from "@/components/actions/AgendarAcaoAvulsaMo
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { CapacidadeSemana } from "@/components/planos/CapacidadeSemana";
 import { RevisaoIndicadores } from "@/components/metas/RevisaoIndicadores";
-import { formatDuracao, hhmm, type Agendamento } from "@/lib/agenda";
+import {
+  execucoesEsperadasNaSemana,
+  formatDuracao,
+  hhmm,
+  type Agendamento,
+} from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
 import { toast } from "sonner";
 
@@ -322,22 +327,42 @@ export default function WeeklyPlanningPage() {
     return map;
   }, [agendamentos]);
 
-  const isScheduledInWeek = (task: PlanningTask) => {
-    if (task.origem === "plano") {
-      return (blocksByTask.get(task.id)?.length ?? 0) > 0;
-    }
-    return Boolean(
-      task.data_agendada &&
-      task.hora_inicio &&
-      task.duracao_minutos &&
-      task.data_agendada >= weekStartISO &&
-      task.data_agendada <= weekEndISO,
-    );
+  const scheduleStatus = (task: PlanningTask) => {
+    const required =
+      task.origem === "plano" ? execucoesEsperadasNaSemana(task, weekDates) : 1;
+    const scheduled =
+      task.origem === "plano"
+        ? (blocksByTask.get(task.id)?.length ?? 0)
+        : task.data_agendada &&
+            task.hora_inicio &&
+            task.duracao_minutos &&
+            task.data_agendada >= weekStartISO &&
+            task.data_agendada <= weekEndISO
+          ? 1
+          : 0;
+    return {
+      required,
+      scheduled,
+      missing: Math.max(0, required - scheduled),
+      complete: scheduled >= required,
+    };
   };
 
   const actionsWithoutSchedule = selectedTasks.filter(
-    (task) => !isScheduledInWeek(task),
+    (task) => !scheduleStatus(task).complete,
   );
+  const missingExecutions = selectedTasks.reduce(
+    (total, task) => total + scheduleStatus(task).missing,
+    0,
+  );
+
+  const suggestedScheduleDate = (taskId: string) => {
+    const blocks = blocksByTask.get(taskId) ?? [];
+    if (blocks.length === 0) return weekStartISO;
+    const lastDate = blocks[blocks.length - 1].data;
+    const nextDate = iso(addDays(new Date(`${lastDate}T12:00:00`), 1));
+    return nextDate <= weekEndISO ? nextDate : lastDate;
+  };
 
   const completed =
     ownPlanTasks.filter((task) => task.concluida).length +
@@ -390,7 +415,7 @@ export default function WeeklyPlanningPage() {
   const save = () => {
     if (actionsWithoutSchedule.length > 0) {
       toast.error(
-        "Defina dia, horário e duração de todas as ações escolhidas antes de confirmar.",
+        `Ainda faltam ${missingExecutions} ${missingExecutions === 1 ? "execução" : "execuções"} no calendário.`,
       );
       return;
     }
@@ -564,6 +589,7 @@ export default function WeeklyPlanningPage() {
                   const isComplementary = state.complementaryIds.includes(
                     task.id,
                   );
+                  const expectedBlocks = scheduleStatus(task).required;
                   const quadrant = actionQuadrant(task);
                   const style = QUADRANT_STYLE[quadrant];
                   return (
@@ -621,6 +647,11 @@ export default function WeeklyPlanningPage() {
                             <span className="text-muted-foreground">
                               Score {task.priorityScore}
                             </span>
+                            {expectedBlocks > 1 && (
+                              <span className="rounded-full bg-[var(--brand-accent-soft)] px-2 py-1 text-[var(--brand-primary)]">
+                                {expectedBlocks} blocos nesta semana
+                              </span>
+                            )}
                           </div>
                           <div className="mt-4 flex flex-wrap gap-2">
                             <Button
@@ -719,7 +750,8 @@ export default function WeeklyPlanningPage() {
                       </div>
                       <div className="space-y-3">
                         {group.tasks.map((task, index) => {
-                          const scheduled = isScheduledInWeek(task);
+                          const status = scheduleStatus(task);
+                          const scheduled = status.complete;
                           const blocks =
                             task.origem === "plano"
                               ? (blocksByTask.get(task.id) ?? [])
@@ -745,6 +777,21 @@ export default function WeeklyPlanningPage() {
                                     <div className="mt-1 text-xs text-muted-foreground">
                                       {task.plano} · {actionQuadrant(task)}
                                     </div>
+                                    <div
+                                      className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                                        status.complete
+                                          ? "bg-[var(--color-green-bg)] text-[var(--color-green)]"
+                                          : "bg-[var(--brand-accent-soft)] text-[var(--brand-primary)]"
+                                      }`}
+                                    >
+                                      {status.complete && (
+                                        <Check className="h-3 w-3" />
+                                      )}
+                                      {status.scheduled} de {status.required}{" "}
+                                      {status.required === 1
+                                        ? "execução agendada"
+                                        : "execuções agendadas"}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -765,14 +812,21 @@ export default function WeeklyPlanningPage() {
                                 )}
 
                                 {task.origem === "plano" &&
-                                  blocks.length === 0 && (
+                                  status.missing > 0 && (
                                     <Button
                                       type="button"
                                       size="sm"
+                                      variant={
+                                        blocks.length > 0
+                                          ? "outline"
+                                          : "default"
+                                      }
                                       onClick={() => setAgendarPlano({ task })}
                                     >
                                       <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                                      Definir dia e horário
+                                      {blocks.length === 0
+                                        ? "Agendar 1ª execução"
+                                        : `Agendar próxima · faltam ${status.missing}`}
                                     </Button>
                                   )}
                               </div>
@@ -818,10 +872,9 @@ export default function WeeklyPlanningPage() {
 
               {actionsWithoutSchedule.length > 0 && (
                 <div className="mt-4 rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-3 text-xs text-[var(--brand-primary)]">
-                  Faltam horários para {actionsWithoutSchedule.length}{" "}
-                  {actionsWithoutSchedule.length === 1 ? "ação" : "ações"} do
-                  planejamento. Defina os blocos acima para liberar a
-                  confirmação.
+                  Ainda faltam {missingExecutions}{" "}
+                  {missingExecutions === 1 ? "execução" : "execuções"} no
+                  calendário. Defina os blocos acima para liberar a confirmação.
                 </div>
               )}
             </Panel>
@@ -911,12 +964,23 @@ export default function WeeklyPlanningPage() {
           open={!!agendarPlano}
           onOpenChange={(value) => !value && setAgendarPlano(null)}
           tarefa={agendarPlano?.task ?? null}
-          dataInicial={agendarPlano?.block?.data ?? weekStartISO}
+          dataInicial={
+            agendarPlano?.block?.data ??
+            (agendarPlano
+              ? suggestedScheduleDate(agendarPlano.task.id)
+              : weekStartISO)
+          }
           dataMin={weekStartISO}
           dataMax={weekEndISO}
           agendamentoId={agendarPlano?.block?.id}
           horaInicial={agendarPlano?.block?.hora_inicio}
           duracaoInicial={agendarPlano?.block?.duracao_minutos}
+          agendadasNaSemana={
+            agendarPlano ? scheduleStatus(agendarPlano.task).scheduled : 0
+          }
+          execucoesNecessarias={
+            agendarPlano ? scheduleStatus(agendarPlano.task).required : 1
+          }
         />
       </div>
     </AppShell>
