@@ -5,6 +5,8 @@ import {
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
   diasRecorrenciaPersistida,
+  execucoesEsperadasNaSemana,
+  execucoesPlanejadasPorPeriodo,
   labelMomentoRecorrencia,
   formatDuracao,
   formatTotalHoras,
@@ -133,5 +135,40 @@ describe("recorrências da agenda", () => {
     expect(diasRecorrenciaPersistida("diaria", null)).toEqual([1, 2, 3, 4, 5]);
     expect(diasRecorrenciaPersistida("semanal", null)).toEqual([1]);
     expect(diasRecorrenciaPersistida("mensal", null)).toEqual([1]);
+  });
+
+  it("separa volume de resultado da quantidade de blocos na agenda", () => {
+    expect(execucoesPlanejadasPorPeriodo({ execucoes_planejadas: 7 })).toBe(7);
+    expect(execucoesPlanejadasPorPeriodo({ execucoes_planejadas: null })).toBe(
+      1,
+    );
+  });
+
+  it("multiplica execuções diárias pelos dias escolhidos da semana", () => {
+    const semana = [
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-26",
+      "2026-08-27",
+      "2026-08-28",
+      "2026-08-29",
+      "2026-08-30",
+    ];
+    expect(
+      execucoesEsperadasNaSemana(
+        {
+          frequencia: "diaria",
+          execucoes_planejadas: 1,
+          dias_semana: [1, 2, 3, 4, 5],
+        },
+        semana,
+      ),
+    ).toBe(5);
+    expect(
+      execucoesEsperadasNaSemana(
+        { frequencia: "semanal", execucoes_planejadas: 7 },
+        semana,
+      ),
+    ).toBe(7);
   });
 });
