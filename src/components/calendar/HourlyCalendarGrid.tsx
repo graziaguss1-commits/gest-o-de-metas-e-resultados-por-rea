@@ -1,3 +1,4 @@
+import { MoreHorizontal } from "lucide-react";
 import type { Agendamento } from "@/lib/agenda";
 import type { Compromisso } from "@/hooks/useCompromissos";
 import type { ActionItem } from "@/hooks/useActions";
@@ -8,7 +9,10 @@ const START = 6;
 const END = 22;
 const SLOT = 30;
 const SLOT_HEIGHT = 44;
-const slots = Array.from({ length: (END - START) * 2 }, (_, i) => START * 60 + i * SLOT);
+const slots = Array.from(
+  { length: (END - START) * 2 },
+  (_, i) => START * 60 + i * SLOT,
+);
 const time = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 const minutesOf = (value: string) => {
@@ -30,6 +34,9 @@ type Props = {
   onMoveAction: (id: string, data: string, hora: string) => void;
   onMoveStandaloneAction: (id: string, data: string, hora: string) => void;
   onMoveCommitment: (id: string, data: string, hora: string) => void;
+  onOpenAction: (id: string) => void;
+  onOpenStandaloneAction: (id: string) => void;
+  onOpenCommitment: (id: string) => void;
   onOpenDay: (data: string) => void;
 };
 
@@ -42,6 +49,9 @@ export function HourlyCalendarGrid({
   onMoveAction,
   onMoveStandaloneAction,
   onMoveCommitment,
+  onOpenAction,
+  onOpenStandaloneAction,
+  onOpenCommitment,
   onOpenDay,
 }: Props) {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -63,6 +73,11 @@ export function HourlyCalendarGrid({
       // Arrastes externos são ignorados.
     }
   };
+  const openWithKeyboard = (event: React.KeyboardEvent, onOpen: () => void) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onOpen();
+  };
 
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
@@ -80,7 +95,9 @@ export function HourlyCalendarGrid({
             <div className="text-[10px] font-bold uppercase text-muted-foreground">
               {day.toLocaleDateString("pt-BR", { weekday: "short" })}
             </div>
-            <div className="font-display text-xl font-semibold">{day.getDate()}</div>
+            <div className="font-display text-xl font-semibold">
+              {day.getDate()}
+            </div>
           </button>
         ))}
 
@@ -127,7 +144,8 @@ export function HourlyCalendarGrid({
                 const task = taskById.get(item.tarefa_id);
                 if (!task) return null;
                 const top =
-                  ((minutesOf(item.hora_inicio) - START * 60) / SLOT) * SLOT_HEIGHT;
+                  ((minutesOf(item.hora_inicio) - START * 60) / SLOT) *
+                  SLOT_HEIGHT;
                 const height = Math.max(
                   34,
                   (item.duracao_minutos / SLOT) * SLOT_HEIGHT,
@@ -135,13 +153,21 @@ export function HourlyCalendarGrid({
                 return (
                   <div
                     draggable
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenAction(item.id)}
+                    onKeyDown={(event) =>
+                      openWithKeyboard(event, () => onOpenAction(item.id))
+                    }
                     onDragStart={(event) =>
                       drag(event, { kind: "acao", id: item.id })
                     }
                     key={item.id}
-                    className="absolute left-1 right-1 z-10 cursor-grab overflow-hidden rounded-lg border border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)] p-2 shadow-sm active:cursor-grabbing"
+                    className="absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)] p-2 pr-6 shadow-sm active:cursor-grabbing"
                     style={{ top, height }}
+                    title="Clique para editar ou excluir. Arraste para reagendar."
                   >
+                    <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--brand-primary)]">
                       {hhmm(item.hora_inicio)}–
                       {horaFim(hhmm(item.hora_inicio), item.duracao_minutos)}
@@ -162,13 +188,23 @@ export function HourlyCalendarGrid({
                 return (
                   <div
                     draggable
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenStandaloneAction(action.id)}
+                    onKeyDown={(event) =>
+                      openWithKeyboard(event, () =>
+                        onOpenStandaloneAction(action.id),
+                      )
+                    }
                     onDragStart={(event) =>
                       drag(event, { kind: "acao-avulsa", id: action.id })
                     }
                     key={action.id}
-                    className={`absolute left-1 right-1 z-10 cursor-grab overflow-hidden rounded-lg border border-[var(--color-green)]/35 bg-[var(--color-green-bg)] p-2 shadow-sm active:cursor-grabbing ${action.concluida ? "opacity-60" : ""}`}
+                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--color-green)]/35 bg-[var(--color-green-bg)] p-2 pr-6 shadow-sm active:cursor-grabbing ${action.concluida ? "opacity-60" : ""}`}
                     style={{ top, height }}
+                    title="Clique para editar ou excluir. Arraste para reagendar."
                   >
+                    <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--color-green)]">
                       {hhmm(start)}–{horaFim(hhmm(start), duration)}
                     </div>
@@ -188,17 +224,30 @@ export function HourlyCalendarGrid({
                 const start = minutesOf(commitment.hora_inicio);
                 const end = minutesOf(commitment.hora_fim);
                 const top = ((start - START * 60) / SLOT) * SLOT_HEIGHT;
-                const height = Math.max(34, ((end - start) / SLOT) * SLOT_HEIGHT);
+                const height = Math.max(
+                  34,
+                  ((end - start) / SLOT) * SLOT_HEIGHT,
+                );
                 return (
                   <div
                     draggable
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenCommitment(commitment.id)}
+                    onKeyDown={(event) =>
+                      openWithKeyboard(event, () =>
+                        onOpenCommitment(commitment.id),
+                      )
+                    }
                     onDragStart={(event) =>
                       drag(event, { kind: "compromisso", id: commitment.id })
                     }
                     key={commitment.id}
-                    className="absolute left-1 right-1 z-10 cursor-grab overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-2 shadow-sm active:cursor-grabbing"
+                    className="absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-2 pr-6 shadow-sm active:cursor-grabbing"
                     style={{ top, height }}
+                    title="Clique para excluir. Arraste para reagendar."
                   >
+                    <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <div className="text-[10px] font-bold text-[var(--brand-accent)]">
                       {hhmm(commitment.hora_inicio)}–{hhmm(commitment.hora_fim)}
                     </div>
@@ -216,7 +265,8 @@ export function HourlyCalendarGrid({
         })}
       </div>
       <div className="border-t p-2 text-center text-[10px] text-muted-foreground">
-        Arraste um bloco para outro dia ou horário. Cada linha representa 30 minutos.
+        Clique em um bloco para editar ou excluir. Arraste para outro dia ou
+        horário. Cada linha representa 30 minutos.
       </div>
     </div>
   );

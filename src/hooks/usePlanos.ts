@@ -35,7 +35,9 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
 
   const { data: meta, error: metaError } = await supabase
     .from("metas")
-    .select("metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status")
+    .select(
+      "metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status",
+    )
     .eq("id", metaId)
     .maybeSingle();
   if (metaError || !meta) return;
@@ -61,8 +63,13 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
   }
 
   const concluidas = ids.filter((planoId) => {
-    const tarefasDoPlano = tarefas.filter((tarefa) => tarefa.plano_id === planoId);
-    return tarefasDoPlano.length > 0 && tarefasDoPlano.every((tarefa) => tarefa.concluida);
+    const tarefasDoPlano = tarefas.filter(
+      (tarefa) => tarefa.plano_id === planoId,
+    );
+    return (
+      tarefasDoPlano.length > 0 &&
+      tarefasDoPlano.every((tarefa) => tarefa.concluida)
+    );
   }).length;
   const total = ids.length;
 
@@ -113,9 +120,17 @@ export function usePlanos() {
         { data: vinculos, error: vinculosError },
         { data: diretorio, error: diretorioError },
       ] = await Promise.all([
-        supabase.from("planos_acao").select("*").order("created_at", { ascending: false }),
-        supabase.from("plano_tarefas").select("*").order("ordem", { ascending: true }),
-        supabase.from("metas").select("id, nome, status, area, metric_type, unidade"),
+        supabase
+          .from("planos_acao")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("plano_tarefas")
+          .select("*")
+          .order("ordem", { ascending: true }),
+        supabase
+          .from("metas")
+          .select("id, nome, status, area, metric_type, unidade"),
         supabase.from("meta_responsaveis").select("meta_id, user_id"),
         supabase.rpc("get_team_directory"),
       ]);
@@ -125,7 +140,10 @@ export function usePlanos() {
       if (diretorioError) throw diretorioError;
 
       const membroPorId = new Map(
-        ((diretorio ?? []) as MembroResumo[]).map((membro) => [membro.id, membro]),
+        ((diretorio ?? []) as MembroResumo[]).map((membro) => [
+          membro.id,
+          membro,
+        ]),
       );
       const responsaveisPorMeta = new Map<string, MembroResumo[]>();
       (vinculos ?? []).forEach((vinculo) => {
@@ -151,15 +169,19 @@ export function usePlanos() {
       const resultado = (planos ?? []).map((p) => ({
         ...(p as Plano),
         meta: p.meta_id
-          ? (metaById.get(p.meta_id) as PlanoWithMeta["meta"]) ?? null
+          ? ((metaById.get(p.meta_id) as PlanoWithMeta["meta"]) ?? null)
           : null,
         tarefas: tarefasByPlano.get(p.id) ?? [],
       }));
 
       const metasDeProjeto = (metas ?? [])
-        .filter((meta) => meta.metric_type === "projeto" || meta.unidade === "etapas")
+        .filter(
+          (meta) => meta.metric_type === "projeto" || meta.unidade === "etapas",
+        )
         .map((meta) => meta.id);
-      await Promise.all(metasDeProjeto.map((metaId) => sincronizarEtapasDaMeta(metaId)));
+      await Promise.all(
+        metasDeProjeto.map((metaId) => sincronizarEtapasDaMeta(metaId)),
+      );
       return resultado;
     },
   });
@@ -172,10 +194,15 @@ export function useExecucoes() {
     queryFn: async (): Promise<Execucao[]> => {
       const { data, error } = await supabase
         .from("tarefa_execucoes")
-        .select("id, tarefa_id, data_referencia, quantidade, observacao, tempo_real_minutos")
+        .select(
+          "id, tarefa_id, data_referencia, quantidade, observacao, tempo_real_minutos",
+        )
         .order("data_referencia", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((e) => ({ ...e, quantidade: Number(e.quantidade) })) as Execucao[];
+      return (data ?? []).map((e) => ({
+        ...e,
+        quantidade: Number(e.quantidade),
+      })) as Execucao[];
     },
   });
 }
@@ -210,7 +237,6 @@ export type NovoTarefaInput = {
   horario_preferencial?: string | null;
   dias_semana?: number[] | null;
 };
-
 
 export type NovoPlanoInput = {
   titulo: string;
@@ -256,9 +282,10 @@ export function useCreatePlano() {
           dias_semana: t.dias_semana ?? null,
         }));
 
-
       if (taskRows.length > 0) {
-        const { error: tErr } = await supabase.from("plano_tarefas").insert(taskRows);
+        const { error: tErr } = await supabase
+          .from("plano_tarefas")
+          .insert(taskRows);
         if (tErr) throw tErr;
       }
       await sincronizarEtapasDaMeta(input.meta_id);
@@ -291,8 +318,12 @@ export function useUpdatePlano() {
         .eq("id", id);
       if (error) throw error;
 
-      const metasAfetadas = [...new Set([metaAnterior, meta_id].filter(Boolean))] as string[];
-      await Promise.all(metasAfetadas.map((meta) => sincronizarEtapasDaMeta(meta)));
+      const metasAfetadas = [
+        ...new Set([metaAnterior, meta_id].filter(Boolean)),
+      ] as string[];
+      await Promise.all(
+        metasAfetadas.map((meta) => sincronizarEtapasDaMeta(meta)),
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PLANOS_KEY });
@@ -304,7 +335,13 @@ export function useUpdatePlano() {
 export function useToggleTarefa() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, concluida }: { id: string; concluida: boolean }) => {
+    mutationFn: async ({
+      id,
+      concluida,
+    }: {
+      id: string;
+      concluida: boolean;
+    }) => {
       const { data: tarefa } = await supabase
         .from("plano_tarefas")
         .select("plano_id")
@@ -328,7 +365,9 @@ export function useToggleTarefa() {
           PLANOS_KEY,
           prev.map((p) => ({
             ...p,
-            tarefas: p.tarefas.map((t) => (t.id === id ? { ...t, concluida } : t)),
+            tarefas: p.tarefas.map((t) =>
+              t.id === id ? { ...t, concluida } : t,
+            ),
           })),
         );
       }
@@ -406,7 +445,9 @@ export function useUpdateTarefa() {
     }) => {
       const { data: anterior, error: readError } = await supabase
         .from("plano_tarefas")
-        .select("frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana,responsavel_id")
+        .select(
+          "frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana,responsavel_id",
+        )
         .eq("id", id)
         .single();
       if (readError) throw readError;
@@ -416,11 +457,16 @@ export function useUpdateTarefa() {
       const diasAnteriores = JSON.stringify(anterior.dias_semana ?? null);
       const diasNovos = JSON.stringify(patch.dias_semana ?? null);
       const agendaMudou =
-        (patch.frequencia !== undefined && patch.frequencia !== anterior.frequencia) ||
-        (patch.data_inicio !== undefined && patch.data_inicio !== anterior.data_inicio) ||
-        (patch.data_fim !== undefined && patch.data_fim !== anterior.data_fim) ||
-        (patch.duracao_minutos !== undefined && patch.duracao_minutos !== anterior.duracao_minutos) ||
-        (patch.horario_preferencial !== undefined && horaNova !== horaAnterior) ||
+        (patch.frequencia !== undefined &&
+          patch.frequencia !== anterior.frequencia) ||
+        (patch.data_inicio !== undefined &&
+          patch.data_inicio !== anterior.data_inicio) ||
+        (patch.data_fim !== undefined &&
+          patch.data_fim !== anterior.data_fim) ||
+        (patch.duracao_minutos !== undefined &&
+          patch.duracao_minutos !== anterior.duracao_minutos) ||
+        (patch.horario_preferencial !== undefined &&
+          horaNova !== horaAnterior) ||
         (patch.dias_semana !== undefined && diasNovos !== diasAnteriores);
       const responsavelMudou =
         patch.responsavel_id !== undefined &&
@@ -432,7 +478,10 @@ export function useUpdateTarefa() {
         );
       }
 
-      const { error } = await supabase.from("plano_tarefas").update(patch).eq("id", id);
+      const { error } = await supabase
+        .from("plano_tarefas")
+        .update(patch)
+        .eq("id", id);
       if (error) throw error;
 
       if (agendaMudou) {
@@ -443,7 +492,7 @@ export function useUpdateTarefa() {
           .from("tarefa_agendamentos")
           .delete()
           .eq("tarefa_id", id)
-          .eq("observacao", "Gerado pela recorrência")
+          .in("observacao", ["Gerado pela recorrência", "Ocorrência cancelada"])
           .gte("data", hoje);
         if (agendaError) throw agendaError;
       }
@@ -493,13 +542,15 @@ export function useRegistrarExecucao() {
   });
 }
 
-
 export function useDeletePlano() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const metaId = await metaIdDoPlano(id);
-      const { error } = await supabase.from("planos_acao").delete().eq("id", id);
+      const { error } = await supabase
+        .from("planos_acao")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
       await sincronizarEtapasDaMeta(metaId);
     },
