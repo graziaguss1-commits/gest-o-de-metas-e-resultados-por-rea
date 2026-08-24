@@ -12,11 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DuracaoPicker } from "@/components/planos/DuracaoPicker";
+import { AgendaDiaPreview } from "@/components/calendar/AgendaDiaPreview";
+import { useAgendaDoDia } from "@/hooks/useAgendaDoDia";
+import { useScheduleAction, type ActionItem } from "@/hooks/useActions";
 import {
-  useScheduleAction,
-  type ActionItem,
-} from "@/hooks/useActions";
-import { formatDuracao, hhmm, horaFim } from "@/lib/agenda";
+  formatDuracao,
+  hhmm,
+  horaFim,
+  intervalosConflitam,
+} from "@/lib/agenda";
 import { todayISO } from "@/lib/metas";
 
 type Props = {
@@ -40,16 +44,32 @@ export function AgendarAcaoAvulsaModal({
   const [data, setData] = useState("");
   const [hora, setHora] = useState("09:00");
   const [duracao, setDuracao] = useState<number | null>(null);
+  const { blocos, isLoading: agendaLoading } = useAgendaDoDia(data, {
+    excluirAcaoId: action?.id,
+  });
+  const conflito =
+    duracao && hora
+      ? blocos.find((bloco) =>
+          intervalosConflitam(
+            hora,
+            horaFim(hora, duracao),
+            bloco.inicio,
+            bloco.fim,
+          ),
+        )
+      : undefined;
 
   useEffect(() => {
     if (!open) return;
     const dataExistente = action?.data_agendada;
     const dentroDaSemana = Boolean(
       dataExistente &&
-        (!dataMin || dataExistente >= dataMin) &&
-        (!dataMax || dataExistente <= dataMax),
+      (!dataMin || dataExistente >= dataMin) &&
+      (!dataMax || dataExistente <= dataMax),
     );
-    setData(dentroDaSemana ? dataExistente! : dataInicial ?? dataMin ?? todayISO());
+    setData(
+      dentroDaSemana ? dataExistente! : (dataInicial ?? dataMin ?? todayISO()),
+    );
     setHora(hhmm(action?.hora_inicio ?? "") || "09:00");
     setDuracao(action?.duracao_minutos ?? null);
   }, [open, action, dataInicial, dataMin, dataMax]);
@@ -59,11 +79,19 @@ export function AgendarAcaoAvulsaModal({
     if (!action) return;
     if (!data) return toast.error("Escolha o dia da execução.");
     if ((dataMin && data < dataMin) || (dataMax && data > dataMax)) {
-      return toast.error("Escolha um dia dentro da semana que está sendo planejada.");
+      return toast.error(
+        "Escolha um dia dentro da semana que está sendo planejada.",
+      );
     }
     if (!hora) return toast.error("Escolha o horário de início.");
     if (!duracao || duracao <= 0) {
       return toast.error("Informe quanto tempo esta ação deve ocupar.");
+    }
+    if (agendaLoading) return toast.error("Aguarde sua agenda carregar.");
+    if (conflito) {
+      return toast.error(
+        `Esse horário conflita com ${conflito.titulo} (${conflito.inicio}–${conflito.fim}).`,
+      );
     }
 
     try {
@@ -81,63 +109,93 @@ export function AgendarAcaoAvulsaModal({
       onOpenChange(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível agendar a prioridade",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível agendar a prioridade",
       );
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[920px]">
         <DialogHeader>
           <DialogTitle>
-            {action?.data_agendada ? "Reagendar prioridade" : "Colocar na semana"}
+            {action?.data_agendada
+              ? "Reagendar prioridade"
+              : "Colocar na semana"}
           </DialogTitle>
           <DialogDescription>
-            {action?.descricao} — transforme esta prioridade em um bloco protegido na agenda.
+            {action?.descricao} — escolha a data e confira sua agenda antes de
+            reservar o horário.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="avulsa-data">Dia da execução</Label>
-              <Input
-                id="avulsa-data"
-                type="date"
-                value={data}
-                min={dataMin}
-                max={dataMax}
-                onChange={(event) => setData(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="avulsa-hora">Horário de início</Label>
-              <Input
-                id="avulsa-hora"
-                type="time"
-                value={hora}
-                onChange={(event) => setHora(event.target.value)}
-              />
-            </div>
-          </div>
+        <form onSubmit={submit} className="space-y-5">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_370px]">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="avulsa-data">Dia da execução</Label>
+                  <Input
+                    id="avulsa-data"
+                    type="date"
+                    value={data}
+                    min={dataMin}
+                    max={dataMax}
+                    onChange={(event) => setData(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="avulsa-hora">Horário de início</Label>
+                  <Input
+                    id="avulsa-hora"
+                    type="time"
+                    value={hora}
+                    onChange={(event) => setHora(event.target.value)}
+                  />
+                </div>
+              </div>
 
-          <div className="space-y-1.5">
-            <Label>Tempo reservado</Label>
-            <DuracaoPicker value={duracao} onChange={setDuracao} allowEmpty={false} />
-          </div>
+              <div className="space-y-1.5">
+                <Label>Tempo reservado</Label>
+                <DuracaoPicker
+                  value={duracao}
+                  onChange={setDuracao}
+                  allowEmpty={false}
+                />
+              </div>
 
-          {duracao ? (
-            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-              Bloco na agenda:{" "}
-              <strong>
-                {hora}–{horaFim(hora, duracao)}
-              </strong>{" "}
-              <span className="text-muted-foreground">
-                ({formatDuracao(duracao)})
-              </span>
+              {duracao ? (
+                <div
+                  className={`rounded-lg border p-3 text-sm ${
+                    conflito
+                      ? "border-[var(--color-red)]/40 bg-[var(--color-red-bg)]"
+                      : "bg-muted/30"
+                  }`}
+                >
+                  Bloco selecionado:{" "}
+                  <strong>
+                    {hora}–{horaFim(hora, duracao)}
+                  </strong>{" "}
+                  <span className="text-muted-foreground">
+                    ({formatDuracao(duracao)})
+                  </span>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+
+            <AgendaDiaPreview
+              data={data}
+              hora={hora}
+              duracao={duracao}
+              tituloNovoBloco={action?.descricao ?? "Nova prioridade"}
+              blocos={blocos}
+              isLoading={agendaLoading}
+              conflito={conflito}
+              onSelectHora={setHora}
+            />
+          </div>
 
           <DialogFooter className="gap-2">
             <Button
@@ -150,7 +208,9 @@ export function AgendarAcaoAvulsaModal({
             <Button
               type="submit"
               className="brand-button"
-              disabled={schedule.isPending}
+              disabled={
+                schedule.isPending || agendaLoading || Boolean(conflito)
+              }
             >
               {schedule.isPending
                 ? "Salvando…"
