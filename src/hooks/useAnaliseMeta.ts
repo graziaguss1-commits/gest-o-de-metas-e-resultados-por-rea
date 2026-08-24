@@ -1,12 +1,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Lancamento, MetaWithResponsavel } from "@/lib/metas";
+import { getEdgeFunctionErrorMessage } from "@/lib/edgeFunctions";
 
 export type AnaliseIA = {
   diagnostico: string;
   acoes: { titulo: string; contexto: string }[];
   previsao_final: number;
   vai_bater: boolean;
+  provider?: "anthropic";
+  model?: string;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    custo_estimado_usd: number;
+  };
+  gerado_em?: string;
 };
 
 export function useAnaliseMeta() {
@@ -65,7 +74,14 @@ export function useAnaliseMeta() {
           planos,
         },
       });
-      if (error) throw error;
+      if (error) {
+        const message = await getEdgeFunctionErrorMessage(
+          error,
+          data,
+          "Não foi possível gerar a análise com o Claude.",
+        );
+        throw new Error(message);
+      }
       if ((data as { error?: string })?.error) {
         throw new Error((data as { error: string }).error);
       }

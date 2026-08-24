@@ -1,70 +1,69 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  authenticateRequest,
+  createServiceClient,
+  errorResponse,
+  jsonResponse,
+  normalizeService,
+  optionsResponse,
+  readJsonBody,
+  HttpError,
+} from "../_shared/common.ts";
+import {
+  ANTHROPIC_MODEL,
+  ANTHROPIC_MODEL_LABEL,
+  validateAnthropicKey,
+} from "../_shared/anthropic.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-// Generic validator stub — projects that remix this template should extend it
-// with concrete per-service test calls. Returns 'valid' if a key exists in vault.
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return optionsResponse();
+  if (req.method !== "POST") return jsonResponse({ error: "Método não permitido" }, 405);
 
   try {
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response(JSON.stringify({ status: "error" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-    const { data: u } = await admin.auth.getUser(authHeader.replace("Bearer ", ""));
-    const user = u?.user;
-    if (!user) return new Response(JSON.stringify({ status: "error" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const { user } = await authenticateRequest(req, true);
+    const body = await readJsonBody(req);
+    const service = normalizeService(body.service_name);
+    const serviceClient = createServiceClient();
+
+    const { data: apiKey, error: readError } = await serviceClient.rpc("read_user_api_key", {
+      p_user_id: user.id,
+      p_service_name: service,
     });
 
-    const { service_name } = await req.json();
-    if (!service_name) return new Response(JSON.stringify({ status: "error" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (readError) {
+      throw new HttpError(500, "Não foi possível consultar a chave armazenada.", "vault_read_failed");
+    }
+    if (!apiKey) {
+      return jsonResponse({ status: "unconfigured", error: "Nenhuma chave da Anthropic foi configurada." });
+    }
 
-    const { data: row } = await admin
+    try {
+      await validateAnthropicKey(String(apiKey));
+    } catch (error) {
+      if (error instanceof HttpError && error.code === "invalid_api_key") {
+        await serviceClient
+          .from("api_keys_registry")
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .eq("service_name", service);
+        return jsonResponse({ status: "invalid", error: error.message });
+      }
+      throw error;
+    }
+
+    await serviceClient
       .from("api_keys_registry")
-      .select("vault_secret_id, is_active")
+      .update({ is_active: true, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .eq("service_name", service_name)
-      .maybeSingle();
+      .eq("service_name", service);
 
-    if (!row?.vault_secret_id) {
-      return new Response(JSON.stringify({ status: "invalid" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Read decrypted value from vault.decrypted_secrets
-    const { data: secret } = await admin
-      .from("vault.decrypted_secrets" as any)
-      .select("decrypted_secret")
-      .eq("id", row.vault_secret_id)
-      .maybeSingle();
-
-    if (!secret?.decrypted_secret) {
-      return new Response(JSON.stringify({ status: "invalid" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Per-service validation (extend in your project)
-    // For the base template: presence of a non-empty key counts as 'valid'.
-    return new Response(JSON.stringify({ status: "valid" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return jsonResponse({
+      status: "valid",
+      provider: service,
+      model: ANTHROPIC_MODEL,
+      model_label: ANTHROPIC_MODEL_LABEL,
     });
-  } catch (e) {
-    return new Response(JSON.stringify({ status: "error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    return errorResponse(error, "Não foi possível testar a conexão com a Anthropic.");
   }
 });
+
