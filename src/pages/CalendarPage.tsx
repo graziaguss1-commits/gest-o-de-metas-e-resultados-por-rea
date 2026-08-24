@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   CalendarClock,
   CheckCircle2,
@@ -17,6 +18,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   usePlanos,
+  useExecucoes,
+  useRegistrarExecucao,
   useToggleTarefa,
   type PlanoWithMeta,
 } from "@/hooks/usePlanos";
@@ -45,7 +48,6 @@ import {
 } from "@/components/calendar/EventoCalendarioModal";
 import { NovoPlanoModal } from "@/components/planos/NovoPlanoModal";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
-import { RegistrarRealizadoModal } from "@/components/planos/RegistrarRealizadoModal";
 import { AgendarAcaoAvulsaModal } from "@/components/actions/AgendarAcaoAvulsaModal";
 import {
   capacidadeDoDia,
@@ -57,6 +59,7 @@ import {
   horaFim,
   totalSemana,
 } from "@/lib/agenda";
+import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
 import type { Tarefa } from "@/lib/metas";
 
 type CalendarTask = PlanoWithMeta["tarefas"][number] & {
@@ -79,28 +82,32 @@ const addDays = (date: Date, amount: number) => {
   d.setDate(d.getDate() + amount);
   return d;
 };
-const weekFromParam = (value: string | null) => {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return startOfWeek(new Date());
+const dateFromParam = (value: string | null) => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return hoje;
   const parsed = new Date(`${value}T12:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? startOfWeek(new Date())
-    : startOfWeek(parsed);
+  if (Number.isNaN(parsed.getTime())) return hoje;
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
 };
 
 export default function CalendarPage() {
   const [searchParams] = useSearchParams();
   const requestedWeek = searchParams.get("semana");
   const { data: planos, isLoading } = usePlanos();
+  const { data: execucoes = [] } = useExecucoes();
   const { user } = useAuth();
   const { data: settings } = useAppSettings();
   const { data: actions = [], isLoading: actionsLoading } = useActions();
   const toggle = useToggleTarefa();
+  const registrarExecucao = useRegistrarExecucao();
   const toggleAction = useToggleAction();
   const scheduleAction = useScheduleAction();
   const reagendar = useReagendarTarefa();
   const materializar = useMaterializarRecorrencias();
-  const [anchor, setAnchor] = useState(() => weekFromParam(requestedWeek));
+  const [anchor, setAnchor] = useState(() => dateFromParam(requestedWeek));
+  const [calendarSpan, setCalendarSpan] = useState<3 | 7>(3);
   const [novoOpen, setNovoOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"horas" | "compacto">(
     "horas",
@@ -109,17 +116,31 @@ export default function CalendarPage() {
   const [compromissoData, setCompromissoData] = useState<string>();
   const atualizarCompromisso = useAtualizarCompromisso();
   const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(anchor, i)),
-    [anchor],
+    () => Array.from({ length: calendarSpan }, (_, i) => addDays(anchor, i)),
+    [anchor, calendarSpan],
   );
-  const weekDates = useMemo(() => days.map(iso), [days]);
-  const { data: agendamentos = [] } = useAgendamentos(
-    iso(days[0]),
-    iso(days[6]),
+  const weekStart = useMemo(() => startOfWeek(anchor), [anchor]);
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    [weekStart],
   );
+  const weekDates = useMemo(() => weekDays.map(iso), [weekDays]);
+  const queryStart = iso(startOfWeek(days[0]));
+  const queryEnd = iso(addDays(startOfWeek(days[days.length - 1]), 6));
+  const queryDates = useMemo(() => {
+    const datas: string[] = [];
+    let atual = new Date(`${queryStart}T12:00:00`);
+    const fim = new Date(`${queryEnd}T12:00:00`);
+    while (atual <= fim) {
+      datas.push(iso(atual));
+      atual = addDays(atual, 1);
+    }
+    return datas;
+  }, [queryStart, queryEnd]);
+  const { data: agendamentos = [] } = useAgendamentos(queryStart, queryEnd);
   const { data: compromissos = [] } = useCompromissos(
-    iso(days[0]),
-    iso(days[6]),
+    queryStart,
+    queryEnd,
   );
 
   const [agendar, setAgendar] = useState<{
@@ -130,10 +151,7 @@ export default function CalendarPage() {
     duracao?: number | null;
   } | null>(null);
   const [agendarAvulsa, setAgendarAvulsa] = useState<ActionItem | null>(null);
-  const [registrar, setRegistrar] = useState<{
-    tarefa: Tarefa;
-    data: string;
-  } | null>(null);
+  const [concluindoId, setConcluindoId] = useState<string | null>(null);
   const [eventoSelecionado, setEventoSelecionado] =
     useState<EventoCalendarioSelecionado | null>(null);
 
@@ -153,19 +171,42 @@ export default function CalendarPage() {
     [planos, user?.id],
   );
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const execucaoPorAgendamento = useMemo(
+    () =>
+      new Map(
+        execucoes
+          .filter((execucao) => execucao.agendamento_id)
+          .map((execucao) => [execucao.agendamento_id as string, execucao]),
+      ),
+    [execucoes],
+  );
+  const inicioSemana = iso(weekDays[0]);
+  const fimSemana = iso(weekDays[6]);
+  const agendamentosDaSemana = useMemo(
+    () =>
+      agendamentos.filter(
+        (item) => item.data >= inicioSemana && item.data <= fimSemana,
+      ),
+    [agendamentos, inicioSemana, fimSemana],
+  );
+  const compromissosDaSemana = useMemo(
+    () =>
+      compromissos.filter(
+        (item) => item.data >= inicioSemana && item.data <= fimSemana,
+      ),
+    [compromissos, inicioSemana, fimSemana],
+  );
   const agendamentosPorTarefa = useMemo(
     () =>
-      agendamentos.reduce((map, agendamento) => {
+      agendamentosDaSemana.reduce((map, agendamento) => {
         map.set(
           agendamento.tarefa_id,
           (map.get(agendamento.tarefa_id) ?? 0) + 1,
         );
         return map;
       }, new Map<string, number>()),
-    [agendamentos],
+    [agendamentosDaSemana],
   );
-  const inicioSemana = iso(days[0]);
-  const fimSemana = iso(days[6]);
   const temRotinaAutomaticaAtiva = (task: CalendarTask) =>
     configuracaoRecorrenciaCompleta(
       task.frequencia,
@@ -202,6 +243,15 @@ export default function CalendarPage() {
       action.data_agendada <= fimSemana,
     ),
   );
+  const scheduledStandaloneInRange = actions.filter((action) =>
+    Boolean(
+      action.data_agendada &&
+      action.hora_inicio &&
+      action.duracao_minutos &&
+      action.data_agendada >= queryStart &&
+      action.data_agendada <= queryEnd,
+    ),
+  );
   const standaloneToSchedule = actions.filter(
     (action) =>
       !action.concluida &&
@@ -212,8 +262,8 @@ export default function CalendarPage() {
   );
   const semAgendamento =
     availableToSchedule.length + standaloneToSchedule.length;
-  const weekLabel = `${days[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} — ${days[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
-  const minutosCompromissos = compromissos.reduce((total, c) => {
+  const periodLabel = `${days[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} — ${days[days.length - 1].toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
+  const minutosCompromissos = compromissosDaSemana.reduce((total, c) => {
     const [hi, mi] = c.hora_inicio.split(":").map(Number);
     const [hf, mf] = c.hora_fim.split(":").map(Number);
     return total + (hf * 60 + mf - hi * 60 - mi);
@@ -223,7 +273,7 @@ export default function CalendarPage() {
     0,
   );
   const minutosSemana =
-    totalSemana(days.map(iso), agendamentos) +
+    totalSemana(weekDates, agendamentosDaSemana) +
     minutosAvulsos +
     minutosCompromissos;
   const recurrenceSignature = tasks
@@ -234,15 +284,15 @@ export default function CalendarPage() {
     .join("|");
 
   useEffect(() => {
-    if (requestedWeek) setAnchor(weekFromParam(requestedWeek));
+    if (requestedWeek) setAnchor(dateFromParam(requestedWeek));
   }, [requestedWeek]);
 
   useEffect(() => {
     if (!tasks.length) return;
-    materializar.mutate({ tarefas: tasks, datas: days.map(iso) });
+    materializar.mutate({ tarefas: tasks, datas: queryDates });
     // A semana e a configuração das tarefas determinam as ocorrências; o hook evita duplicatas.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor, recurrenceSignature]);
+  }, [queryStart, queryEnd, recurrenceSignature]);
 
   const abrirAcaoDoPlano = (agendamentoId: string) => {
     const agendamento = agendamentos.find((item) => item.id === agendamentoId);
@@ -260,11 +310,48 @@ export default function CalendarPage() {
     if (compromisso) setEventoSelecionado({ tipo: "compromisso", compromisso });
   };
   const dataSugeridaParaTarefa = (taskId: string) => {
-    const blocos = agendamentos.filter((item) => item.tarefa_id === taskId);
+    const blocos = agendamentosDaSemana.filter(
+      (item) => item.tarefa_id === taskId,
+    );
     if (blocos.length === 0) return inicioSemana;
     const ultimaData = blocos[blocos.length - 1].data;
     const proxima = iso(addDays(new Date(`${ultimaData}T12:00:00`), 1));
     return proxima <= fimSemana ? proxima : ultimaData;
+  };
+
+  const marcarAgendamentoComoFeito = async (agendamentoId: string) => {
+    if (execucaoPorAgendamento.has(agendamentoId)) return;
+    const agendamento = agendamentos.find(
+      (item) => item.id === agendamentoId,
+    );
+    const tarefa = agendamento
+      ? taskById.get(agendamento.tarefa_id)
+      : undefined;
+    if (!agendamento || !tarefa) return;
+
+    setConcluindoId(agendamentoId);
+    try {
+      await registrarExecucao.mutateAsync({
+        tarefaId: tarefa.id,
+        agendamentoId,
+        quantidade: quantidadePorExecucao(tarefa),
+        data: agendamento.data,
+      });
+      if (getFrequencia(tarefa) === "unica" && !tarefa.concluida) {
+        await toggle.mutateAsync({ id: tarefa.id, concluida: true });
+      }
+      toast.success(
+        "Execução registrada. O resultado da meta continua separado.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível marcar esta execução como feita.",
+      );
+    } finally {
+      setConcluindoId(null);
+    }
   };
 
   return (
@@ -302,12 +389,14 @@ export default function CalendarPage() {
         <section className="grid gap-3 sm:grid-cols-5">
           <CalendarMetric
             label="Ações agendadas"
-            value={String(agendamentos.length + scheduledStandalone.length)}
+            value={String(
+              agendamentosDaSemana.length + scheduledStandalone.length,
+            )}
             tone="primary"
           />
           <CalendarMetric
             label="Compromissos"
-            value={String(compromissos.length)}
+            value={String(compromissosDaSemana.length)}
             tone="primary"
           />
           <CalendarMetric
@@ -330,10 +419,10 @@ export default function CalendarPage() {
         <section className="performance-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Semana selecionada
+              {calendarSpan === 3 ? "Período selecionado" : "Semana selecionada"}
             </div>
             <div className="mt-1 font-display text-lg font-semibold capitalize">
-              {weekLabel}
+              {periodLabel}
             </div>
             <div className="text-xs text-muted-foreground">
               Capacidade diária configurada: {formatTotalHoras(capacidade)}
@@ -343,27 +432,46 @@ export default function CalendarPage() {
             <Button
               size="icon"
               variant="outline"
-              onClick={() => setAnchor(addDays(anchor, -7))}
+              onClick={() => setAnchor(addDays(anchor, -calendarSpan))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              onClick={() => setAnchor(startOfWeek(new Date()))}
+              onClick={() => setAnchor(dateFromParam(null))}
             >
               Hoje
             </Button>
             <Button
               size="icon"
               variant="outline"
-              onClick={() => setAnchor(addDays(anchor, 7))}
+              onClick={() => setAnchor(addDays(anchor, calendarSpan))}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </section>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <div className="mr-2 flex gap-2 border-r pr-4">
+            <Button
+              size="sm"
+              variant={calendarSpan === 3 ? "default" : "outline"}
+              onClick={() => setCalendarSpan(3)}
+            >
+              3 dias
+            </Button>
+            <Button
+              size="sm"
+              variant={calendarSpan === 7 ? "default" : "outline"}
+              onClick={() => {
+                setCalendarSpan(7);
+                setAnchor(startOfWeek(anchor));
+              }}
+            >
+              Semana
+            </Button>
+          </div>
           <Button
             size="sm"
             variant={calendarView === "horas" ? "default" : "outline"}
@@ -387,6 +495,8 @@ export default function CalendarPage() {
             acoesAvulsas={actions}
             compromissos={compromissos}
             taskById={taskById}
+            completedActionIds={new Set(execucaoPorAgendamento.keys())}
+            completingActionId={concluindoId}
             onOpenDay={(data) => {
               setCompromissoData(data);
               setCompromissoOpen(true);
@@ -394,6 +504,13 @@ export default function CalendarPage() {
             onOpenAction={abrirAcaoDoPlano}
             onOpenStandaloneAction={abrirAcaoAvulsa}
             onOpenCommitment={abrirCompromisso}
+            onMarkActionDone={marcarAgendamentoComoFeito}
+            onToggleStandaloneAction={(id, concluida) =>
+              toggleAction.mutate({ id, concluida })
+            }
+            onToggleCommitment={(id, concluido) =>
+              atualizarCompromisso.mutate({ id, concluido })
+            }
             onMoveAction={(id, data, hora) => {
               const atual = agendamentos.find((item) => item.id === id);
               if (atual)
@@ -438,7 +555,12 @@ export default function CalendarPage() {
           {isLoading || actionsLoading ? (
             <Skeleton className="h-[440px] w-full" />
           ) : (
-            <div className="grid min-w-[900px] grid-cols-7 divide-x overflow-x-auto">
+            <div
+              className={`grid divide-x overflow-x-auto ${calendarSpan === 3 ? "min-w-[720px]" : "min-w-[1050px]"}`}
+              style={{
+                gridTemplateColumns: `repeat(${days.length}, minmax(${calendarSpan === 3 ? "220px" : "145px"}, 1fr))`,
+              }}
+            >
               {days.map((day) => {
                 const dia = iso(day);
                 const blocos = agendamentos
@@ -447,7 +569,7 @@ export default function CalendarPage() {
                 const compromissosDia = compromissos
                   .filter((c) => c.data === dia)
                   .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
-                const avulsasDia = scheduledStandalone
+                const avulsasDia = scheduledStandaloneInRange
                   .filter((action) => action.data_agendada === dia)
                   .sort((a, b) =>
                     (a.hora_inicio ?? "").localeCompare(b.hora_inicio ?? ""),
@@ -637,10 +759,11 @@ export default function CalendarPage() {
                       {blocos.map((bloco) => {
                         const task = taskById.get(bloco.tarefa_id);
                         if (!task) return null;
+                        const concluido = execucaoPorAgendamento.has(bloco.id);
                         return (
                           <div
                             key={bloco.id}
-                            className="rounded-xl border bg-card p-2.5"
+                            className={`rounded-xl border bg-card p-2.5 ${concluido ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : ""}`}
                           >
                             <div className="text-[11px] font-bold tabular-nums text-[var(--brand-primary)]">
                               {hhmm(bloco.hora_inicio)}–
@@ -649,7 +772,9 @@ export default function CalendarPage() {
                                 bloco.duracao_minutos,
                               )}
                             </div>
-                            <div className="mt-0.5 text-xs font-semibold leading-snug">
+                            <div
+                              className={`mt-0.5 text-xs font-semibold leading-snug ${concluido ? "line-through opacity-70" : ""}`}
+                            >
                               {task.descricao}
                             </div>
                             <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -661,15 +786,11 @@ export default function CalendarPage() {
                                 size="sm"
                                 variant="outline"
                                 className="h-6 px-1.5 text-[10px]"
-                                onClick={() =>
-                                  setRegistrar({
-                                    tarefa: task,
-                                    data: bloco.data,
-                                  })
-                                }
+                                disabled={concluido || concluindoId === bloco.id}
+                                onClick={() => marcarAgendamentoComoFeito(bloco.id)}
                               >
                                 <CheckCircle2 className="mr-1 h-3 w-3" />
-                                Registrar
+                                {concluido ? "Feito" : "Marcar feito"}
                               </Button>
                               <Button
                                 size="icon"
@@ -869,12 +990,6 @@ export default function CalendarPage() {
           open={!!agendarAvulsa}
           onOpenChange={(value) => !value && setAgendarAvulsa(null)}
           action={agendarAvulsa}
-        />
-        <RegistrarRealizadoModal
-          open={!!registrar}
-          onOpenChange={(v) => !v && setRegistrar(null)}
-          tarefa={registrar?.tarefa ?? null}
-          dataInicial={registrar?.data}
         />
         <EventoCalendarioModal
           open={!!eventoSelecionado}
