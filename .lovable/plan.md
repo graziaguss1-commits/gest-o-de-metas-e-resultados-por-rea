@@ -1,50 +1,25 @@
-# Modelo de planilha para Google Sheets
+# Usar a Claude (Anthropic) na análise de IA das metas
 
-## Objetivo
-No modal "Conectar Google Sheets" (Integrações), oferecer um botão para baixar uma planilha-modelo (.xlsx) já no formato esperado pela sincronização de metas, para que o usuário só precise preencher e compartilhar.
+Hoje a análise de meta ("Analisar com IA") roda pelo modelo padrão do Lovable AI. Você quer trocar esse motor pela Claude usando sua própria chave da Anthropic.
 
-## Formato proposto da planilha
+## Como vai funcionar
 
-Arquivo: `metasia-modelo-sheets.xlsx`
+1. Sua chave da Anthropic é guardada como segredo do backend (nunca aparece no navegador nem no código). Vou pedir a chave por um campo seguro na hora de implementar.
+2. A função de análise passa a chamar a API da Claude em vez do modelo atual, mantendo exatamente o mesmo formato de resposta: diagnóstico, 3 ações recomendadas, previsão final e veredicto "vai bater".
+3. Nada muda na tela: mesmos botões, mesma exibição do resultado, mesma criação de plano de ação a partir das ações sugeridas.
+4. Mensagens de erro claras em português quando a chave estiver ausente/inválida, sem créditos na Anthropic, ou quando o limite de requisições for atingido.
 
-**Aba 1 — `Metas`** (uma linha por meta acompanhada)
-| Coluna | Exemplo | Observação |
-|---|---|---|
-| `meta_id` | `META-001` | Identificador estável, usado para casar com a meta no app |
-| `nome_meta` | `Vendas Q1` | Apenas referência humana |
-| `unidade` | `R$` / `un` / `%` | Texto livre |
-| `valor_alvo` | `100000` | Número |
-| `is_inverse` | `FALSE` | TRUE quando menor é melhor |
+## Detalhes técnicos
 
-**Aba 2 — `Resultados`** (uma linha por lançamento)
-| Coluna | Exemplo |
-|---|---|
-| `meta_id` | `META-001` |
-| `data` | `2026-01-15` (YYYY-MM-DD) |
-| `valor` | `12500` |
-| `observacao` | texto livre opcional |
+- Novo segredo `ANTHROPIC_API_KEY` no backend.
+- `supabase/functions/analise-meta/index.ts`: substituir a chamada ao gateway por `POST https://api.anthropic.com/v1/messages` com os headers `x-api-key` e `anthropic-version: 2023-06-01`.
+- Modelo: `claude-sonnet-4-5` (última geração Sonnet), com `max_tokens` adequado e `temperature` 0.4.
+- O prompt de sistema atual vai no campo `system`; o prompt do usuário vira uma única mensagem `user`. O parser de JSON e a validação de schema já existentes continuam iguais.
+- Tratamento de status: 401 (chave inválida), 429 (limite), 400/500 (erro upstream) — cada um com mensagem própria em português, seguindo o padrão de erros que a função já usa.
+- Nenhuma migração de banco e nenhuma mudança de layout.
 
-**Aba 3 — `Instruções`**
-- Não renomear/remover colunas nem abas.
-- Compartilhar a planilha como "qualquer pessoa com o link — leitor" (ou com o e-mail de serviço).
-- Colar a URL no campo do modal.
-- Linhas de exemplo (2-3) preenchidas em cada aba, que o usuário substitui.
+## Validação
 
-## Mudanças de implementação
-
-1. **Gerar o arquivo modelo** com `xlsx` (SheetJS) no cliente, sob demanda — sem precisar versionar um binário no repo.
-   - Adicionar dependência: `xlsx`.
-   - Novo util `src/lib/gsheetsTemplate.ts` exportando `downloadGSheetsTemplate()` que monta as 3 abas, formata cabeçalhos e dispara o download via `XLSX.writeFile`.
-
-2. **Atualizar `src/components/settings/GoogleSheetsModal.tsx`**:
-   - Logo abaixo do campo "URL da planilha", adicionar um bloco "Não sabe o formato?" com:
-     - Texto curto explicando o modelo.
-     - Botão secundário `Baixar modelo (.xlsx)` chamando `downloadGSheetsTemplate()`.
-   - Toast de sucesso ao baixar.
-   - Mantém o restante do modal (salvar/desconectar) intacto.
-
-3. Nenhuma mudança de banco, hook ou edge function — é puramente UI + util front-end.
-
-## Fora de escopo
-- Mapeamento real coluna→meta e sincronização efetiva (continuam para a próxima fase, como já indicado no próprio modal).
-- Geração via Google Drive API (criar a planilha direto na conta do usuário) — fica para depois, se desejado.
+- Abrir uma meta → "Analisar com IA" e confirmar que retorna diagnóstico + 3 ações.
+- Verificar os logs da função para confirmar que a chamada foi para a Anthropic.
+- Rodar typecheck e a suíte de testes existente.
