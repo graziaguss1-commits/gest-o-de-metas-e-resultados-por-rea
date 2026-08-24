@@ -195,7 +195,7 @@ export function useExecucoes() {
       const { data, error } = await supabase
         .from("tarefa_execucoes")
         .select(
-          "id, tarefa_id, data_referencia, quantidade, observacao, tempo_real_minutos",
+          "id, tarefa_id, agendamento_id, data_referencia, quantidade, observacao, tempo_real_minutos",
         )
         .order("data_referencia", { ascending: false });
       if (error) throw error;
@@ -518,6 +518,7 @@ export function useRegistrarExecucao() {
       data,
       observacao,
       tempoRealMinutos,
+      agendamentoId,
     }: {
       tarefaId: string;
       quantidade: number;
@@ -525,12 +526,15 @@ export function useRegistrarExecucao() {
       observacao?: string | null;
       /** Tempo real gasto — nunca substitui a estimativa da ação. */
       tempoRealMinutos?: number | null;
+      /** Evita que o mesmo bloco do calendário seja concluído duas vezes. */
+      agendamentoId?: string | null;
     }) => {
       const { data: user } = await supabase.auth.getUser();
       const uid = user.user?.id;
       if (!uid) throw new Error("Sessão expirada — faça login novamente.");
       const { error } = await supabase.from("tarefa_execucoes").insert({
         tarefa_id: tarefaId,
+        agendamento_id: agendamentoId ?? null,
         quantidade,
         data_referencia: data,
         observacao: observacao?.trim() || null,
