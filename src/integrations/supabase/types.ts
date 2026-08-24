@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      acoes_avulsas: {
+        Row: {
+          area: string
+          concluida: boolean
+          created_at: string
+          criado_por: string | null
+          data_agendada: string | null
+          descricao: string
+          duracao_minutos: number | null
+          esforco: number
+          hora_inicio: string | null
+          id: string
+          impacto: number
+          prazo: string | null
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          concluida?: boolean
+          created_at?: string
+          criado_por?: string | null
+          data_agendada?: string | null
+          descricao: string
+          duracao_minutos?: number | null
+          esforco: number
+          hora_inicio?: string | null
+          id?: string
+          impacto: number
+          prazo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          concluida?: boolean
+          created_at?: string
+          criado_por?: string | null
+          data_agendada?: string | null
+          descricao?: string
+          duracao_minutos?: number | null
+          esforco?: number
+          hora_inicio?: string | null
+          id?: string
+          impacto?: number
+          prazo?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_keys_registry: {
         Row: {
           created_at: string | null
@@ -105,9 +153,51 @@ export type Database = {
         Relationships: []
       }
       compromissos: {
-        Row: { area: string; concluido: boolean; created_at: string; criado_por: string | null; data: string; hora_fim: string; hora_inicio: string; id: string; observacao: string | null; titulo: string; updated_at: string }
-        Insert: { area?: string; concluido?: boolean; created_at?: string; criado_por?: string | null; data: string; hora_fim: string; hora_inicio: string; id?: string; observacao?: string | null; titulo: string; updated_at?: string }
-        Update: { area?: string; concluido?: boolean; created_at?: string; criado_por?: string | null; data?: string; hora_fim?: string; hora_inicio?: string; id?: string; observacao?: string | null; titulo?: string; updated_at?: string }
+        Row: {
+          area: string
+          concluido: boolean
+          created_at: string
+          criado_por: string | null
+          data: string
+          hora_fim: string
+          hora_inicio: string
+          id: string
+          observacao: string | null
+          recorrencia: string
+          recorrencia_fim: string | null
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          area?: string
+          concluido?: boolean
+          created_at?: string
+          criado_por?: string | null
+          data: string
+          hora_fim: string
+          hora_inicio: string
+          id?: string
+          observacao?: string | null
+          recorrencia?: string
+          recorrencia_fim?: string | null
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          concluido?: boolean
+          created_at?: string
+          criado_por?: string | null
+          data?: string
+          hora_fim?: string
+          hora_inicio?: string
+          id?: string
+          observacao?: string | null
+          recorrencia?: string
+          recorrencia_fim?: string | null
+          titulo?: string
+          updated_at?: string
+        }
         Relationships: []
       }
       meta_comentarios: {
@@ -267,6 +357,13 @@ export type Database = {
             columns: ["meta_id"]
             isOneToOne: false
             referencedRelation: "metas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_responsaveis_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "metas_with_responsavel"
             referencedColumns: ["id"]
           },
         ]
@@ -652,7 +749,7 @@ export type Database = {
           {
             foreignKeyName: "tarefa_execucoes_agendamento_id_fkey"
             columns: ["agendamento_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "tarefa_agendamentos"
             referencedColumns: ["id"]
           },
@@ -717,32 +814,9 @@ export type Database = {
       }
     }
     Functions: {
-      can_access_meta: { Args: { p_meta_id: string }; Returns: boolean }
-      can_access_plan: { Args: { p_plano_id: string }; Returns: boolean }
-      can_access_task: { Args: { p_tarefa_id: string }; Returns: boolean }
-      criar_meta_com_responsaveis: {
-        Args: { p_meta: Json; p_responsaveis: string[] }
-        Returns: string
-      }
       atualizar_meta_com_responsaveis: {
         Args: { p_meta_id: string; p_patch: Json; p_responsaveis: string[] }
         Returns: undefined
-      }
-      get_team_directory: {
-        Args: never
-        Returns: {
-          avatar_url: string | null
-          full_name: string
-          id: string
-        }[]
-      }
-      is_meta_responsavel: {
-        Args: { p_meta_id: string; p_user_id?: string }
-        Returns: boolean
-      }
-      is_task_responsavel: {
-        Args: { p_tarefa_id: string }
-        Returns: boolean
       }
       calcular_status_meta: {
         Args: {
@@ -754,8 +828,23 @@ export type Database = {
         }
         Returns: string
       }
+      can_access_meta: { Args: { p_meta_id: string }; Returns: boolean }
+      can_access_plan: { Args: { p_plano_id: string }; Returns: boolean }
+      can_access_task: { Args: { p_tarefa_id: string }; Returns: boolean }
+      criar_meta_com_responsaveis: {
+        Args: { p_meta: Json; p_responsaveis: string[] }
+        Returns: string
+      }
       ensure_auth_trigger: { Args: never; Returns: Json }
       get_handle_new_user_def: { Args: never; Returns: string }
+      get_team_directory: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -764,6 +853,11 @@ export type Database = {
         Returns: boolean
       }
       is_active_member: { Args: never; Returns: boolean }
+      is_meta_responsavel: {
+        Args: { p_meta_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      is_task_responsavel: { Args: { p_tarefa_id: string }; Returns: boolean }
       read_vault_secret: { Args: { p_key: string }; Returns: string }
       store_vault_secret: {
         Args: { p_key: string; p_value: string }
