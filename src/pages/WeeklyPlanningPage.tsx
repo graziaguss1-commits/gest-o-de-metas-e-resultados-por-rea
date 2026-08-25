@@ -11,6 +11,7 @@ import {
   Plus,
   RotateCcw,
   Save,
+  Sparkles,
   Star,
   Target,
 } from "lucide-react";
@@ -28,15 +29,28 @@ import {
   useAgendamentos,
   useMaterializarRecorrencias,
 } from "@/hooks/useAgendamentos";
+import { useCompromissos } from "@/hooks/useCompromissos";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import {
+  useAplicarPlanejamentoClaude,
+  useGerarPlanejamentoClaude,
+  type PlanejamentoClaudeResponse,
+  type TarefaPlanejamentoClaude,
+} from "@/hooks/usePlanejamentoClaude";
 import { useAuth } from "@/hooks/useAuth";
 import { AgendarAcaoAvulsaModal } from "@/components/actions/AgendarAcaoAvulsaModal";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { CapacidadeSemana } from "@/components/planos/CapacidadeSemana";
+import {
+  PlanejamentoClaudeModal,
+  type PlanejamentoClaudeDraft,
+} from "@/components/planos/PlanejamentoClaudeModal";
 import { RevisaoIndicadores } from "@/components/metas/RevisaoIndicadores";
 import {
   execucoesEsperadasNaSemana,
   formatDuracao,
   hhmm,
+  horaFim,
   type Agendamento,
 } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
@@ -191,8 +205,11 @@ const scheduleLabel = (block: Agendamento) => {
 export default function WeeklyPlanningPage() {
   const { data: planos } = usePlanos();
   const { data: actions } = useActions();
+  const { data: settings } = useAppSettings();
   const { user } = useAuth();
   const materializar = useMaterializarRecorrencias();
+  const gerarPlanejamento = useGerarPlanejamentoClaude();
+  const aplicarPlanejamento = useAplicarPlanejamentoClaude();
 
   const [step, setStep] = useState(1);
   const [weekStart, setWeekStart] = useState(() => defaultPlanningWeek());
@@ -215,8 +232,15 @@ export default function WeeklyPlanningPage() {
     task: PlanPlanningTask;
     block?: Agendamento;
   } | null>(null);
+  const [claudeOpen, setClaudeOpen] = useState(false);
+  const [claudeSuggestion, setClaudeSuggestion] =
+    useState<PlanejamentoClaudeResponse | null>(null);
 
   const { data: agendamentos = [] } = useAgendamentos(weekStartISO, weekEndISO);
+  const { data: compromissos = [] } = useCompromissos(
+    weekStartISO,
+    weekEndISO,
+  );
 
   useEffect(() => {
     setState(
@@ -226,6 +250,12 @@ export default function WeeklyPlanningPage() {
       ),
     );
     setStep(1);
+    setClaudeOpen(false);
+    setClaudeSuggestion(null);
+    gerarPlanejamento.reset();
+    aplicarPlanejamento.reset();
+    // As mutations são estáveis durante a troca da semana.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStartISO, defaultWeekISO]);
 
   const ownPlanTasks = useMemo(
@@ -356,6 +386,66 @@ export default function WeeklyPlanningPage() {
     0,
   );
 
+  const claudeTasks: TarefaPlanejamentoClaude[] = tasks
+    .filter((task) => !task.id.startsWith("local-"))
+    .map((task) => ({
+      id: task.id,
+      origem: task.origem,
+      descricao: task.descricao,
+      area: task.area,
+      plano: task.plano,
+      meta: task.meta,
+      impacto: task.impacto,
+      esforco: task.esforco,
+      priority_score: task.priorityScore,
+      prazo: task.prazo,
+      duracao_minutos: task.duracao_minutos ?? null,
+      execucoes_faltantes: scheduleStatus(task).missing,
+      horario_preferencial:
+        task.origem === "plano" ? hhmm(task.horario_preferencial) || null : null,
+      dias_semana:
+        task.origem === "plano" ? (task.dias_semana ?? []) : [],
+      selecionada_como: state.priorityIds.includes(task.id)
+        ? "top"
+        : state.complementaryIds.includes(task.id)
+          ? "complementar"
+          : null,
+    }));
+
+  const taskLabelById = new Map(tasks.map((task) => [task.id, task.descricao]));
+  const busyBlocks = [
+    ...agendamentos.map((block) => ({
+      data: block.data,
+      inicio: hhmm(block.hora_inicio),
+      fim: horaFim(hhmm(block.hora_inicio), block.duracao_minutos),
+      titulo: taskLabelById.get(block.tarefa_id) ?? "Ação agendada",
+      tipo: "acao" as const,
+    })),
+    ...(actions ?? [])
+      .filter(
+        (action) =>
+          action.data_agendada &&
+          action.hora_inicio &&
+          action.duracao_minutos &&
+          action.data_agendada >= weekStartISO &&
+          action.data_agendada <= weekEndISO,
+      )
+      .map((action) => ({
+        data: action.data_agendada!,
+        inicio: hhmm(action.hora_inicio),
+        fim: horaFim(hhmm(action.hora_inicio), action.duracao_minutos!),
+        titulo: action.descricao,
+        tipo: "acao" as const,
+      })),
+    ...compromissos.map((commitment) => ({
+      data: commitment.data,
+      inicio: hhmm(commitment.hora_inicio),
+      fim: hhmm(commitment.hora_fim),
+      titulo: commitment.titulo,
+      tipo: "compromisso" as const,
+    })),
+  ];
+
   const suggestedScheduleDate = (taskId: string) => {
     const blocks = blocksByTask.get(taskId) ?? [];
     if (blocks.length === 0) return weekStartISO;
@@ -410,6 +500,87 @@ export default function WeeklyPlanningPage() {
       return;
     }
     selectComplementary(id);
+  };
+
+  const generateWithClaude = async () => {
+    if (!claudeTasks.length) {
+      toast.error(
+        "Não há ações sincronizadas para o Claude planejar. Atualize a página ou crie uma ação primeiro.",
+      );
+      return;
+    }
+
+    gerarPlanejamento.reset();
+    aplicarPlanejamento.reset();
+    setClaudeSuggestion(null);
+    setClaudeOpen(true);
+    try {
+      const suggestion = await gerarPlanejamento.mutateAsync({
+        week_start: weekStartISO,
+        week_end: weekEndISO,
+        capacidade_diaria_minutos:
+          settings?.capacidade_diaria_minutos ?? 480,
+        revisao: {
+          conquistas: state.wins,
+          pendencias: state.pending,
+          aprendizado: state.lesson,
+          foco_atual: state.focus,
+        },
+        tarefas: claudeTasks,
+        blocos_ocupados: busyBlocks,
+      });
+      setClaudeSuggestion(suggestion);
+    } catch {
+      // A mensagem segura da Edge Function é exibida dentro do modal.
+    }
+  };
+
+  const applyClaudePlan = async (draft: PlanejamentoClaudeDraft) => {
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const agenda = draft.agenda.flatMap((item) => {
+      const task = taskById.get(item.task_id);
+      return task
+        ? [{ ...item, origem: task.origem }]
+        : [];
+    });
+
+    try {
+      await aplicarPlanejamento.mutateAsync({
+        weekStart: weekStartISO,
+        weekEnd: weekEndISO,
+        agenda,
+      });
+      const validIds = new Set(tasks.map((task) => task.id));
+      const topIds = draft.topIds.filter((id) => validIds.has(id)).slice(0, 3);
+      const complementaryIds = draft.complementaryIds.filter(
+        (id) => validIds.has(id) && !topIds.includes(id),
+      );
+      const next: PlanningState = {
+        ...state,
+        focus: draft.focoSemana,
+        priorityIds: topIds,
+        complementaryIds,
+        savedAt: undefined,
+      };
+      localStorage.setItem(
+        planningStorageKey(weekStartISO),
+        JSON.stringify(next),
+      );
+      setState(next);
+      setClaudeOpen(false);
+      setStep(3);
+      toast.success(
+        agenda.length > 0
+          ? `${agenda.length} ${agenda.length === 1 ? "bloco adicionado" : "blocos adicionados"} ao planejamento. Revise antes de confirmar.`
+          : "Prioridades organizadas. Revise os horários que ainda faltam.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível aplicar a proposta no calendário.",
+      );
+    }
   };
 
   const save = () => {
@@ -537,6 +708,41 @@ export default function WeeklyPlanningPage() {
 
         {step === 2 && (
           <div className="space-y-4">
+            <section className="performance-card overflow-hidden border-[var(--brand-accent)]/35 bg-gradient-to-br from-[var(--brand-accent-soft)] via-card to-card p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-white shadow-sm">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg font-semibold">
+                      Planejar minha semana com Claude
+                    </h2>
+                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                      O Claude cruza impacto × esforço, prazos, recorrências,
+                      duração e a agenda já ocupada. Você revisa tudo antes de
+                      aplicar.
+                    </p>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Somente os dados necessários desta semana são enviados à
+                      Anthropic.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  className="brand-button shrink-0"
+                  onClick={generateWithClaude}
+                  disabled={gerarPlanejamento.isPending || claudeTasks.length === 0}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {gerarPlanejamento.isPending
+                    ? "Analisando…"
+                    : "Montar com Claude"}
+                </Button>
+              </div>
+            </section>
+
             <Panel
               icon={<Target className="h-5 w-5" />}
               title="Matriz impacto × esforço"
@@ -951,6 +1157,24 @@ export default function WeeklyPlanningPage() {
             </div>
           </div>
         )}
+
+        <PlanejamentoClaudeModal
+          open={claudeOpen}
+          onOpenChange={setClaudeOpen}
+          loading={gerarPlanejamento.isPending}
+          applying={aplicarPlanejamento.isPending}
+          error={
+            gerarPlanejamento.error instanceof Error
+              ? gerarPlanejamento.error.message
+              : null
+          }
+          suggestion={claudeSuggestion}
+          tasks={claudeTasks}
+          weekStart={weekStartISO}
+          weekEnd={weekEndISO}
+          onRetry={() => void generateWithClaude()}
+          onConfirm={(draft) => void applyClaudePlan(draft)}
+        />
 
         <AgendarAcaoAvulsaModal
           open={!!agendarAvulsa}
