@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -111,6 +111,13 @@ export type Database = {
             columns: ["meta_id"]
             isOneToOne: false
             referencedRelation: "metas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_execucoes_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "metas_with_responsavel"
             referencedColumns: ["id"]
           },
         ]
@@ -888,6 +895,7 @@ export type Database = {
         Args: { p_meta: Json; p_responsaveis: string[] }
         Returns: string
       }
+      delete_own_api_key: { Args: { p_service_name: string }; Returns: boolean }
       ensure_auth_trigger: { Args: never; Returns: Json }
       get_handle_new_user_def: { Args: never; Returns: string }
       get_team_directory: {
@@ -911,14 +919,11 @@ export type Database = {
         Returns: boolean
       }
       is_task_responsavel: { Args: { p_tarefa_id: string }; Returns: boolean }
-      delete_own_api_key: {
-        Args: { p_service_name: string }
-        Returns: boolean
-      }
       read_user_api_key: {
         Args: { p_service_name: string; p_user_id: string }
         Returns: string
       }
+      read_vault_secret: { Args: { p_key: string }; Returns: string }
       resolve_active_api_key: {
         Args: { p_service_name: string }
         Returns: Json
@@ -931,7 +936,6 @@ export type Database = {
         }
         Returns: string
       }
-      read_vault_secret: { Args: { p_key: string }; Returns: string }
       store_vault_secret: {
         Args: { p_key: string; p_value: string }
         Returns: string
