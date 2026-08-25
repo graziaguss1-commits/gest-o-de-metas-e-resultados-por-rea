@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, CheckCircle2, Lightbulb, Plus, Sparkles, Target } from "lucide-react";
+import { CalendarClock, CheckCircle2, Eye, EyeOff, Lightbulb, Plus, Sparkles, Target } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,5 +48,162 @@ export default function ActionsPage() {
 
 function Quadrant({ label, className, color }: { label: string; className: string; color: string }) { return <span className={`absolute text-[10px] font-bold tracking-[0.14em] ${className}`} style={{ color }}>{label}</span>; }
 function Score({ label, value }: { label: string; value: number }) { return <div><div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div><div className="mt-1 flex items-center gap-2"><strong className="font-display text-xl">{value}</strong><div className="h-1.5 flex-1 rounded-full bg-muted"><div className="h-full rounded-full bg-[var(--brand-accent)]" style={{ width: `${value * 10}%` }} /></div></div></div>; }
-function NewActionModal({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (value: boolean) => void; onCreated: (action: ActionItem) => void }) { const create = useCreateAction(); const [descricao, setDescricao] = useState(""); const [area, setArea] = useState("Pessoal"); const [impacto, setImpacto] = useState(7); const [esforco, setEsforco] = useState(3); const [prazo, setPrazo] = useState(""); const quadrant = actionQuadrant({ impacto, esforco }); const submit = async () => { if (!descricao.trim()) return; try { const created = await create.mutateAsync({ descricao: descricao.trim(), area, impacto, esforco, prazo: prazo || null }); toast.success("Ação adicionada à matriz"); setDescricao(""); setImpacto(7); setEsforco(3); setPrazo(""); onOpenChange(false); onCreated(created); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível salvar"); } }; return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle className="font-display text-2xl">Nova ação avulsa</DialogTitle><DialogDescription>Ela não precisa estar vinculada a uma meta. Avalie retorno e esforço para priorizar.</DialogDescription></DialogHeader><div className="space-y-5 pt-2"><div><Label>O que precisa ser feito?</Label><Input className="mt-2" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: criar página de vendas da mentoria" /></div><div className="grid grid-cols-2 gap-3"><div><Label>Área</Label><Select value={area} onValueChange={setArea}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent>{AREAS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div><div><Label>Prazo opcional</Label><Input type="date" className="mt-2" value={prazo} onChange={(e) => setPrazo(e.target.value)} /></div></div><Rating label="Impacto no resultado" value={impacto} onChange={setImpacto} low="Baixo retorno" high="Alto retorno" /><Rating label="Esforço para executar" value={esforco} onChange={setEsforco} low="Pouco esforço" high="Muito esforço" /><div className="rounded-xl p-4" style={{ background: QUADRANT_STYLE[quadrant].soft, color: QUADRANT_STYLE[quadrant].color }}><div className="text-[10px] font-bold uppercase tracking-wider">Classificação automática</div><div className="font-display mt-1 text-xl font-semibold">{quadrant}</div><div className="mt-1 text-xs">Pontuação estratégica: {impacto * (11 - esforco)} de 100</div></div><Button className="brand-button w-full" disabled={!descricao.trim() || create.isPending} onClick={submit}><Sparkles className="mr-2 h-4 w-4" />Adicionar e priorizar</Button></div></DialogContent></Dialog>; }
+function NewActionModal({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  onCreated: (action: ActionItem) => void;
+}) {
+  const create = useCreateAction();
+  const [descricao, setDescricao] = useState("");
+  const [area, setArea] = useState("Pessoal");
+  const [impacto, setImpacto] = useState(7);
+  const [esforco, setEsforco] = useState(3);
+  const [prazo, setPrazo] = useState("");
+  const [showResult, setShowResult] = useState(false);
+  const quadrant = actionQuadrant({ impacto, esforco });
+
+  const handleOpenChange = (value: boolean) => {
+    if (!value) setShowResult(false);
+    onOpenChange(value);
+  };
+
+  const submit = async () => {
+    if (!descricao.trim()) return;
+    try {
+      const created = await create.mutateAsync({
+        descricao: descricao.trim(),
+        area,
+        impacto,
+        esforco,
+        prazo: prazo || null,
+      });
+      toast.success("Ação adicionada à matriz");
+      setDescricao("");
+      setImpacto(7);
+      setEsforco(3);
+      setPrazo("");
+      setShowResult(false);
+      onOpenChange(false);
+      onCreated(created);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">
+            Nova ação avulsa
+          </DialogTitle>
+          <DialogDescription>
+            Ela não precisa estar vinculada a uma meta. Avalie retorno e esforço
+            para priorizar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-5 pt-2">
+          <div>
+            <Label>O que precisa ser feito?</Label>
+            <Input
+              className="mt-2"
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              placeholder="Ex.: criar página de vendas da mentoria"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Área</Label>
+              <Select value={area} onValueChange={setArea}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AREAS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Prazo opcional</Label>
+              <Input
+                type="date"
+                className="mt-2"
+                value={prazo}
+                onChange={(e) => setPrazo(e.target.value)}
+              />
+            </div>
+          </div>
+          <Rating
+            label="Impacto no resultado"
+            value={impacto}
+            onChange={setImpacto}
+            low="Baixo retorno"
+            high="Alto retorno"
+          />
+          <Rating
+            label="Esforço para executar"
+            value={esforco}
+            onChange={setEsforco}
+            low="Pouco esforço"
+            high="Muito esforço"
+          />
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            aria-expanded={showResult}
+            onClick={() => setShowResult((current) => !current)}
+          >
+            {showResult ? (
+              <EyeOff className="mr-2 h-4 w-4" />
+            ) : (
+              <Eye className="mr-2 h-4 w-4" />
+            )}
+            {showResult ? "Ocultar resultado" : "Ver resultado"}
+          </Button>
+
+          {showResult && (
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: QUADRANT_STYLE[quadrant].soft,
+                color: QUADRANT_STYLE[quadrant].color,
+              }}
+              aria-live="polite"
+            >
+              <div className="text-[10px] font-bold uppercase tracking-wider">
+                Classificação automática
+              </div>
+              <div className="font-display mt-1 text-xl font-semibold">
+                {quadrant}
+              </div>
+              <div className="mt-1 text-xs">
+                Pontuação estratégica: {impacto * (11 - esforco)} de 100
+              </div>
+            </div>
+          )}
+
+          <Button
+            className="brand-button w-full"
+            disabled={!descricao.trim() || create.isPending}
+            onClick={submit}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Adicionar e priorizar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 function Rating({ label, value, onChange, low, high }: { label: string; value: number; onChange: (value: number) => void; low: string; high: string }) { return <div><div className="mb-3 flex items-center justify-between"><Label>{label}</Label><span className="font-display text-2xl font-semibold text-[var(--brand-primary)]">{value}</span></div><Slider value={[value]} min={0} max={10} step={1} onValueChange={(v) => onChange(v[0])} /><div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>{low}</span><span>{high}</span></div></div>; }
