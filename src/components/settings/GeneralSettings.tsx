@@ -48,8 +48,12 @@ export default function GeneralSettings() {
     try {
       await updateSettings.mutateAsync({ capacidade_diaria_minutos: Math.round(min) });
       toast.success("Capacidade diária atualizada.");
-    } catch {
-      toast.error("Não foi possível salvar a capacidade.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a capacidade.",
+      );
     }
   };
 

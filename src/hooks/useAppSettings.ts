@@ -25,11 +25,10 @@ export function useUpdateAppSettings() {
     mutationFn: async (patch: Partial<AppSettings>) => {
       const { data, error } = await supabase
         .from("app_settings")
-        .update(patch)
-        .eq("id", 1)
+        .upsert({ ...patch, id: 1 }, { onConflict: "id" })
         .select()
         .single();
-      if (error) throw error;
+      if (error) throw new Error(error.message || "Não foi possível salvar as configurações.");
       return data as AppSettings;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
