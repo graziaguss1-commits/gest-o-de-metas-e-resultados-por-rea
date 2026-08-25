@@ -261,7 +261,9 @@ export function useCreatePlano() {
         })
         .select()
         .single();
-      if (pErr) throw pErr;
+      if (pErr) {
+        throw new Error(pErr.message || "Não foi possível criar o plano.");
+      }
 
       const taskRows = input.tarefas
         .filter((t) => t.descricao.trim().length > 0)
@@ -288,7 +290,13 @@ export function useCreatePlano() {
         const { error: tErr } = await supabase
           .from("plano_tarefas")
           .insert(taskRows);
-        if (tErr) throw tErr;
+        if (tErr) {
+          // Evita deixar um plano vazio quando alguma tarefa não puder ser salva.
+          await supabase.from("planos_acao").delete().eq("id", plano.id);
+          throw new Error(
+            tErr.message || "O plano foi validado, mas as ações não puderam ser salvas.",
+          );
+        }
       }
       await sincronizarEtapasDaMeta(input.meta_id);
       return plano as Plano;

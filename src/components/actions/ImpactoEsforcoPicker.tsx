@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { actionQuadrant, actionScore } from "@/hooks/useActions";
@@ -34,6 +37,7 @@ export function ImpactoEsforcoPicker({
   compact = false,
   className,
 }: Props) {
+  const [showResult, setShowResult] = useState(false);
   const quadrant = actionQuadrant({ impacto, esforco });
   const style = QUADRANT_STYLE[quadrant];
 
@@ -73,16 +77,41 @@ export function ImpactoEsforcoPicker({
         high="Muito esforço"
       />
 
-      <div className="rounded-lg p-3" style={{ background: style.soft, color: style.color }}>
-        <div className="text-[10px] font-bold uppercase tracking-wider">
-          Classificação automática
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        aria-expanded={showResult}
+        onClick={() => setShowResult((current) => !current)}
+      >
+        {showResult ? (
+          <EyeOff className="mr-2 h-4 w-4" />
+        ) : (
+          <Eye className="mr-2 h-4 w-4" />
+        )}
+        {showResult ? "Ocultar resultado" : "Ver resultado"}
+      </Button>
+
+      {showResult && (
+        <div
+          className="rounded-lg p-3"
+          style={{ background: style.soft, color: style.color }}
+          aria-live="polite"
+        >
+          <div className="text-[10px] font-bold uppercase tracking-wider">
+            Classificação automática
+          </div>
+          <div className="mt-0.5 font-display text-lg font-semibold">
+            {quadrant}
+          </div>
+          <p className="mt-0.5 text-[11px]">
+            {QUADRANT_DESCRIPTION[quadrant]}
+          </p>
+          <div className="mt-1 text-[11px]">
+            Pontuação estratégica: {actionScore({ impacto, esforco })} de 100
+          </div>
         </div>
-        <div className="mt-0.5 font-display text-lg font-semibold">{quadrant}</div>
-        <p className="mt-0.5 text-[11px]">{QUADRANT_DESCRIPTION[quadrant]}</p>
-        <div className="mt-1 text-[11px]">
-          Pontuação estratégica: {actionScore({ impacto, esforco })} de 100
-        </div>
-      </div>
+      )}
     </section>
   );
 }
