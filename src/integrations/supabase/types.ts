@@ -874,6 +874,10 @@ export type Database = {
       }
     }
     Functions: {
+      aplicar_planejamento_semanal: {
+        Args: { p_agenda: Json; p_fim: string; p_inicio: string }
+        Returns: Json
+      }
       atualizar_meta_com_responsaveis: {
         Args: { p_meta_id: string; p_patch: Json; p_responsaveis: string[] }
         Returns: undefined
