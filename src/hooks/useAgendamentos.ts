@@ -137,9 +137,6 @@ export function useFinalizarCronometroAgendamento() {
           cronometro_segundos: Math.max(0, Math.floor(segundos)),
         })
         .eq("id", id);
-      if (error?.code === "23505") {
-        throw new Error("Esta ação já está agendada nesse dia e horário.");
-      }
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
