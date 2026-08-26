@@ -6,11 +6,14 @@ import {
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
   diasRecorrenciaPersistida,
+  hhmm,
   segundosDoCronometro,
 } from "@/lib/agenda";
 
 const KEY = ["agendamentos"] as const;
 export const OBSERVACAO_OCORRENCIA_CANCELADA = "Ocorrência cancelada";
+export const OBSERVACAO_OCORRENCIA_DUPLICADA_ARQUIVADA =
+  "Ocorrência duplicada arquivada";
 
 /**
  * Ocorrências agendadas. Buscamos apenas a janela visível (semana atual +
@@ -31,9 +34,29 @@ export function useAgendamentos(inicio?: string, fim?: string) {
       if (fim) query = query.lte("data", fim);
       const { data, error } = await query;
       if (error) throw error;
-      return ((data ?? []) as Agendamento[]).filter(
-        (item) => item.observacao !== OBSERVACAO_OCORRENCIA_CANCELADA,
+      const visiveis = ((data ?? []) as Agendamento[]).filter(
+        (item) =>
+          item.observacao !== OBSERVACAO_OCORRENCIA_CANCELADA &&
+          !item.observacao?.startsWith(
+            OBSERVACAO_OCORRENCIA_DUPLICADA_ARQUIVADA,
+          ),
       );
+      const unicos = new Map<string, Agendamento>();
+      visiveis.forEach((item) => {
+        const chave = `${item.tarefa_id}|${item.data}|${hhmm(item.hora_inicio)}`;
+        const existente = unicos.get(chave);
+        const pontuacao =
+          (item.cronometro_iniciado_em ? 1_000_000_000 : 0) +
+          Number(item.cronometro_segundos ?? 0);
+        const pontuacaoExistente = existente
+          ? (existente.cronometro_iniciado_em ? 1_000_000_000 : 0) +
+            Number(existente.cronometro_segundos ?? 0)
+          : -1;
+        if (!existente || pontuacao > pontuacaoExistente) {
+          unicos.set(chave, item);
+        }
+      });
+      return [...unicos.values()];
     },
   });
 }
@@ -114,6 +137,9 @@ export function useFinalizarCronometroAgendamento() {
           cronometro_segundos: Math.max(0, Math.floor(segundos)),
         })
         .eq("id", id);
+      if (error?.code === "23505") {
+        throw new Error("Esta ação já está agendada nesse dia e horário.");
+      }
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
@@ -141,6 +167,9 @@ export function useAgendarTarefa() {
         observacao: input.observacao?.trim() || null,
         criado_por: user.user?.id ?? null,
       });
+      if (error?.code === "23505") {
+        throw new Error("Esta ação já está agendada nesse dia e horário.");
+      }
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
@@ -169,6 +198,9 @@ export function useReagendarTarefa() {
           duracao_minutos: duracaoMinutos,
         })
         .eq("id", id);
+      if (error?.code === "23505") {
+        throw new Error("Esta ação já está agendada nesse dia e horário.");
+      }
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
@@ -214,6 +246,7 @@ export function useCancelarOcorrencia() {
 export function useMaterializarRecorrencias() {
   const qc = useQueryClient();
   return useMutation({
+    scope: { id: "materializar-recorrencias" },
     mutationFn: async ({
       tarefas,
       datas,
@@ -278,8 +311,24 @@ export function useMaterializarRecorrencias() {
       });
       if (!rows.length) return 0;
       const { error } = await supabase.from("tarefa_agendamentos").insert(rows);
-      if (error) throw error;
-      return rows.length;
+      if (!error) return rows.length;
+      if (error.code !== "23505") throw error;
+
+      // Outra aba pode ter materializado parte da mesma janela entre a leitura
+      // e a gravação. Nesse caso, tentamos cada ocorrência separadamente: as
+      // que já existem são ignoradas e as demais continuam sendo criadas.
+      let criadas = 0;
+      for (const row of rows) {
+        const { error: rowError } = await supabase
+          .from("tarefa_agendamentos")
+          .insert(row);
+        if (!rowError) {
+          criadas += 1;
+        } else if (rowError.code !== "23505") {
+          throw rowError;
+        }
+      }
+      return criadas;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
