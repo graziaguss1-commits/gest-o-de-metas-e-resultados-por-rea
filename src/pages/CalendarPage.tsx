@@ -1078,8 +1078,6 @@ export default function CalendarPage() {
           onOpenChange={(v) => !v && setAgendar(null)}
           tarefa={agendar?.tarefa ?? null}
           dataInicial={agendar?.data}
-          dataMin={queryStart}
-          dataMax={queryEnd}
           agendamentoId={agendar?.agendamentoId}
           horaInicial={agendar?.hora}
           duracaoInicial={agendar?.duracao}
