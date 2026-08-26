@@ -11,6 +11,7 @@ type Props = {
   agendamento: Agendamento;
   pending?: boolean;
   showLabel?: boolean;
+  showElapsed?: boolean;
   className?: string;
   onToggle: (agendamento: Agendamento) => void;
 };
@@ -20,6 +21,7 @@ export function TaskTimerButton({
   agendamento,
   pending = false,
   showLabel = true,
+  showElapsed = true,
   className,
   onToggle,
 }: Props) {
@@ -64,7 +66,9 @@ export function TaskTimerButton({
       )}
     >
       {ativo ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-      {(showLabel || possuiTempo) && <span>{showLabel ? label : tempo}</span>}
+      {(showLabel || (possuiTempo && showElapsed)) && (
+        <span>{showLabel ? label : tempo}</span>
+      )}
     </button>
   );
 }

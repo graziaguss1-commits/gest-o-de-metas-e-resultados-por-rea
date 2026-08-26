@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Check, Loader2, MoreHorizontal } from "lucide-react";
 import type { Agendamento } from "@/lib/agenda";
 import type { Compromisso } from "@/hooks/useCompromissos";
@@ -10,6 +11,8 @@ const START = 6;
 const END = 22;
 const SLOT = 30;
 const SLOT_HEIGHT = 44;
+const MIN_EVENT_HEIGHT = 34;
+const EVENT_GAP = 4;
 const slots = Array.from(
   { length: (END - START) * 2 },
   (_, i) => START * 60 + i * SLOT,
@@ -19,6 +22,68 @@ const time = (minutes: number) =>
 const minutesOf = (value: string) => {
   const [h, m] = hhmm(value).split(":").map(Number);
   return h * 60 + m;
+};
+
+type LayoutSeed = {
+  key: string;
+  top: number;
+  height: number;
+};
+
+type EventLayout = LayoutSeed & {
+  lane: number;
+  laneCount: number;
+};
+
+/**
+ * Blocos muito curtos precisam de uma altura mínima para continuarem
+ * clicáveis. Quando essa altura visual invade o próximo horário, distribuímos
+ * os itens em colunas para que nenhum título fique escondido atrás de outro.
+ */
+function calcularLayouts(seeds: LayoutSeed[]) {
+  const layouts = new Map<string, EventLayout>();
+  const ordenados = [...seeds].sort(
+    (a, b) => a.top - b.top || b.height - a.height || a.key.localeCompare(b.key),
+  );
+  let cluster: LayoutSeed[] = [];
+  let fimDoCluster = Number.NEGATIVE_INFINITY;
+
+  const distribuirCluster = () => {
+    if (!cluster.length) return;
+    const fimPorColuna: number[] = [];
+    const atribuicoes = cluster.map((item) => {
+      let lane = fimPorColuna.findIndex((fim) => fim <= item.top + 0.5);
+      if (lane < 0) lane = fimPorColuna.length;
+      fimPorColuna[lane] = item.top + item.height;
+      return { item, lane };
+    });
+    const laneCount = Math.max(1, fimPorColuna.length);
+    atribuicoes.forEach(({ item, lane }) =>
+      layouts.set(item.key, { ...item, lane, laneCount }),
+    );
+  };
+
+  ordenados.forEach((item) => {
+    if (cluster.length && item.top >= fimDoCluster - 0.5) {
+      distribuirCluster();
+      cluster = [];
+      fimDoCluster = Number.NEGATIVE_INFINITY;
+    }
+    cluster.push(item);
+    fimDoCluster = Math.max(fimDoCluster, item.top + item.height);
+  });
+  distribuirCluster();
+  return layouts;
+}
+
+const estiloDoLayout = (layout: EventLayout): CSSProperties => {
+  const largura = 100 / layout.laneCount;
+  return {
+    top: layout.top,
+    height: layout.height,
+    left: `calc(${layout.lane * largura}% + ${EVENT_GAP}px)`,
+    width: `calc(${largura}% - ${EVENT_GAP * 2}px)`,
+  };
 };
 
 type DragData = {
@@ -142,6 +207,42 @@ export function HourlyCalendarGrid({
               item.duracao_minutos,
           );
           const fixed = compromissos.filter((item) => item.data === data);
+          const criarSeed = (
+            key: string,
+            inicio: string,
+            duracaoMinutos: number,
+          ): LayoutSeed => ({
+            key,
+            top:
+              ((minutesOf(inicio) - START * 60) / SLOT) * SLOT_HEIGHT,
+            height: Math.max(
+              MIN_EVENT_HEIGHT,
+              (Math.max(1, duracaoMinutos) / SLOT) * SLOT_HEIGHT,
+            ),
+          });
+          const layouts = calcularLayouts([
+            ...tasks.map((item) =>
+              criarSeed(
+                `plano:${item.id}`,
+                item.hora_inicio,
+                item.duracao_minutos,
+              ),
+            ),
+            ...standalone.map((item) =>
+              criarSeed(
+                `avulsa:${item.id}`,
+                item.hora_inicio as string,
+                item.duracao_minutos as number,
+              ),
+            ),
+            ...fixed.map((item) =>
+              criarSeed(
+                `compromisso:${item.id}`,
+                item.hora_inicio,
+                minutesOf(item.hora_fim) - minutesOf(item.hora_inicio),
+              ),
+            ),
+          ]);
 
           return (
             <div
@@ -165,13 +266,19 @@ export function HourlyCalendarGrid({
                 const completed = completedActionIds.has(item.id);
                 const realMinutes = realMinutesByActionId.get(item.id) ?? null;
                 const completing = completingActionId === item.id;
-                const top =
-                  ((minutesOf(item.hora_inicio) - START * 60) / SLOT) *
-                  SLOT_HEIGHT;
-                const height = Math.max(
-                  34,
-                  (item.duracao_minutos / SLOT) * SLOT_HEIGHT,
-                );
+                const layout = layouts.get(`plano:${item.id}`)!;
+                const compacto = item.duracao_minutos < 30;
+                const mostrarTextoAcoes =
+                  days.length <= 3 && !compacto && layout.laneCount === 1;
+                const paddingAcoes = mostrarTextoAcoes
+                  ? completed
+                    ? "pr-32"
+                    : "pr-[250px]"
+                  : completed
+                    ? "pr-12"
+                    : "pr-[72px]";
+                const inicio = hhmm(item.hora_inicio);
+                const fim = horaFim(inicio, item.duracao_minutos);
                 return (
                   <div
                     draggable
@@ -185,16 +292,24 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "acao", id: item.id })
                     }
                     key={item.id}
-                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border p-2 shadow-sm active:cursor-grabbing ${completed ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : "border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)]"} ${days.length <= 3 ? (completed ? "pr-32" : "pr-[250px]") : completed ? "pr-12" : "pr-[120px]"}`}
-                    style={{ top, height }}
-                    title="Clique para editar ou excluir. Arraste para reagendar."
+                    className={`absolute z-10 cursor-pointer overflow-hidden rounded-lg border shadow-sm active:cursor-grabbing ${compacto ? "px-1.5 py-1" : "p-2"} ${completed ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : "border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)]"} ${paddingAcoes}`}
+                    style={estiloDoLayout(layout)}
+                    title={`${inicio}–${fim} · ${task.descricao}. Clique para editar ou excluir; arraste para reagendar.`}
                   >
-                    <div className="absolute right-6 top-1 flex items-center gap-1">
+                    <div
+                      className={`absolute right-6 flex items-center gap-1 ${compacto ? "top-1/2 -translate-y-1/2" : "top-1"}`}
+                    >
                       {!completed && (
                         <TaskTimerButton
                           agendamento={item}
                           pending={timerPendingId === item.id || completing}
-                          showLabel={days.length <= 3}
+                          showLabel={mostrarTextoAcoes}
+                          showElapsed={mostrarTextoAcoes}
+                          className={
+                            mostrarTextoAcoes
+                              ? undefined
+                              : "h-5 w-5 justify-center px-0"
+                          }
                           onToggle={onToggleTimer}
                         />
                       )}
@@ -216,14 +331,14 @@ export function HourlyCalendarGrid({
                           onMarkActionDone(item.id);
                         }}
                         onKeyDown={(event) => event.stopPropagation()}
-                        className={`flex h-6 items-center gap-1 rounded-full border px-1.5 text-[9px] font-semibold ${completed ? "border-[var(--color-green)]/40 bg-white/70 text-[var(--color-green)]" : "border-border bg-card/90 text-foreground hover:border-[var(--color-green)]"}`}
+                        className={`flex items-center justify-center gap-1 rounded-full border text-[9px] font-semibold ${mostrarTextoAcoes ? "h-6 px-1.5" : "h-5 w-5 px-0"} ${completed ? "border-[var(--color-green)]/40 bg-white/70 text-[var(--color-green)]" : "border-border bg-card/90 text-foreground hover:border-[var(--color-green)]"}`}
                       >
                         {completing ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <Check className="h-3 w-3" />
                         )}
-                        {days.length <= 3 && (
+                        {mostrarTextoAcoes && (
                           <span>
                             {completed
                               ? `Feito${realMinutes ? ` · ${formatDuracao(realMinutes)}` : ""}`
@@ -235,16 +350,32 @@ export function HourlyCalendarGrid({
                         )}
                       </button>
                     </div>
-                    <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <div className="text-[10px] font-bold text-[var(--brand-primary)]">
-                      {hhmm(item.hora_inicio)}–
-                      {horaFim(hhmm(item.hora_inicio), item.duracao_minutos)}
-                    </div>
-                    <div
-                      className={`line-clamp-2 text-xs font-semibold ${completed ? "line-through opacity-70" : ""}`}
-                    >
-                      {task.descricao}
-                    </div>
+                    <MoreHorizontal
+                      className={`absolute right-1.5 h-3.5 w-3.5 text-muted-foreground ${compacto ? "top-1/2 -translate-y-1/2" : "top-1.5"}`}
+                    />
+                    {compacto ? (
+                      <div className="flex h-full min-w-0 items-center gap-1.5 leading-none">
+                        <span className="shrink-0 text-[9px] font-bold text-[var(--brand-primary)]">
+                          {inicio}
+                        </span>
+                        <span
+                          className={`truncate text-[11px] font-semibold ${completed ? "line-through opacity-70" : ""}`}
+                        >
+                          {task.descricao}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[10px] font-bold text-[var(--brand-primary)]">
+                          {inicio}–{fim}
+                        </div>
+                        <div
+                          className={`line-clamp-2 text-xs font-semibold ${completed ? "line-through opacity-70" : ""}`}
+                        >
+                          {task.descricao}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -252,9 +383,12 @@ export function HourlyCalendarGrid({
               {standalone.map((action) => {
                 const start = action.hora_inicio as string;
                 const duration = action.duracao_minutos as number;
-                const top =
-                  ((minutesOf(start) - START * 60) / SLOT) * SLOT_HEIGHT;
-                const height = Math.max(34, (duration / SLOT) * SLOT_HEIGHT);
+                const layout = layouts.get(`avulsa:${action.id}`)!;
+                const compacto = duration < 30;
+                const mostrarTextoAcoes =
+                  days.length <= 3 && !compacto && layout.laneCount === 1;
+                const inicio = hhmm(start);
+                const fim = horaFim(inicio, duration);
                 return (
                   <div
                     draggable
@@ -270,9 +404,9 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "acao-avulsa", id: action.id })
                     }
                     key={action.id}
-                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--color-green)]/35 bg-[var(--color-green-bg)] p-2 shadow-sm active:cursor-grabbing ${days.length <= 3 ? "pr-24" : "pr-12"} ${action.concluida ? "opacity-60" : ""}`}
-                    style={{ top, height }}
-                    title="Clique para editar ou excluir. Arraste para reagendar."
+                    className={`absolute z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--color-green)]/35 bg-[var(--color-green-bg)] shadow-sm active:cursor-grabbing ${compacto ? "px-1.5 py-1" : "p-2"} ${mostrarTextoAcoes ? "pr-24" : "pr-12"} ${action.concluida ? "opacity-60" : ""}`}
+                    style={estiloDoLayout(layout)}
+                    title={`${inicio}–${fim} · ${action.descricao}. Clique para editar ou excluir; arraste para reagendar.`}
                   >
                     <button
                       type="button"
@@ -288,25 +422,42 @@ export function HourlyCalendarGrid({
                         onToggleStandaloneAction(action.id, !action.concluida);
                       }}
                       onKeyDown={(event) => event.stopPropagation()}
-                      className="absolute right-6 top-1 flex h-6 items-center gap-1 rounded-full border border-[var(--color-green)]/40 bg-card/90 px-1.5 text-[9px] font-semibold text-[var(--color-green)]"
+                      className={`absolute right-6 flex items-center justify-center gap-1 rounded-full border border-[var(--color-green)]/40 bg-card/90 text-[9px] font-semibold text-[var(--color-green)] ${compacto ? "top-1/2 h-5 w-5 -translate-y-1/2 px-0" : "top-1 h-6 px-1.5"}`}
                     >
                       <Check className="h-3 w-3" />
-                      {days.length <= 3 && (
+                      {mostrarTextoAcoes && (
                         <span>{action.concluida ? "Feito" : "Marcar feito"}</span>
                       )}
                     </button>
-                    <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <div className="text-[10px] font-bold text-[var(--color-green)]">
-                      {hhmm(start)}–{horaFim(hhmm(start), duration)}
-                    </div>
-                    <div
-                      className={`line-clamp-2 text-xs font-semibold ${action.concluida ? "line-through" : ""}`}
-                    >
-                      {action.descricao}
-                    </div>
-                    <div className="text-[9px] uppercase text-muted-foreground">
-                      Prioridade avulsa
-                    </div>
+                    <MoreHorizontal
+                      className={`absolute right-1.5 h-3.5 w-3.5 text-muted-foreground ${compacto ? "top-1/2 -translate-y-1/2" : "top-1.5"}`}
+                    />
+                    {compacto ? (
+                      <div className="flex h-full min-w-0 items-center gap-1.5 leading-none">
+                        <span className="shrink-0 text-[9px] font-bold text-[var(--color-green)]">
+                          {inicio}
+                        </span>
+                        <span
+                          className={`truncate text-[11px] font-semibold ${action.concluida ? "line-through" : ""}`}
+                        >
+                          {action.descricao}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[10px] font-bold text-[var(--color-green)]">
+                          {inicio}–{fim}
+                        </div>
+                        <div
+                          className={`line-clamp-2 text-xs font-semibold ${action.concluida ? "line-through" : ""}`}
+                        >
+                          {action.descricao}
+                        </div>
+                        <div className="text-[9px] uppercase text-muted-foreground">
+                          Prioridade avulsa
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -314,11 +465,16 @@ export function HourlyCalendarGrid({
               {fixed.map((commitment) => {
                 const start = minutesOf(commitment.hora_inicio);
                 const end = minutesOf(commitment.hora_fim);
-                const top = ((start - START * 60) / SLOT) * SLOT_HEIGHT;
-                const height = Math.max(
-                  34,
-                  ((end - start) / SLOT) * SLOT_HEIGHT,
-                );
+                const duration = Math.max(1, end - start);
+                const layout = layouts.get(`compromisso:${commitment.id}`)!;
+                const compacto = duration < 30;
+                const mostrarTextoAcoes =
+                  commitment.recorrencia === "nenhuma" &&
+                  days.length <= 3 &&
+                  !compacto &&
+                  layout.laneCount === 1;
+                const inicio = hhmm(commitment.hora_inicio);
+                const fim = hhmm(commitment.hora_fim);
                 return (
                   <div
                     draggable
@@ -334,9 +490,9 @@ export function HourlyCalendarGrid({
                       drag(event, { kind: "compromisso", id: commitment.id })
                     }
                     key={commitment.id}
-                    className={`absolute left-1 right-1 z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] p-2 shadow-sm active:cursor-grabbing ${commitment.recorrencia === "nenhuma" ? (days.length <= 3 ? "pr-24" : "pr-12") : "pr-6"} ${commitment.concluido ? "opacity-60" : ""}`}
-                    style={{ top, height }}
-                    title="Clique para excluir. Arraste para reagendar."
+                    className={`absolute z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] shadow-sm active:cursor-grabbing ${compacto ? "px-1.5 py-1" : "p-2"} ${mostrarTextoAcoes ? "pr-24" : commitment.recorrencia === "nenhuma" ? "pr-12" : "pr-6"} ${commitment.concluido ? "opacity-60" : ""}`}
+                    style={estiloDoLayout(layout)}
+                    title={`${inicio}–${fim} · ${commitment.titulo}. Clique para excluir; arraste para reagendar.`}
                   >
                     {commitment.recorrencia === "nenhuma" && (
                       <button
@@ -360,28 +516,45 @@ export function HourlyCalendarGrid({
                           );
                         }}
                         onKeyDown={(event) => event.stopPropagation()}
-                        className="absolute right-6 top-1 flex h-6 items-center gap-1 rounded-full border border-[var(--brand-accent)]/40 bg-card/90 px-1.5 text-[9px] font-semibold text-[var(--brand-accent)]"
+                        className={`absolute right-6 flex items-center justify-center gap-1 rounded-full border border-[var(--brand-accent)]/40 bg-card/90 text-[9px] font-semibold text-[var(--brand-accent)] ${compacto ? "top-1/2 h-5 w-5 -translate-y-1/2 px-0" : "top-1 h-6 px-1.5"}`}
                       >
                         <Check className="h-3 w-3" />
-                        {days.length <= 3 && (
+                        {mostrarTextoAcoes && (
                           <span>
                             {commitment.concluido ? "Feito" : "Marcar feito"}
                           </span>
                         )}
                       </button>
                     )}
-                    <MoreHorizontal className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <div className="text-[10px] font-bold text-[var(--brand-accent)]">
-                      {hhmm(commitment.hora_inicio)}–{hhmm(commitment.hora_fim)}
-                    </div>
-                    <div
-                      className={`line-clamp-2 text-xs font-semibold ${commitment.concluido ? "line-through" : ""}`}
-                    >
-                      {commitment.titulo}
-                    </div>
-                    <div className="text-[9px] uppercase text-muted-foreground">
-                      {commitment.area}
-                    </div>
+                    <MoreHorizontal
+                      className={`absolute right-1.5 h-3.5 w-3.5 text-muted-foreground ${compacto ? "top-1/2 -translate-y-1/2" : "top-1.5"}`}
+                    />
+                    {compacto ? (
+                      <div className="flex h-full min-w-0 items-center gap-1.5 leading-none">
+                        <span className="shrink-0 text-[9px] font-bold text-[var(--brand-accent)]">
+                          {inicio}
+                        </span>
+                        <span
+                          className={`truncate text-[11px] font-semibold ${commitment.concluido ? "line-through" : ""}`}
+                        >
+                          {commitment.titulo}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[10px] font-bold text-[var(--brand-accent)]">
+                          {inicio}–{fim}
+                        </div>
+                        <div
+                          className={`line-clamp-2 text-xs font-semibold ${commitment.concluido ? "line-through" : ""}`}
+                        >
+                          {commitment.titulo}
+                        </div>
+                        <div className="text-[9px] uppercase text-muted-foreground">
+                          {commitment.area}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
