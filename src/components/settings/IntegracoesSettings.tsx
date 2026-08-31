@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SlackWebhookModal } from "./SlackWebhookModal";
 import { GoogleSheetsModal } from "./GoogleSheetsModal";
 import { EvolutionApiModal } from "./EvolutionApiModal";
+import { GoogleCalendarConnect } from "./GoogleCalendarConnect";
 
 type IntegrationStatus = "conectado" | "desconectado" | "em-breve";
 
@@ -77,6 +78,7 @@ export default function IntegracoesSettings() {
   return (
     <>
       <div className="space-y-3 max-w-2xl">
+        <GoogleCalendarConnect />
         {integrations.map((it) => (
           <div key={it.id} className="metasia-card p-4 flex items-center gap-4">
             <div

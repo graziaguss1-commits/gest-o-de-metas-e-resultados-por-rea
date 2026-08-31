@@ -30,6 +30,7 @@ import {
   useMaterializarRecorrencias,
 } from "@/hooks/useAgendamentos";
 import { useCompromissos } from "@/hooks/useCompromissos";
+import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import {
   useAplicarPlanejamentoClaude,
@@ -237,6 +238,7 @@ export default function WeeklyPlanningPage() {
     useState<PlanejamentoClaudeResponse | null>(null);
 
   const { data: agendamentos = [] } = useAgendamentos(weekStartISO, weekEndISO);
+  const { data: googleBusy = [] } = useGoogleBusyBlocks(weekStartISO, weekEndISO);
   const { data: compromissos = [] } = useCompromissos(
     weekStartISO,
     weekEndISO,
@@ -442,6 +444,14 @@ export default function WeeklyPlanningPage() {
       inicio: hhmm(commitment.hora_inicio),
       fim: hhmm(commitment.hora_fim),
       titulo: commitment.titulo,
+      tipo: "compromisso" as const,
+    })),
+    // Privacidade: do Google só importamos o intervalo ocupado, sem títulos.
+    ...googleBusy.map((block) => ({
+      data: block.data,
+      inicio: hhmm(block.hora_inicio),
+      fim: hhmm(block.hora_fim),
+      titulo: "Ocupado (Google Agenda)",
       tipo: "compromisso" as const,
     })),
   ];

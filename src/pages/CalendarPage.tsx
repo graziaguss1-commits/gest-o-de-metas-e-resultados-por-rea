@@ -68,6 +68,7 @@ import {
 } from "@/lib/agenda";
 import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
 import type { Tarefa } from "@/lib/metas";
+import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
 
 type CalendarTask = PlanoWithMeta["tarefas"][number] & {
   plano: string;
@@ -136,6 +137,7 @@ export default function CalendarPage() {
   const weekDates = useMemo(() => weekDays.map(iso), [weekDays]);
   const queryStart = iso(startOfWeek(days[0]));
   const queryEnd = iso(addDays(startOfWeek(days[days.length - 1]), 6));
+  const { data: googleBusy = [] } = useGoogleBusyBlocks(queryStart, queryEnd);
   const queryDates = useMemo(() => {
     const datas: string[] = [];
     let atual = new Date(`${queryStart}T12:00:00`);
@@ -563,6 +565,7 @@ export default function CalendarPage() {
             agendamentos={agendamentos}
             acoesAvulsas={actions}
             compromissos={compromissos}
+            googleBusy={googleBusy}
             taskById={taskById}
             completedActionIds={new Set(execucaoPorAgendamento.keys())}
             realMinutesByActionId={realMinutesByActionId}

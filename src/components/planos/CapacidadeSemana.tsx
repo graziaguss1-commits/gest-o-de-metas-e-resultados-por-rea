@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { useAgendamentos } from "@/hooks/useAgendamentos";
 import { useActions } from "@/hooks/useActions";
 import { useCompromissos } from "@/hooks/useCompromissos";
+import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { capacidadeDoDia, formatTotalHoras, totalSemana } from "@/lib/agenda";
 
@@ -33,6 +34,7 @@ export function CapacidadeSemana({ inicioSemana }: { inicioSemana?: string }) {
   }, [inicioSemana]);
   const { data: agendamentos = [] } = useAgendamentos(iso(dias[0]), iso(dias[6]));
   const { data: compromissos = [] } = useCompromissos(iso(dias[0]), iso(dias[6]));
+  const { data: googleBusy = [] } = useGoogleBusyBlocks(iso(dias[0]), iso(dias[6]));
   const capacidade = settings?.capacidade_diaria_minutos ?? 480;
 
   const minutosAvulsos = (data: string) =>
@@ -49,10 +51,22 @@ export function CapacidadeSemana({ inicioSemana }: { inicioSemana?: string }) {
         return total + (hf * 60 + mf - hi * 60 - mi);
       }, 0);
 
+  const minutosGoogle = (data: string) =>
+    googleBusy
+      .filter((block) => block.data === data)
+      .reduce((total, block) => {
+        const [hi, mi] = block.hora_inicio.split(":").map(Number);
+        const [hf, mf] = block.hora_fim.split(":").map(Number);
+        return total + (hf * 60 + mf - hi * 60 - mi);
+      }, 0);
+
   const capacidadeCompleta = (data: string) => {
     const base = capacidadeDoDia(data, agendamentos, capacidade);
     const planejado =
-      base.planejado + minutosAvulsos(data) + minutosCompromissos(data);
+      base.planejado +
+      minutosAvulsos(data) +
+      minutosCompromissos(data) +
+      minutosGoogle(data);
     return {
       ...base,
       planejado,
@@ -65,7 +79,10 @@ export function CapacidadeSemana({ inicioSemana }: { inicioSemana?: string }) {
     totalSemana(dias.map(iso), agendamentos) +
     dias.reduce(
       (total, dia) =>
-        total + minutosAvulsos(iso(dia)) + minutosCompromissos(iso(dia)),
+        total +
+        minutosAvulsos(iso(dia)) +
+        minutosCompromissos(iso(dia)) +
+        minutosGoogle(iso(dia)),
       0,
     );
   const sobrecarregados = dias
