@@ -116,10 +116,7 @@ export function useAlternarCronometroAgendamento() {
         segundos: Number(agendamento.cronometro_segundos ?? 0),
       };
     },
-    onSuccess: () => {
-      agendarSyncGoogle();
-      return qc.invalidateQueries({ queryKey: KEY });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 
@@ -143,10 +140,7 @@ export function useFinalizarCronometroAgendamento() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      agendarSyncGoogle();
-      return qc.invalidateQueries({ queryKey: KEY });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 

@@ -12,41 +12,27 @@ export default function GoogleCalendarReturn() {
       type: "appUserConnectorOAuthComplete" | "appUserConnectorOAuthFailed",
       reason?: string,
     ) => {
-      window.opener?.postMessage(
-        { type, connectorId: CONNECTOR_ID, reason },
-        window.location.origin,
-      );
+      window.opener?.postMessage({ type, connectorId: CONNECTOR_ID, reason }, window.location.origin);
       window.close();
     };
 
     if (params.get("success") !== "true") {
-      const reason = params.get("error") ?? "A autorização no Google não foi concluída.";
+      const reason = "A autorização no Google não foi concluída.";
       setMessage(reason);
       notifyOpenerAndClose("appUserConnectorOAuthFailed", reason);
       return;
     }
     const code = params.get("code");
-    if (!code) {
-      if (params.get("offline_access_allowed") === "false") {
-        const reason =
-          "Esta conexão ainda não pode ser usada: um administrador precisa habilitar o acesso offline no cliente do App User Connector nas configurações do workspace.";
-        setMessage(reason);
-        window.opener?.postMessage(
-          { type: "appUserConnectorOAuthFailed", connectorId: CONNECTOR_ID, reason },
-          window.location.origin,
-        );
-        return;
-      }
-      setMessage("A autorização terminou sem um código de troca.");
-      notifyOpenerAndClose("appUserConnectorOAuthFailed");
+    const state = params.get("gstate");
+    if (!code || !state) {
+      const reason = "A autorização terminou sem os dados de segurança necessários.";
+      setMessage(reason);
+      notifyOpenerAndClose("appUserConnectorOAuthFailed", reason);
       return;
     }
-    void supabase.functions
-      .invoke("google-oauth-complete", { body: { code } })
+    void supabase.functions.invoke("google-oauth-complete", { body: { code, state } })
       .then(({ data, error }) => {
-        if (error || !data?.success) {
-          throw new Error(data?.error ?? "Não foi possível concluir a conexão.");
-        }
+        if (error || !data?.success) throw new Error(data?.error ?? "Não foi possível concluir a conexão.");
         notifyOpenerAndClose("appUserConnectorOAuthComplete");
       })
       .catch((err) => {

@@ -1,21 +1,18 @@
-/**
- * App User Connector helpers.
- *
- * Server-only. Imported by Supabase edge functions to start per-user OAuth
- * and to make authenticated provider calls on behalf of the end user that
- * completed the OAuth flow.
- *
- * Never ship this module or its env values to the browser — it reads
- * server-side secrets from Deno.env and calls the connector gateway directly.
- */
+/** Helpers server-only do App User Connector. */
+
+export class AppUserConnectorError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly status: number,
+  ) {
+    super(code);
+    this.name = "AppUserConnectorError";
+  }
+}
 
 function requireApiKey(): string {
   const key = Deno.env.get("LOVABLE_API_KEY");
-  if (!key) {
-    throw new Error(
-      "LOVABLE_API_KEY is not set. App User Connector calls require a server-side workspace token.",
-    );
-  }
+  if (!key) throw new AppUserConnectorError("connector_not_configured", 500);
   return key;
 }
 
@@ -26,7 +23,6 @@ export interface AppUserOAuthAuthorizeParams {
   clientAPIKey: string;
   returnUrl: string;
   credentialsConfiguration?: Record<string, unknown>;
-  /** Stored lovack_* for a reconnect. Omit on first connect. */
   connectionAPIKey?: string;
 }
 
@@ -43,9 +39,7 @@ export async function authorizeAppUserOAuth(
     "Content-Type": "application/json",
     "X-Client-Api-Key": params.clientAPIKey,
   };
-  if (params.connectionAPIKey) {
-    headers["X-Connection-Api-Key"] = params.connectionAPIKey;
-  }
+  if (params.connectionAPIKey) headers["X-Connection-Api-Key"] = params.connectionAPIKey;
   const res = await fetch(`${params.gatewayBaseUrl}/api/v1/app-users/oauth2/authorize`, {
     method: "POST",
     headers,
@@ -56,32 +50,21 @@ export async function authorizeAppUserOAuth(
       credentials_configuration: params.credentialsConfiguration,
     }),
   });
-
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`App User OAuth start failed (${res.status}): ${text || res.statusText}`);
+  if (!res.ok) throw new AppUserConnectorError("oauth_start_failed", res.status);
+  const body = await res.json().catch(() => null) as {
+    authorization_url?: string;
+    session_id?: string;
+  } | null;
+  if (!body?.authorization_url) {
+    throw new AppUserConnectorError("invalid_oauth_response", 502);
   }
-
-  let body: { authorization_url?: string; session_id?: string };
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(`App User OAuth start returned invalid JSON: ${text.slice(0, 200)}`);
-  }
-  if (!body.authorization_url) {
-    throw new Error("App User OAuth start response missing authorization_url");
-  }
-  return {
-    authorizationUrl: body.authorization_url,
-    sessionId: body.session_id ?? "",
-  };
+  return { authorizationUrl: body.authorization_url, sessionId: body.session_id ?? "" };
 }
 
 export interface CallAsAppUserParams {
   gatewayBaseUrl: string;
   connectionAPIKey: string;
   connectorId: string;
-  /** Path under the connector, e.g. "/calendar/v3/users/me/calendarList". Leading slash optional. */
   path: string;
   init?: RequestInit;
 }
@@ -97,10 +80,7 @@ export async function callAsAppUser({
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${requireApiKey()}`);
   headers.set("X-Connection-Api-Key", connectionAPIKey);
-  return fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, {
-    ...init,
-    headers,
-  });
+  return fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, { ...init, headers });
 }
 
 export interface DisconnectAppUserParams {
@@ -114,20 +94,16 @@ export async function disconnectAppUser({
   connectionAPIKey,
   connectorId,
 }: DisconnectAppUserParams): Promise<void> {
-  const headers = new Headers();
-  headers.set("Authorization", `Bearer ${requireApiKey()}`);
-  headers.set("X-Connection-Api-Key", connectionAPIKey);
-  headers.set("Content-Type", "application/json");
   const res = await fetch(`${gatewayBaseUrl}/api/v1/app-users/connection`, {
     method: "DELETE",
-    headers,
+    headers: {
+      Authorization: `Bearer ${requireApiKey()}`,
+      "X-Connection-Api-Key": connectionAPIKey,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ connector_id: connectorId }),
   });
-
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`App User disconnect failed (${res.status}): ${text || res.statusText}`);
-  }
+  if (!res.ok) throw new AppUserConnectorError("disconnect_failed", res.status);
 }
 
 export interface ExchangeAppUserOAuthCodeResult {
@@ -135,13 +111,6 @@ export interface ExchangeAppUserOAuthCodeResult {
   connectorId: string;
 }
 
-/**
- * Swap the one-time code from the redirect landing page for the per-user
- * connection key (lovack_*). Server-only. Call it from an authenticated edge
- * function, then persist the returned connectionAPIKey server-side against the
- * signed-in app user. The code is single-use and short-lived, so exchange it
- * as soon as the redirect lands.
- */
 export async function exchangeAppUserOAuthCode(
   gatewayBaseUrl: string,
   code: string,
@@ -154,23 +123,13 @@ export async function exchangeAppUserOAuthCode(
     },
     body: JSON.stringify({ code }),
   });
-
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`App User OAuth exchange failed (${res.status}): ${text || res.statusText}`);
-  }
-
-  let body: { api_key?: string; connector_id?: string };
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(`App User OAuth exchange returned invalid JSON: ${text.slice(0, 200)}`);
-  }
-  if (!body.api_key) {
-    throw new Error("App User OAuth exchange response missing api_key");
-  }
-  if (!body.connector_id) {
-    throw new Error("App User OAuth exchange response missing connector_id");
+  if (!res.ok) throw new AppUserConnectorError("oauth_exchange_failed", res.status);
+  const body = await res.json().catch(() => null) as {
+    api_key?: string;
+    connector_id?: string;
+  } | null;
+  if (!body?.api_key || !body.connector_id) {
+    throw new AppUserConnectorError("invalid_exchange_response", 502);
   }
   return { connectionAPIKey: body.api_key, connectorId: body.connector_id };
 }

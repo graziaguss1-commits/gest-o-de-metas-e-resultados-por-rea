@@ -41,7 +41,7 @@ const App = () => <QueryClientProvider client={queryClient}><TooltipProvider><To
   <Route path="/acoes" element={<ProtectedRoute><ActionsPage /></ProtectedRoute>} />
   <Route path="/relatorios" element={<ProtectedRoute><RelatoriosPage /></ProtectedRoute>} />
   <Route path="/ajuda" element={<ProtectedRoute><AjudaPage /></ProtectedRoute>} />
-  <Route path="/configuracoes/*" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
+  <Route path="/configuracoes/*" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
   <Route path="/settings/*" element={<Navigate to="/configuracoes" replace />} />
   <Route path="*" element={<NotFound />} />
 </Routes></AuthProvider></BrowserRouter></TooltipProvider></QueryClientProvider>;

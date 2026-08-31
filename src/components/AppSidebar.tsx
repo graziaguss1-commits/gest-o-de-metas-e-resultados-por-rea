@@ -22,7 +22,7 @@ export function AppSidebar({ onLancarResultado }: { onLancarResultado?: () => vo
   ];
   const footerItems: NavItem[] = [
     { title: "Ajuda", url: "/ajuda", icon: HelpCircle },
-    { title: "Configurações", url: "/configuracoes", icon: Settings, adminOnly: true },
+    { title: "Configurações", url: "/configuracoes", icon: Settings },
   ];
   const initials = (profile?.full_name || "?").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
   const isActive = (url: string) => url === "/dashboard" ? pathname === "/" || pathname === "/dashboard" : pathname.startsWith(url);

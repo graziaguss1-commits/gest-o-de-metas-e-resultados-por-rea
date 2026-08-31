@@ -9,10 +9,12 @@ import TeamSettings from "@/components/settings/TeamSettings";
 import DemonstrationSettings from "@/components/settings/DemonstrationSettings";
 import NotificacoesSettings from "@/components/settings/NotificacoesSettings";
 import OnboardingSettings from "@/components/settings/OnboardingSettings";
+import { GoogleCalendarConnect } from "@/components/settings/GoogleCalendarConnect";
 import { useAuth } from "@/hooks/useAuth";
 
 const VALID_TABS = [
   "general",
+  "google-calendar",
   "notificacoes",
   "security",
   "integrations",
@@ -26,6 +28,10 @@ const TAB_META: Record<Tab, { title: string; description: string }> = {
   general: {
     title: "Geral",
     description: "Gerencie suas informações pessoais utilizadas na plataforma.",
+  },
+  "google-calendar": {
+    title: "Google Agenda",
+    description: "Conecte sua conta pessoal e escolha onde os compromissos serão sincronizados.",
   },
   notificacoes: {
     title: "Notificações",
@@ -62,7 +68,18 @@ export default function SettingsPage() {
   const { isAdmin } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const activeTab = getTabFromPath(pathname);
+  const requestedTab = getTabFromPath(pathname);
+  const adminTabs: Tab[] = [
+    "notificacoes",
+    "security",
+    "integrations",
+    "team",
+    "demonstration",
+    "onboarding",
+  ];
+  const activeTab = !isAdmin && adminTabs.includes(requestedTab)
+    ? "google-calendar"
+    : requestedTab;
   const meta = TAB_META[activeTab];
 
   const handleChange = (value: string) => {
@@ -76,6 +93,7 @@ export default function SettingsPage() {
         <Tabs value={activeTab} onValueChange={handleChange}>
           <TabsList>
             <TabsTrigger value="general">Geral</TabsTrigger>
+            <TabsTrigger value="google-calendar">Google Agenda</TabsTrigger>
             {isAdmin && <TabsTrigger value="notificacoes">Notificações</TabsTrigger>}
             {isAdmin && <TabsTrigger value="security">Segurança</TabsTrigger>}
             {isAdmin && <TabsTrigger value="integrations">Integrações</TabsTrigger>}
@@ -88,6 +106,7 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">{meta.description}</p>
           </div>
           <TabsContent value="general"><GeneralSettings /></TabsContent>
+          <TabsContent value="google-calendar"><GoogleCalendarConnect /></TabsContent>
           {isAdmin && <TabsContent value="notificacoes"><NotificacoesSettings /></TabsContent>}
           {isAdmin && <TabsContent value="security"><SecuritySettings /></TabsContent>}
           {isAdmin && (

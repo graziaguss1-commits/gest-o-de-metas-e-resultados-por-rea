@@ -198,10 +198,7 @@ export function useCreateAction() {
       if (error) return criarLocal(input);
       return normalizar(data as ActionItem);
     },
-    onSuccess: () => {
-      agendarSyncGoogle();
-      return qc.invalidateQueries({ queryKey: KEY });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 
@@ -221,10 +218,7 @@ export function useToggleAction() {
       const { error } = await table().update({ concluida }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      agendarSyncGoogle();
-      return qc.invalidateQueries({ queryKey: KEY });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 
