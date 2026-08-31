@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Agendamento } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
-import {
 import { agendarSyncGoogle } from "@/lib/googleSync";
+import {
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
   diasRecorrenciaPersistida,
