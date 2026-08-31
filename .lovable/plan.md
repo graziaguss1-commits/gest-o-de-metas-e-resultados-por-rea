@@ -1,36 +1,50 @@
-# Diagnóstico: erro ao clicar em "Validar e salvar" (Conectar Claude)
+# Integração Google Calendar (App User Connector, por usuário)
 
-Nenhum arquivo foi alterado. Abaixo, o que as verificações mostraram.
+O cliente OAuth "Google Calendar client" já está vinculado ao projeto. Agora implementamos a integração completa: cada usuário conecta a própria conta Google, com sincronização bidirecional, privacidade estrita e tokens apenas no Connector Gateway.
 
-## 1. Mensagem exata observada
+## 1. Banco de dados (migration idempotente)
 
-Chamando as funções diretamente no projeto de backend:
+- **`app_user_connections`**: guarda a chave de conexão criptografada (`lovack_*`) por usuário + conector. Sem acesso anon/authenticated; só service_role (edge functions).
+- **`google_calendar_connections`**: estado da conexão por usuário (e-mail Google, calendário escolhido, `sync_token`, `webhook_channel_id`/`resource_id` + expiração, `last_sync_at`). RLS: cada usuário vê/edita **somente a própria linha** (`auth.uid() = user_id`), sem exceção administrativa.
+- **`google_calendar_event_links`**: vínculo 1:1 entre agendamentos internos (`tarefa_agendamentos.id`) e eventos Google (`event_id`), com `etag`/`updated` para idempotência e anti-loop. RLS estrita por `auth.uid()`.
+- Grants adequados (service_role completo; authenticated apenas leitura da própria linha onde fizer sentido).
 
-- `POST /store-api-key` → HTTP 401, corpo `{"error":"Não autorizado"}`
-- `POST /validate-api-key` → HTTP 401, corpo `{"status":"error"}`
+## 2. Backend — edge functions (tudo via gateway, server-side)
 
-Não há stack trace. Os logs de runtime de `store-api-key` mostram apenas `booted (time: 289ms)` em 2026-08-25T13:40:01Z (momento do clique) e `validate-api-key` não tem log nenhum.
+Helpers compartilhados em `supabase/functions/_shared/`:
+- `appUserConnector.ts` (authorize/exchange/callAsAppUser/disconnect — arquivo padrão do Lovable);
+- `connectionKeyCrypto.ts` + `appUserConnections.ts` (criptografia AES-GCM com `APP_USER_CONNECTION_KEY_SECRET`, auto-provisionado).
 
-## 2. As funções estão implantadas?
+Funções:
+- `google-oauth-start` / `google-oauth-complete`: fluxo OAuth em popup; troca do `code` pela chave e armazenamento criptografado. Escopos: `userinfo.email`, `userinfo.profile`, `calendar.readonly` e `calendar.events`.
+- `google-calendar-status`: retorna se o usuário está conectado (sem dados de outros usuários).
+- `google-calendar-sync`: sincronização bidirecional e idempotente:
+  - **Google → app**: lista eventos do período via `sync_token` (ou janela inicial de ±60 dias); grava apenas **data, hora início/fim e flag "ocupado"** — título/descrição nunca são persistidos.
+  - **App → Google**: cria/atualiza/exclui eventos correspondentes aos `tarefa_agendamentos` do usuário, usando `event_links` + `etag` para não duplicar nem entrar em loop.
+- `google-calendar-webhook`: recebe notificações push do Google (canal por usuário) e dispara sync incremental; renova canais antes de expirar.
+- `google-calendar-disconnect`: revoga no gateway, remove linhas e vínculos do usuário.
 
-Sim — ambas respondem e a `store-api-key` inicializou hoje. Mas o que está implantado **não é o código atual do repositório**.
+## 3. Frontend
 
-## 3. Causa raiz
+- **Configurações → Integrações**: novo card individual "Google Agenda" (por usuário, não admin): conectar (popup OAuth), status com e-mail da conta, escolha do calendário, botão "Sincronizar agora" e desconectar. Rota `/oauth/google-calendar/return` para o retorno do popup.
+- **Calendário semanal**: blocos "Ocupado no Google" (apenas intervalo, sem título) junto aos blocos internos, considerados no cálculo de capacidade/sobrecarga do dia.
+- **Planejamento com Claude**: envia apenas **intervalos ocupados** do Google (sem títulos) como `blocos_ocupados`, para o planejador não colidir com compromissos externos.
+- Hooks React Query (`useGoogleCalendarConnection`, `useGoogleBusyBlocks`) e tipos Supabase atualizados.
 
-Os textos retornados não existem no código-fonte atual:
+## 4. Garantias
 
-- `supabase/functions/_shared/common.ts` (linhas 46–50) responde 401 com `{"success":false,"error":"Sua sessão expirou. Entre novamente.","code":"unauthorized"}` — nunca `"Não autorizado"`.
-- `errorResponse` (linha 112) faz `console.error` em toda falha; não há nenhum log de erro registrado, apenas o boot.
-- `validate-api-key` nunca retorna `{"status":"error"}` em lugar algum do código atual.
+- Cada usuário só acessa a própria conta; tokens nunca saem do gateway; chave `lovack_*` criptografada e só em edge functions.
+- Idempotência: `event_links` + `etag`/`sync_token`; janela de sync limitada (sem criar registros ilimitados no futuro).
+- Não altera timers, conclusão de tarefas, recorrências ou planejamento manual existentes.
 
-Ou seja: **as versões implantadas são anteriores ao commit `557ffd9` (integração com a Claude, 24/08)**. O front-end novo (`ApiKeysSettings.tsx`) chama funções antigas, que rejeitam a requisição com 401 antes de chegar ao Vault e à validação na Anthropic. As dependências no banco estão corretas: `store_own_api_key`, `read_user_api_key` e `delete_own_api_key` existem como `SECURITY DEFINER`, e `api_keys_registry` tem as colunas esperadas.
+## 5. Validação
 
-Ponto não confirmado: como a fonte implantada é antiga, não dá para afirmar se, depois do redeploy, o fluxo passa direto — pode ainda haver o 401 legítimo da verificação de admin. Isso se verifica na primeira execução após o redeploy.
+- Typecheck, lint, testes unitários e build.
+- Deploy das edge functions e chamada sem sessão para confirmar 401 estruturado.
+- Nota: verificar que `https://connector-gateway.lovable.dev/api/v1/app-users/oauth2/callback` está como redirect URI autorizado no cliente OAuth do Google Cloud Console.
 
-## 4. Correção mínima recomendada
+## Detalhes técnicos
 
-1. Reimplantar `store-api-key`, `validate-api-key` e `delete-api-key` a partir do código atual do repositório (nenhuma mudança de código necessária).
-2. Refazer o teste de "Validar e salvar" na tela e ler os logs das funções.
-3. Se ainda vier 401/403, ler a mensagem — o código atual distingue `unauthorized` (sessão), `inactive_user` e `admin_required` — e tratar só o caso que aparecer.
-
-Nenhuma chave de API foi lida, exibida ou registrada nesta investigação.
+- Gateway: `https://connector-gateway.lovable.dev`, `connectorId: "google_calendar"`, env `GOOGLE_CALENDAR_APP_USER_CONNECTOR_CLIENT_API_KEY` (já sincronizada).
+- `app_user_id` = `auth.users.id` (UUID opaco), nunca e-mail.
+- Sync incremental com `syncToken`; fallback para `timeMin/timeMax` em caso de `410 Gone`.
