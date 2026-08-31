@@ -68,7 +68,10 @@ import {
 } from "@/lib/agenda";
 import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
 import type { Tarefa } from "@/lib/metas";
-import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
+import {
+  useAutoSyncGoogleCalendar,
+  useGoogleBusyBlocks,
+} from "@/hooks/useGoogleCalendar";
 
 type CalendarTask = PlanoWithMeta["tarefas"][number] & {
   plano: string;
@@ -138,6 +141,8 @@ export default function CalendarPage() {
   const queryStart = iso(startOfWeek(days[0]));
   const queryEnd = iso(addDays(startOfWeek(days[days.length - 1]), 6));
   const { data: googleBusy = [] } = useGoogleBusyBlocks(queryStart, queryEnd);
+  // Sincroniza ao abrir a tela e a cada troca de período exibido.
+  useAutoSyncGoogleCalendar(`${queryStart}:${queryEnd}`, true);
   const queryDates = useMemo(() => {
     const datas: string[] = [];
     let atual = new Date(`${queryStart}T12:00:00`);

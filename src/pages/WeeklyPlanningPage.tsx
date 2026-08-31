@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useAgendamentos";
 import { useCompromissos } from "@/hooks/useCompromissos";
 import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
+import { sincronizarGoogleAgora } from "@/lib/googleSync";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import {
   useAplicarPlanejamentoClaude,
@@ -238,7 +239,10 @@ export default function WeeklyPlanningPage() {
     useState<PlanejamentoClaudeResponse | null>(null);
 
   const { data: agendamentos = [] } = useAgendamentos(weekStartISO, weekEndISO);
-  const { data: googleBusy = [] } = useGoogleBusyBlocks(weekStartISO, weekEndISO);
+  const { data: googleBusy = [], refetch: refetchGoogleBusy } = useGoogleBusyBlocks(
+    weekStartISO,
+    weekEndISO,
+  );
   const { data: compromissos = [] } = useCompromissos(
     weekStartISO,
     weekEndISO,
@@ -254,6 +258,21 @@ export default function WeeklyPlanningPage() {
     setStep(1);
     setClaudeOpen(false);
     setClaudeSuggestion(null);
+    // Sincroniza com o Google antes de planejar, para o Claude enxergar os
+    // horários ocupados mais recentes (apenas data/hora, sem conteúdo).
+    await sincronizarGoogleAgora();
+    const { data: freshBusy } = await refetchGoogleBusy();
+    const blocosOcupados = [
+      ...busyBlocks.filter((b) => b.titulo !== "Ocupado no Google"),
+      ...(freshBusy ?? []).map((block) => ({
+        data: block.data,
+        inicio: hhmm(block.hora_inicio),
+        fim: hhmm(block.hora_fim),
+        titulo: "Ocupado no Google",
+        tipo: "compromisso" as const,
+      })),
+    ];
+
     gerarPlanejamento.reset();
     aplicarPlanejamento.reset();
     // As mutations são estáveis durante a troca da semana.
@@ -451,7 +470,7 @@ export default function WeeklyPlanningPage() {
       data: block.data,
       inicio: hhmm(block.hora_inicio),
       fim: hhmm(block.hora_fim),
-      titulo: "Ocupado (Google Agenda)",
+      titulo: "Ocupado no Google",
       tipo: "compromisso" as const,
     })),
   ];
@@ -520,6 +539,21 @@ export default function WeeklyPlanningPage() {
       return;
     }
 
+    // Sincroniza com o Google antes de planejar, para o Claude enxergar os
+    // horários ocupados mais recentes (apenas data/hora, sem conteúdo).
+    await sincronizarGoogleAgora();
+    const { data: freshBusy } = await refetchGoogleBusy();
+    const blocosOcupados = [
+      ...busyBlocks.filter((b) => b.titulo !== "Ocupado no Google"),
+      ...(freshBusy ?? []).map((block) => ({
+        data: block.data,
+        inicio: hhmm(block.hora_inicio),
+        fim: hhmm(block.hora_fim),
+        titulo: "Ocupado no Google",
+        tipo: "compromisso" as const,
+      })),
+    ];
+
     gerarPlanejamento.reset();
     aplicarPlanejamento.reset();
     setClaudeSuggestion(null);
@@ -537,7 +571,7 @@ export default function WeeklyPlanningPage() {
           foco_atual: state.focus,
         },
         tarefas: claudeTasks,
-        blocos_ocupados: busyBlocks,
+        blocos_ocupados: blocosOcupados,
       });
       setClaudeSuggestion(suggestion);
     } catch {
