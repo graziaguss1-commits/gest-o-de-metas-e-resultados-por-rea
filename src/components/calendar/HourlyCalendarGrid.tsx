@@ -6,6 +6,7 @@ import type { ActionItem } from "@/hooks/useActions";
 import type { Tarefa } from "@/lib/metas";
 import { formatDuracao, hhmm, horaFim } from "@/lib/agenda";
 import { TaskTimerButton } from "@/components/calendar/TaskTimerButton";
+import type { GoogleBusyBlock } from "@/hooks/useGoogleCalendar";
 
 const START = 6;
 const END = 22;
@@ -96,6 +97,7 @@ type Props = {
   agendamentos: Agendamento[];
   acoesAvulsas: ActionItem[];
   compromissos: Compromisso[];
+  googleBusy?: GoogleBusyBlock[];
   taskById: Map<string, Tarefa & { area?: string; meta?: string | null }>;
   completedActionIds: Set<string>;
   realMinutesByActionId: Map<string, number | null>;
@@ -119,6 +121,7 @@ export function HourlyCalendarGrid({
   agendamentos,
   acoesAvulsas,
   compromissos,
+  googleBusy = [],
   taskById,
   completedActionIds,
   realMinutesByActionId,
@@ -207,6 +210,7 @@ export function HourlyCalendarGrid({
               item.duracao_minutos,
           );
           const fixed = compromissos.filter((item) => item.data === data);
+          const google = googleBusy.filter((item) => item.data === data);
           const criarSeed = (
             key: string,
             inicio: string,
@@ -238,6 +242,13 @@ export function HourlyCalendarGrid({
             ...fixed.map((item) =>
               criarSeed(
                 `compromisso:${item.id}`,
+                item.hora_inicio,
+                minutesOf(item.hora_fim) - minutesOf(item.hora_inicio),
+              ),
+            ),
+            ...google.map((item) =>
+              criarSeed(
+                `google:${item.id}`,
                 item.hora_inicio,
                 minutesOf(item.hora_fim) - minutesOf(item.hora_inicio),
               ),
@@ -555,6 +566,25 @@ export function HourlyCalendarGrid({
                         </div>
                       </>
                     )}
+                  </div>
+                );
+              })}
+
+              {google.map((block) => {
+                const layout = layouts.get(`google:${block.id}`)!;
+                const inicio = hhmm(block.hora_inicio);
+                const fim = hhmm(block.hora_fim);
+                return (
+                  <div
+                    key={block.id}
+                    aria-hidden="true"
+                    className="absolute z-[5] overflow-hidden rounded-lg border border-dashed border-muted-foreground/30 bg-muted/50 px-1.5 py-1"
+                    style={estiloDoLayout(layout)}
+                    title={`${inicio}–${fim} · Ocupado no Google Agenda (horário reservado)`}
+                  >
+                    <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {inicio}–{fim} · Google
+                    </div>
                   </div>
                 );
               })}
