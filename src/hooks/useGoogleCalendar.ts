@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -7,7 +8,15 @@ export type GoogleCalendarStatus = {
   connected: boolean;
   google_email: string | null;
   calendar_id: string;
+  calendar_timezone: string | null;
   last_sync_at: string | null;
+};
+
+export type GoogleCalendarOption = {
+  id: string;
+  summary: string;
+  primary: boolean;
+  timeZone: string | null;
 };
 
 export function useGoogleCalendarStatus(enabled = true) {
@@ -22,8 +31,45 @@ export function useGoogleCalendarStatus(enabled = true) {
         connected: Boolean(data.connected),
         google_email: data.google_email ?? null,
         calendar_id: data.calendar_id ?? "primary",
+        calendar_timezone: data.calendar_timezone ?? null,
         last_sync_at: data.last_sync_at ?? null,
       };
+    },
+  });
+}
+
+/** Lista os calendários graváveis da conta Google do próprio usuário. */
+export function useGoogleCalendarList(enabled = true) {
+  return useQuery({
+    queryKey: ["google-calendar-list"],
+    enabled,
+    queryFn: async (): Promise<GoogleCalendarOption[]> => {
+      const { data, error } = await supabase.functions.invoke("google-calendar-calendars");
+      if (error || !data?.success) return [];
+      return (data.calendars ?? []) as GoogleCalendarOption[];
+    },
+  });
+}
+
+export function useSelecionarCalendarioGoogle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (calendarId: string) => {
+      const { data, error } = await supabase.functions.invoke("google-calendar-calendars", {
+        method: "POST",
+        body: { calendar_id: calendarId },
+      });
+      if (error || !data?.success) {
+        throw new Error(data?.error ?? "Não foi possível trocar o calendário de destino.");
+      }
+      const sync = await supabase.functions.invoke("google-calendar-sync");
+      if (sync.error) throw new Error("Calendário alterado, mas a sincronização falhou.");
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-status"] }),
+        queryClient.invalidateQueries({ queryKey: ["google-busy-blocks"] }),
+      ]);
     },
   });
 }
@@ -151,4 +197,36 @@ export function useDesconectarGoogleCalendar() {
       ]);
     },
   });
+}
+
+/**
+ * Dispara sincronização silenciosa (abertura de tela, troca de período,
+ * alterações locais ou antes do planejamento com Claude). Falhas não
+ * interrompem o fluxo do usuário.
+ */
+export function useAutoSyncGoogleCalendar(chave: string, ativo: boolean) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!ativo) return;
+    let cancelado = false;
+    void supabase.functions
+      .invoke("google-calendar-sync")
+      .then(() => {
+        if (cancelado) return;
+        void queryClient.invalidateQueries({ queryKey: ["google-busy-blocks"] });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelado = true;
+    };
+  }, [chave, ativo, queryClient]);
+}
+
+/** Sincronização imperativa (ex.: antes de chamar o Claude). */
+export async function sincronizarGoogleCalendarAgora() {
+  try {
+    await supabase.functions.invoke("google-calendar-sync");
+  } catch {
+    // Melhor esforço: o planejamento segue com os dados já sincronizados.
+  }
 }
