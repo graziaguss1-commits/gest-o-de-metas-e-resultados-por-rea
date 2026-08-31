@@ -21,6 +21,7 @@ import AjudaPage from "./pages/AjudaPage";
 import SettingsPage from "./pages/SettingsPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import NotFound from "./pages/NotFound";
+import GoogleCalendarReturn from "./pages/oauth/GoogleCalendarReturn";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false } } });
 function TriggerHealthCheck() { useEffect(() => { const checked = sessionStorage.getItem("auth_trigger_checked"); if (checked) return; supabase.functions.invoke("ensure-auth-trigger").then(({ data, error }) => { sessionStorage.setItem("auth_trigger_checked", "1"); if (error || !(data as { ok?: boolean })?.ok) console.warn("[Auth Setup] Trigger check failed:", error || (data as { message?: string })?.message); }).catch((err) => console.warn("[Auth Setup]", err)); }, []); return null; }
@@ -29,6 +30,7 @@ const App = () => <QueryClientProvider client={queryClient}><TooltipProvider><To
   <Route path="/" element={<Navigate to="/dashboard" replace />} />
   <Route path="/auth" element={<AuthPage />} />
   <Route path="/pending-approval" element={<ProtectedRoute allowUnapproved><PendingApprovalPage /></ProtectedRoute>} />
+  <Route path="/oauth/google-calendar/return" element={<GoogleCalendarReturn />} />
   <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
   <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
   <Route path="/metas" element={<ProtectedRoute><MetasPage /></ProtectedRoute>} />
