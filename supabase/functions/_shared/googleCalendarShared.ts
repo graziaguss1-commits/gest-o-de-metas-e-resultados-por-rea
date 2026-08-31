@@ -34,17 +34,17 @@ export async function getAuthenticatedUser(req: Request) {
   return user;
 }
 
-/** Converte um dateTime ISO do Google para data/hora locais de São Paulo. */
-export function googleDateTimeToLocal(dateTime: string) {
+/** Converte um dateTime ISO do Google para data/hora no fuso do calendário. */
+export function googleDateTimeToLocal(dateTime: string, timeZone: string = TIMEZONE) {
   const d = new Date(dateTime);
   const data = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIMEZONE,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(d);
   const hora = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: TIMEZONE,
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

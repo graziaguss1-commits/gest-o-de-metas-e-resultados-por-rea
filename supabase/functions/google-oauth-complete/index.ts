@@ -57,7 +57,11 @@ Deno.serve(async (req) => {
         if (primary?.id) {
           await admin
             .from("google_calendar_connections")
-            .update({ google_email: primary.id, updated_at: new Date().toISOString() })
+            .update({
+              google_email: primary.id,
+              calendar_timezone: typeof primary.timeZone === "string" ? primary.timeZone : null,
+              updated_at: new Date().toISOString(),
+            })
             .eq("user_id", user.id);
         }
       }

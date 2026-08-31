@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { agendarSyncGoogle } from "@/lib/googleSync";
 
 export type RecorrenciaCompromisso = "nenhuma" | "semanal" | "quinzenal" | "mensal";
 
@@ -160,7 +161,10 @@ export function useCriarCompromisso() {
       salvarLocal(input);
       return { armazenamento: "local" as const };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -177,7 +181,10 @@ export function useAtualizarCompromisso() {
       const { error } = await supabase.from("compromissos").update(values as never).eq("id", serieId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -193,6 +200,9 @@ export function useExcluirCompromisso() {
       const { error } = await supabase.from("compromissos").delete().eq("id", serieId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }

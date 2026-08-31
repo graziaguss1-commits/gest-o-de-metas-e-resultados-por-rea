@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
   const { data: conn } = await adminClient()
     .from("google_calendar_connections")
-    .select("google_email, calendar_id, last_sync_at")
+    .select("google_email, calendar_id, calendar_timezone, last_sync_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
     connected: true,
     google_email: conn?.google_email ?? null,
     calendar_id: conn?.calendar_id ?? "primary",
+    calendar_timezone: conn?.calendar_timezone ?? null,
     last_sync_at: conn?.last_sync_at ?? null,
   });
 });

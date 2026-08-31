@@ -2,12 +2,13 @@
 //
 // Regras de privacidade e idempotência:
 // - Google -> app: persistimos apenas data/hora início/fim ("ocupado") dos
-//   eventos do usuário. Títulos e descrições NUNCA são gravados.
-// - App -> Google: cada tarefa_agendamentos vira um evento marcado com
-//   extendedProperties.private.metasia = <agendamento_id>. Eventos com essa
-//   marca são ignorados na importação, evitando loops.
-// - google_calendar_event_links vincula 1:1 agendamento <-> evento, com etag
-//   e timestamps para atualizar só o que mudou.
+//   eventos do usuário. Títulos, descrições, local e participantes NUNCA são
+//   gravados nem registrados em log.
+// - App -> Google: cada origem interna (ocorrência agendada, compromisso e
+//   ação avulsa) vira um evento marcado com extendedProperties.private.metasia.
+//   Eventos com essa marca são ignorados na importação, evitando loops.
+// - google_calendar_event_links vincula 1:1 (origem, origem_id) <-> evento,
+//   com etag/updated para atualizar só o que mudou.
 // - Janela limitada (7 dias no passado, 60 no futuro) para não criar
 //   registros ilimitados.
 import { callAsAppUser } from "./appUserConnector.ts";
@@ -25,6 +26,8 @@ const enc = encodeURIComponent;
 
 const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const hhmmss = (hora: string) => (hora.length === 5 ? `${hora}:00` : hora);
 
 /** Soma minutos a uma data/hora locais, devolvendo data e hora locais. */
 function addMinutesLocal(data: string, hora: string, minutos: number) {
@@ -47,6 +50,17 @@ type GoogleEvent = {
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   extendedProperties?: { private?: Record<string, string> };
+};
+
+type Espelho = {
+  origem: "agendamento" | "compromisso" | "acao_avulsa";
+  origem_id: string;
+  agendamento_id: string | null;
+  summary: string;
+  data: string;
+  hora_inicio: string;
+  hora_fim: string;
+  updated_at: string;
 };
 
 export type SyncStats = {
@@ -78,6 +92,7 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
     conn = created;
   }
   const calendarId: string = conn.calendar_id || "primary";
+  const timeZone: string = conn.calendar_timezone || TIMEZONE;
 
   const now = Date.now();
   const timeMin = new Date(now - WINDOW_PAST_DAYS * 86400000);
@@ -93,7 +108,9 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
   };
 
   // ---------- 1) Google -> app: apenas intervalos ocupados ----------
-  const listEvents = async (syncToken: string | null): Promise<{ items: GoogleEvent[]; nextSyncToken: string | null }> => {
+  const listEvents = async (
+    syncToken: string | null,
+  ): Promise<{ items: GoogleEvent[]; nextSyncToken: string | null }> => {
     const items: GoogleEvent[] = [];
     let nextSyncToken: string | null = null;
     let pageToken: string | undefined;
@@ -118,7 +135,7 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
         return listEvents(null);
       }
       if (!res.ok) {
-        throw new Error(`Google events list failed (${res.status}): ${await res.text()}`);
+        throw new Error(`Google events list failed (${res.status})`);
       }
       const body = await res.json();
       items.push(...((body.items ?? []) as GoogleEvent[]));
@@ -143,8 +160,8 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
     }
     // Eventos de dia inteiro (start.date) não bloqueiam horário específico.
     if (!event.start?.dateTime || !event.end?.dateTime) continue;
-    const inicio = googleDateTimeToLocal(event.start.dateTime);
-    const fim = googleDateTimeToLocal(event.end.dateTime);
+    const inicio = googleDateTimeToLocal(event.start.dateTime, timeZone);
+    const fim = googleDateTimeToLocal(event.end.dateTime, timeZone);
     const { error } = await admin.from("google_busy_blocks").upsert(
       {
         user_id: userId,
@@ -159,13 +176,18 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
     if (!error) stats.busy_upserts++;
   }
 
-  // ---------- 2) App -> Google: espelha os agendamentos do usuário ----------
+  // ---------- 2) App -> Google: espelha a agenda interna do usuário ----------
+  const janelaInicio = isoDate(timeMin);
+  const janelaFim = isoDate(timeMax);
+  const espelhos: Espelho[] = [];
+
+  // 2a) Ocorrências agendadas de tarefas de plano.
   const { data: agendamentos, error: agError } = await admin
     .from("tarefa_agendamentos")
     .select("id,tarefa_id,data,hora_inicio,duracao_minutos,updated_at")
     .eq("criado_por", userId)
-    .gte("data", isoDate(timeMin))
-    .lte("data", isoDate(timeMax));
+    .gte("data", janelaInicio)
+    .lte("data", janelaFim);
   if (agError) throw agError;
 
   const tarefaIds = [...new Set((agendamentos ?? []).map((a) => a.tarefa_id))];
@@ -177,56 +199,122 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
       .in("id", tarefaIds);
     (tarefas ?? []).forEach((t) => descricaoPorTarefa.set(t.id, t.descricao));
   }
+  for (const ag of agendamentos ?? []) {
+    const fim = addMinutesLocal(ag.data, ag.hora_inicio, ag.duracao_minutos);
+    espelhos.push({
+      origem: "agendamento",
+      origem_id: ag.id,
+      agendamento_id: ag.id,
+      summary: descricaoPorTarefa.get(ag.tarefa_id) ?? "Ação estratégica",
+      data: ag.data,
+      hora_inicio: hhmmss(ag.hora_inicio),
+      hora_fim: fim.hora,
+      updated_at: ag.updated_at,
+    });
+  }
+
+  // 2b) Compromissos fixos.
+  const { data: compromissos, error: compError } = await admin
+    .from("compromissos")
+    .select("id,titulo,data,hora_inicio,hora_fim,updated_at")
+    .eq("criado_por", userId)
+    .gte("data", janelaInicio)
+    .lte("data", janelaFim);
+  if (compError) throw compError;
+  for (const c of compromissos ?? []) {
+    espelhos.push({
+      origem: "compromisso",
+      origem_id: c.id,
+      agendamento_id: null,
+      summary: c.titulo,
+      data: c.data,
+      hora_inicio: hhmmss(c.hora_inicio),
+      hora_fim: hhmmss(c.hora_fim),
+      updated_at: c.updated_at,
+    });
+  }
+
+  // 2c) Ações avulsas com data e hora definidas.
+  const { data: acoes, error: acoesError } = await admin
+    .from("acoes_avulsas")
+    .select("id,descricao,data_agendada,hora_inicio,duracao_minutos,updated_at")
+    .eq("criado_por", userId)
+    .not("data_agendada", "is", null)
+    .not("hora_inicio", "is", null)
+    .gte("data_agendada", janelaInicio)
+    .lte("data_agendada", janelaFim);
+  if (acoesError) throw acoesError;
+  for (const a of acoes ?? []) {
+    const fim = addMinutesLocal(a.data_agendada, a.hora_inicio, a.duracao_minutos ?? 60);
+    espelhos.push({
+      origem: "acao_avulsa",
+      origem_id: a.id,
+      agendamento_id: null,
+      summary: a.descricao,
+      data: a.data_agendada,
+      hora_inicio: hhmmss(a.hora_inicio),
+      hora_fim: fim.hora,
+      updated_at: a.updated_at,
+    });
+  }
 
   const { data: links } = await admin
     .from("google_calendar_event_links")
     .select("*")
     .eq("user_id", userId);
-  const linkPorAgendamento = new Map(
-    (links ?? []).filter((l) => l.agendamento_id).map((l) => [l.agendamento_id as string, l]),
+  const linkPorChave = new Map(
+    (links ?? []).map((l) => [`${l.origem}:${l.origem_id}`, l]),
   );
 
-  for (const ag of agendamentos ?? []) {
-    const inicio = { data: ag.data, hora: ag.hora_inicio };
-    const fim = addMinutesLocal(ag.data, ag.hora_inicio, ag.duracao_minutos);
+  for (const item of espelhos) {
     const body = {
-      summary: descricaoPorTarefa.get(ag.tarefa_id) ?? "Ação estratégica",
-      start: { dateTime: `${inicio.data}T${inicio.hora}`, timeZone: TIMEZONE },
-      end: { dateTime: `${fim.data}T${fim.hora}`, timeZone: TIMEZONE },
-      extendedProperties: { private: { metasia: ag.id } },
+      summary: item.summary,
+      start: { dateTime: `${item.data}T${item.hora_inicio}`, timeZone },
+      end: { dateTime: `${item.data}T${item.hora_fim}`, timeZone },
+      extendedProperties: { private: { metasia: `${item.origem}:${item.origem_id}` } },
     };
-    const link = linkPorAgendamento.get(ag.id);
+    const link = linkPorChave.get(`${item.origem}:${item.origem_id}`);
     if (!link) {
       const res = await callAsAppUser({
         gatewayBaseUrl: GATEWAY_BASE_URL,
         connectionAPIKey: key,
         connectorId: CONNECTOR_ID,
         path: `/calendar/v3/calendars/${enc(calendarId)}/events`,
-        init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
       });
       if (!res.ok) {
-        console.error(`Google event create failed (${res.status}): ${await res.text()}`);
+        console.error(`Google event create failed (${res.status})`);
         continue;
       }
       const created = await res.json();
       await admin.from("google_calendar_event_links").insert({
         user_id: userId,
-        agendamento_id: ag.id,
+        origem: item.origem,
+        origem_id: item.origem_id,
+        agendamento_id: item.agendamento_id,
         google_event_id: created.id,
         etag: created.etag ?? null,
         google_updated: created.updated ?? null,
       });
       stats.eventos_criados++;
-    } else if (new Date(ag.updated_at) > new Date(link.updated_at)) {
+    } else if (new Date(item.updated_at) > new Date(link.updated_at)) {
       const res = await callAsAppUser({
         gatewayBaseUrl: GATEWAY_BASE_URL,
         connectionAPIKey: key,
         connectorId: CONNECTOR_ID,
         path: `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(link.google_event_id)}`,
-        init: { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+        init: {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
       });
       if (!res.ok) {
-        console.error(`Google event update failed (${res.status}): ${await res.text()}`);
+        console.error(`Google event update failed (${res.status})`);
         continue;
       }
       const updated = await res.json();
@@ -242,9 +330,33 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
     }
   }
 
-  // Agendamentos excluídos no app: o vínculo fica com agendamento_id nulo
-  // (FK ON DELETE SET NULL) e o evento correspondente é removido no Google.
-  const orfaos = (links ?? []).filter((l) => !l.agendamento_id);
+  // Itens removidos no app: apagamos apenas o espelho no Google; planos, metas
+  // e histórico interno permanecem intactos.
+  const chavesAtivas = new Set(espelhos.map((e) => `${e.origem}:${e.origem_id}`));
+  const existePorOrigem = async (origem: string, ids: string[]) => {
+    if (!ids.length) return new Set<string>();
+    const tabela = origem === "compromisso"
+      ? "compromissos"
+      : origem === "acao_avulsa"
+      ? "acoes_avulsas"
+      : "tarefa_agendamentos";
+    const { data } = await admin.from(tabela).select("id").in("id", ids);
+    return new Set((data ?? []).map((r: { id: string }) => r.id));
+  };
+
+  const candidatos = (links ?? []).filter(
+    (l) => !chavesAtivas.has(`${l.origem}:${l.origem_id}`),
+  );
+  const porOrigem = new Map<string, string[]>();
+  for (const l of candidatos) {
+    porOrigem.set(l.origem, [...(porOrigem.get(l.origem) ?? []), l.origem_id]);
+  }
+  const existentes = new Map<string, Set<string>>();
+  for (const [origem, ids] of porOrigem) {
+    existentes.set(origem, await existePorOrigem(origem, ids));
+  }
+  const orfaos = candidatos.filter((l) => !existentes.get(l.origem)?.has(l.origem_id));
+
   for (const link of orfaos) {
     const res = await callAsAppUser({
       gatewayBaseUrl: GATEWAY_BASE_URL,
@@ -303,7 +415,7 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
           })
           .eq("user_id", userId);
       } else {
-        console.error(`Google watch registration failed (${res.status}): ${await res.text()}`);
+        console.error(`Google watch registration failed (${res.status})`);
       }
     }
   } catch (watchError) {

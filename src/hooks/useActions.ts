@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { agendarSyncGoogle } from "@/lib/googleSync";
 
 export type ActionItem = {
   id: string;
@@ -197,7 +198,10 @@ export function useCreateAction() {
       if (error) return criarLocal(input);
       return normalizar(data as ActionItem);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -217,7 +221,10 @@ export function useToggleAction() {
       const { error } = await table().update({ concluida }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -251,6 +258,9 @@ export function useScheduleAction() {
       else delete schedules[id];
       salvarAgendasLocais(schedules);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }

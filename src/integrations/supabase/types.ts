@@ -323,6 +323,7 @@ export type Database = {
       google_calendar_connections: {
         Row: {
           calendar_id: string
+          calendar_timezone: string | null
           created_at: string
           google_email: string | null
           id: string
@@ -336,6 +337,7 @@ export type Database = {
         }
         Insert: {
           calendar_id?: string
+          calendar_timezone?: string | null
           created_at?: string
           google_email?: string | null
           id?: string
@@ -349,6 +351,7 @@ export type Database = {
         }
         Update: {
           calendar_id?: string
+          calendar_timezone?: string | null
           created_at?: string
           google_email?: string | null
           id?: string
@@ -370,6 +373,8 @@ export type Database = {
           google_event_id: string
           google_updated: string | null
           id: string
+          origem: string
+          origem_id: string
           updated_at: string
           user_id: string
         }
@@ -380,6 +385,8 @@ export type Database = {
           google_event_id: string
           google_updated?: string | null
           id?: string
+          origem?: string
+          origem_id: string
           updated_at?: string
           user_id: string
         }
@@ -390,6 +397,8 @@ export type Database = {
           google_event_id?: string
           google_updated?: string | null
           id?: string
+          origem?: string
+          origem_id?: string
           updated_at?: string
           user_id?: string
         }

@@ -4,9 +4,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useConectarGoogleCalendar,
   useDesconectarGoogleCalendar,
+  useGoogleCalendarList,
   useGoogleCalendarStatus,
+  useSelecionarCalendarioGoogle,
   useSincronizarGoogleCalendar,
 } from "@/hooks/useGoogleCalendar";
 
@@ -20,14 +29,20 @@ export function GoogleCalendarConnect() {
   const conectar = useConectarGoogleCalendar();
   const sincronizar = useSincronizarGoogleCalendar();
   const desconectar = useDesconectarGoogleCalendar();
+  const selecionar = useSelecionarCalendarioGoogle();
   const [confirmando, setConfirmando] = useState(false);
+  const { data: calendarios = [] } = useGoogleCalendarList(status?.connected ?? false);
 
   if (isLoading) {
     return <Skeleton className="h-24 w-full max-w-2xl" />;
   }
 
   const connected = status?.connected ?? false;
-  const pending = conectar.isPending || sincronizar.isPending || desconectar.isPending;
+  const pending =
+    conectar.isPending ||
+    sincronizar.isPending ||
+    desconectar.isPending ||
+    selecionar.isPending;
 
   const handleConnect = async () => {
     try {
@@ -64,8 +79,18 @@ export function GoogleCalendarConnect() {
     }
   };
 
+  const handleSelecionar = async (calendarId: string) => {
+    try {
+      await selecionar.mutateAsync(calendarId);
+      toast.success("Calendário de destino atualizado e sincronizado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao trocar o calendário.");
+    }
+  };
+
   return (
-    <div className="metasia-card max-w-2xl p-4 flex items-center gap-4">
+    <div className="metasia-card max-w-2xl p-4 space-y-3">
+    <div className="flex items-center gap-4">
       <div
         className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
         style={{
@@ -114,6 +139,9 @@ export function GoogleCalendarConnect() {
               )}
               Sincronizar
             </Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={handleConnect}>
+              Reconectar
+            </Button>
             <Button
               size="sm"
               variant={confirmando ? "destructive" : "outline"}
@@ -138,6 +166,36 @@ export function GoogleCalendarConnect() {
           </Button>
         )}
       </div>
+    </div>
+      {connected && calendarios.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap border-t border-border pt-3">
+          <span className="text-xs text-muted-foreground">Calendário de destino:</span>
+          <Select
+            value={
+              status?.calendar_id && status.calendar_id !== "primary"
+                ? status.calendar_id
+                : (calendarios.find((c) => c.primary)?.id ?? "primary")
+            }
+            disabled={pending}
+            onValueChange={handleSelecionar}
+          >
+            <SelectTrigger className="h-8 w-[260px] text-xs">
+              <SelectValue placeholder="Selecione um calendário" />
+            </SelectTrigger>
+            <SelectContent>
+              {calendarios.map((cal) => (
+                <SelectItem key={cal.id} value={cal.id} className="text-xs">
+                  {cal.summary}
+                  {cal.primary ? " (principal)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selecionar.isPending && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          )}
+        </div>
+      )}
     </div>
   );
 }
