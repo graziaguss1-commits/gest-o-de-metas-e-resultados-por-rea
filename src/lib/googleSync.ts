@@ -2,26 +2,20 @@ import { supabase } from "@/integrations/supabase/client";
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/**
- * Agenda uma sincronização com o Google Agenda após alterações locais.
- * Debounce curto para agrupar várias mutações seguidas; falhas são silenciosas
- * (a integração pode nem estar conectada) e nunca bloqueiam o fluxo do app.
- */
+/** Agrupa alterações de agenda e sincroniza sem bloquear a interface. */
 export function agendarSyncGoogle(delayMs = 1500) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     timer = null;
-    void supabase.functions
-      .invoke("google-calendar-sync")
-      .catch(() => undefined);
+    void supabase.functions.invoke("google-calendar-sync").catch(() => undefined);
   }, delayMs);
 }
 
-/** Sincronização imediata (usada antes de gerar o plano com o Claude). */
+/** Sincronização imediata usada antes do planejamento com Claude. */
 export async function sincronizarGoogleAgora() {
   try {
     await supabase.functions.invoke("google-calendar-sync");
   } catch {
-    // Melhor esforço.
+    // Melhor esforço: o planejamento manual continua disponível.
   }
 }

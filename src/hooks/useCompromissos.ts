@@ -21,6 +21,14 @@ export type Compromisso = {
 export type NovoCompromisso = Omit<Compromisso, "id" | "serie_id" | "concluido">;
 
 type CompromissoBanco = Omit<Compromisso, "serie_id">;
+type CompromissoOcorrencia = {
+  compromisso_id: string;
+  data_original: string;
+  data: string | null;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  cancelado: boolean;
+};
 const KEY = ["compromissos"] as const;
 const STORAGE_KEY = "metasia_compromissos_contingencia";
 
@@ -88,29 +96,56 @@ function proximaOcorrencia(data: Date, recorrencia: RecorrenciaCompromisso) {
   return proxima;
 }
 
-function expandirNaJanela(registrosBrutos: CompromissoBanco[], inicio: string, fim: string): Compromisso[] {
+function expandirNaJanela(
+  registrosBrutos: CompromissoBanco[],
+  inicio: string,
+  fim: string,
+  alteracoes: CompromissoOcorrencia[],
+): Compromisso[] {
+  const alteracaoPorChave = new Map(
+    alteracoes.map((item) => [`${item.compromisso_id}|${item.data_original}`, item]),
+  );
   return registrosBrutos.flatMap((registroBruto) => {
     const registro = normalizarRegistro(registroBruto);
     const recorrencia = registro.recorrencia ?? "nenhuma";
     if (recorrencia === "nenhuma") {
-      return registro.data >= inicio && registro.data <= fim
-        ? [{ ...registro, recorrencia, serie_id: registro.id }]
-        : [];
-    }
-
-    const limite = registro.recorrencia_fim && registro.recorrencia_fim < fim ? registro.recorrencia_fim : fim;
-    const ocorrencias: Compromisso[] = [];
-    let atual = parseData(registro.data);
-    while (iso(atual) < inicio) atual = proximaOcorrencia(atual, recorrencia);
-    while (iso(atual) <= limite) {
-      const data = iso(atual);
-      ocorrencias.push({
+      const alteracao = alteracaoPorChave.get(`${registro.id}|${registro.data}`);
+      if (alteracao?.cancelado) return [];
+      const data = alteracao?.data ?? registro.data;
+      if (data < inicio || data > fim) return [];
+      return [{
         ...registro,
-        id: `${registro.id}@${data}`,
+        recorrencia,
         serie_id: registro.id,
         data,
-        recorrencia,
-      });
+        hora_inicio: alteracao?.hora_inicio ?? registro.hora_inicio,
+        hora_fim: alteracao?.hora_fim ?? registro.hora_fim,
+      }];
+    }
+
+    const originaisMovidosParaJanela = alteracoes
+      .filter((item) => item.compromisso_id === registro.id && !item.cancelado && item.data && item.data >= inicio && item.data <= fim)
+      .map((item) => item.data_original);
+    const limiteDaSerie = registro.recorrencia_fim ?? fim;
+    const limiteAlteracoes = [fim, ...originaisMovidosParaJanela].sort().slice(-1)[0];
+    const limite = limiteAlteracoes < limiteDaSerie ? limiteAlteracoes : limiteDaSerie;
+    const ocorrencias: Compromisso[] = [];
+    let atual = parseData(registro.data);
+    while (iso(atual) <= limite) {
+      const dataOriginal = iso(atual);
+      const alteracao = alteracaoPorChave.get(`${registro.id}|${dataOriginal}`);
+      const data = alteracao?.data ?? dataOriginal;
+      if (!alteracao?.cancelado && data >= inicio && data <= fim) {
+        ocorrencias.push({
+          ...registro,
+          id: `${registro.id}@${dataOriginal}`,
+          serie_id: registro.id,
+          data,
+          hora_inicio: alteracao?.hora_inicio ?? registro.hora_inicio,
+          hora_fim: alteracao?.hora_fim ?? registro.hora_fim,
+          recorrencia,
+        });
+      }
       atual = proximaOcorrencia(atual, recorrencia);
     }
     return ocorrencias;
@@ -121,14 +156,25 @@ export function useCompromissos(inicio: string, fim: string) {
   return useQuery({
     queryKey: [...KEY, inicio, fim],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const [{ data, error }, { data: alteracoes }] = await Promise.all([
+        supabase
         .from("compromissos")
         .select("*")
-        .lte("data", fim)
         .order("data")
-        .order("hora_inicio");
+        .order("hora_inicio"),
+        // A migration desta entrega adiciona a tabela antes do deploy do front-end.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("compromisso_ocorrencias")
+          .select("compromisso_id,data_original,data,hora_inicio,hora_fim,cancelado"),
+      ]);
       const remotos = error ? [] : (data ?? []) as unknown as CompromissoBanco[];
-      return expandirNaJanela([...remotos, ...lerLocais()], inicio, fim);
+      return expandirNaJanela(
+        [...remotos, ...lerLocais()],
+        inicio,
+        fim,
+        (alteracoes ?? []) as CompromissoOcorrencia[],
+      );
     },
   });
 }

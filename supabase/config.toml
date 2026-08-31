@@ -1,1 +1,4 @@
 project_id = "jaffscdivzjzcmvjkwss"
+
+[functions.google-calendar-webhook]
+verify_jwt = false
