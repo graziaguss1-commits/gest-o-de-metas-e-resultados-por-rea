@@ -1,0 +1,5 @@
+ALTER TABLE public.google_calendar_event_links ALTER COLUMN agendamento_id DROP NOT NULL;
+ALTER TABLE public.google_calendar_event_links DROP CONSTRAINT google_calendar_event_links_agendamento_id_fkey;
+ALTER TABLE public.google_calendar_event_links ADD CONSTRAINT google_calendar_event_links_agendamento_id_fkey FOREIGN KEY (agendamento_id) REFERENCES public.tarefa_agendamentos(id) ON DELETE SET NULL;
+ALTER TABLE public.google_calendar_event_links DROP CONSTRAINT IF EXISTS google_calendar_event_links_user_id_agendamento_id_key;
+CREATE UNIQUE INDEX google_calendar_event_links_user_agendamento_unique ON public.google_calendar_event_links (user_id, agendamento_id) WHERE agendamento_id IS NOT NULL;

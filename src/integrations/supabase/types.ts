@@ -364,7 +364,7 @@ export type Database = {
       }
       google_calendar_event_links: {
         Row: {
-          agendamento_id: string
+          agendamento_id: string | null
           created_at: string
           etag: string | null
           google_event_id: string
@@ -374,7 +374,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agendamento_id: string
+          agendamento_id?: string | null
           created_at?: string
           etag?: string | null
           google_event_id: string
@@ -384,7 +384,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agendamento_id?: string
+          agendamento_id?: string | null
           created_at?: string
           etag?: string | null
           google_event_id?: string
