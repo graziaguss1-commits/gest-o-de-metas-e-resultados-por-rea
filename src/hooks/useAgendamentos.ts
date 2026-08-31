@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Agendamento } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
 import {
+import { agendarSyncGoogle } from "@/lib/googleSync";
   configuracaoRecorrenciaCompleta,
   dataCorrespondeRecorrencia,
   diasRecorrenciaPersistida,
@@ -115,7 +116,10 @@ export function useAlternarCronometroAgendamento() {
         segundos: Number(agendamento.cronometro_segundos ?? 0),
       };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -139,7 +143,10 @@ export function useFinalizarCronometroAgendamento() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -169,7 +176,10 @@ export function useAgendarTarefa() {
       }
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -200,7 +210,10 @@ export function useReagendarTarefa() {
       }
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -214,7 +227,10 @@ export function useRemoverAgendamento() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -232,7 +248,10 @@ export function useCancelarOcorrencia() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -327,6 +346,9 @@ export function useMaterializarRecorrencias() {
       }
       return criadas;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      agendarSyncGoogle();
+      return qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
