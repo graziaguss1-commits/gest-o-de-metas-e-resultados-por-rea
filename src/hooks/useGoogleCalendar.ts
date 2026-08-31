@@ -221,12 +221,3 @@ export function useAutoSyncGoogleCalendar(chave: string, ativo: boolean) {
     };
   }, [chave, ativo, queryClient]);
 }
-
-/** Sincronização imperativa (ex.: antes de chamar o Claude). */
-export async function sincronizarGoogleCalendarAgora() {
-  try {
-    await supabase.functions.invoke("google-calendar-sync");
-  } catch {
-    // Melhor esforço: o planejamento segue com os dados já sincronizados.
-  }
-}
