@@ -171,7 +171,11 @@ export function GoogleCalendarConnect() {
         <div className="flex items-center gap-2 flex-wrap border-t border-border pt-3">
           <span className="text-xs text-muted-foreground">Calendário de destino:</span>
           <Select
-            value={status?.calendar_id ?? "primary"}
+            value={
+              status?.calendar_id && status.calendar_id !== "primary"
+                ? status.calendar_id
+                : (calendarios.find((c) => c.primary)?.id ?? "primary")
+            }
             disabled={pending}
             onValueChange={handleSelecionar}
           >
