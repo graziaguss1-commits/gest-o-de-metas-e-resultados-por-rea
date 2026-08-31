@@ -212,6 +212,33 @@ export type Database = {
         }
         Relationships: []
       }
+      app_user_connections: {
+        Row: {
+          connection_key_ciphertext: string
+          connector_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_key_ciphertext: string
+          connector_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_key_ciphertext?: string
+          connector_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       compromissos: {
         Row: {
           area: string
@@ -259,6 +286,122 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      google_busy_blocks: {
+        Row: {
+          created_at: string
+          data: string
+          google_event_id: string
+          hora_fim: string
+          hora_inicio: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          google_event_id: string
+          hora_fim: string
+          hora_inicio: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          google_event_id?: string
+          hora_fim?: string
+          hora_inicio?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      google_calendar_connections: {
+        Row: {
+          calendar_id: string
+          created_at: string
+          google_email: string | null
+          id: string
+          last_sync_at: string | null
+          sync_token: string | null
+          updated_at: string
+          user_id: string
+          webhook_channel_id: string | null
+          webhook_expiration: string | null
+          webhook_resource_id: string | null
+        }
+        Insert: {
+          calendar_id?: string
+          created_at?: string
+          google_email?: string | null
+          id?: string
+          last_sync_at?: string | null
+          sync_token?: string | null
+          updated_at?: string
+          user_id: string
+          webhook_channel_id?: string | null
+          webhook_expiration?: string | null
+          webhook_resource_id?: string | null
+        }
+        Update: {
+          calendar_id?: string
+          created_at?: string
+          google_email?: string | null
+          id?: string
+          last_sync_at?: string | null
+          sync_token?: string | null
+          updated_at?: string
+          user_id?: string
+          webhook_channel_id?: string | null
+          webhook_expiration?: string | null
+          webhook_resource_id?: string | null
+        }
+        Relationships: []
+      }
+      google_calendar_event_links: {
+        Row: {
+          agendamento_id: string
+          created_at: string
+          etag: string | null
+          google_event_id: string
+          google_updated: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agendamento_id: string
+          created_at?: string
+          etag?: string | null
+          google_event_id: string
+          google_updated?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agendamento_id?: string
+          created_at?: string
+          etag?: string | null
+          google_event_id?: string
+          google_updated?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_event_links_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "tarefa_agendamentos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_comentarios: {
         Row: {
