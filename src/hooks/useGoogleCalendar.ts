@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 const CONNECTOR_ID = "google_calendar";
+const OAUTH_CHANNEL = "google-calendar-oauth";
+const OAUTH_RESULT_KEY = "google-calendar-oauth-result";
 
 export type GoogleCalendarStatus = {
   connected: boolean;
@@ -105,32 +107,87 @@ export function useGoogleBusyBlocks(inicio: string, fim: string, enabled = true)
 
 function waitForOAuthCompletion(popup: Window) {
   return new Promise<void>((resolve, reject) => {
+    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(OAUTH_CHANNEL);
+    let closedAt: number | null = null;
+    let checkingStatus = false;
+
     function cleanup() {
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("storage", onStorage);
       window.clearInterval(poll);
+      window.clearInterval(statusPoll);
+      window.clearTimeout(timeout);
+      channel?.close();
     }
-    function onMessage(event: MessageEvent) {
-      const type = event.data?.type;
+
+    function finish(payload: unknown) {
+      const result = payload as {
+        type?: string;
+        connectorId?: string;
+        reason?: string;
+      } | null;
+      const type = result?.type;
       if (
-        event.origin !== window.location.origin ||
-        event.source !== popup ||
-        event.data?.connectorId !== CONNECTOR_ID ||
+        result?.connectorId !== CONNECTOR_ID ||
         (type !== "appUserConnectorOAuthComplete" && type !== "appUserConnectorOAuthFailed")
       ) return;
       cleanup();
       if (type === "appUserConnectorOAuthComplete") {
+        popup.close();
         resolve();
         return;
       }
       popup.close();
-      reject(new Error(event.data?.reason ?? "A conexão com o Google não foi concluída."));
+      reject(new Error(result?.reason ?? "A conexão com o Google não foi concluída."));
     }
+
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      finish(event.data);
+    }
+
+    function onStorage(event: StorageEvent) {
+      if (event.key !== OAUTH_RESULT_KEY || !event.newValue) return;
+      try {
+        finish(JSON.parse(event.newValue));
+      } catch {
+        // Ignora mensagens inválidas de outras abas.
+      }
+    }
+
     const poll = window.setInterval(() => {
-      if (!popup.closed) return;
+      if (!popup.closed) {
+        closedAt = null;
+        return;
+      }
+      closedAt ??= Date.now();
+      if (Date.now() - closedAt < 1_500) return;
       cleanup();
-      reject(new Error("A janela do Google foi fechada antes de concluir."));
+      reject(new Error("A aba do Google foi fechada antes de concluir."));
     }, 500);
+
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      popup.close();
+      reject(new Error("A autorização do Google expirou. Tente conectar novamente."));
+    }, 10 * 60_000);
+
+    const statusPoll = window.setInterval(() => {
+      if (checkingStatus) return;
+      checkingStatus = true;
+      void supabase.functions.invoke("google-calendar-status")
+        .then(({ data, error }) => {
+          if (!error && data?.success && data?.connected && !data?.needs_reconnect) {
+            finish({ type: "appUserConnectorOAuthComplete", connectorId: CONNECTOR_ID });
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => { checkingStatus = false; });
+    }, 2_500);
+
+    channel?.addEventListener("message", (event) => finish(event.data));
     window.addEventListener("message", onMessage);
+    window.addEventListener("storage", onStorage);
   });
 }
 
@@ -138,22 +195,18 @@ export function useConectarGoogleCalendar() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const popup = window.open("", "lovable-oauth", "width=600,height=720");
-      if (!popup) throw new Error("Popup bloqueado. Permita popups e tente novamente.");
       try {
-        const { data, error } = await supabase.functions.invoke("google-oauth-start", {
-          body: { origin: window.location.origin },
-        });
-        if (error || !data?.success) {
-          throw new Error(data?.error ?? "Não foi possível iniciar a conexão com o Google.");
-        }
-        const completion = waitForOAuthCompletion(popup);
-        popup.location.href = data.authorizationUrl;
-        await completion;
-      } catch (error) {
-        popup.close();
-        throw error;
+        window.localStorage.removeItem(OAUTH_RESULT_KEY);
+      } catch {
+        // O fluxo também funciona por BroadcastChannel e postMessage.
       }
+      const popup = window.open(
+        "/oauth/google-calendar/start",
+        "_blank",
+        "popup,width=600,height=720",
+      );
+      if (!popup) throw new Error("Nova aba bloqueada. Permita popups e tente novamente.");
+      await waitForOAuthCompletion(popup);
     },
     onSuccess: async () => {
       await Promise.all([
