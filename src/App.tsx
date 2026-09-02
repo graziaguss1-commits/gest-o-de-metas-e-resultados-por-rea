@@ -21,7 +21,6 @@ import AjudaPage from "./pages/AjudaPage";
 import SettingsPage from "./pages/SettingsPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import NotFound from "./pages/NotFound";
-import GoogleCalendarStart from "./pages/oauth/GoogleCalendarStart";
 import GoogleCalendarReturn from "./pages/oauth/GoogleCalendarReturn";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false } } });
@@ -31,7 +30,6 @@ const App = () => <QueryClientProvider client={queryClient}><TooltipProvider><To
   <Route path="/" element={<Navigate to="/dashboard" replace />} />
   <Route path="/auth" element={<AuthPage />} />
   <Route path="/pending-approval" element={<ProtectedRoute allowUnapproved><PendingApprovalPage /></ProtectedRoute>} />
-  <Route path="/oauth/google-calendar/start" element={<GoogleCalendarStart />} />
   <Route path="/oauth/google-calendar/return" element={<GoogleCalendarReturn />} />
   <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
   <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
