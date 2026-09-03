@@ -239,6 +239,53 @@ export type Database = {
         }
         Relationships: []
       }
+      compromisso_ocorrencias: {
+        Row: {
+          cancelado: boolean
+          compromisso_id: string
+          created_at: string
+          data: string | null
+          data_original: string
+          hora_fim: string | null
+          hora_inicio: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancelado?: boolean
+          compromisso_id: string
+          created_at?: string
+          data?: string | null
+          data_original: string
+          hora_fim?: string | null
+          hora_inicio?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancelado?: boolean
+          compromisso_id?: string
+          created_at?: string
+          data?: string | null
+          data_original?: string
+          hora_fim?: string | null
+          hora_inicio?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compromisso_ocorrencias_compromisso_id_fkey"
+            columns: ["compromisso_id"]
+            isOneToOne: false
+            referencedRelation: "compromissos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       compromissos: {
         Row: {
           area: string
@@ -327,13 +374,17 @@ export type Database = {
           created_at: string
           google_email: string | null
           id: string
+          last_error_code: string | null
           last_sync_at: string | null
+          needs_reconnect: boolean
+          sync_lock_until: string | null
           sync_token: string | null
           updated_at: string
           user_id: string
           webhook_channel_id: string | null
           webhook_expiration: string | null
           webhook_resource_id: string | null
+          webhook_token: string | null
         }
         Insert: {
           calendar_id?: string
@@ -341,13 +392,17 @@ export type Database = {
           created_at?: string
           google_email?: string | null
           id?: string
+          last_error_code?: string | null
           last_sync_at?: string | null
+          needs_reconnect?: boolean
+          sync_lock_until?: string | null
           sync_token?: string | null
           updated_at?: string
           user_id: string
           webhook_channel_id?: string | null
           webhook_expiration?: string | null
           webhook_resource_id?: string | null
+          webhook_token?: string | null
         }
         Update: {
           calendar_id?: string
@@ -355,13 +410,17 @@ export type Database = {
           created_at?: string
           google_email?: string | null
           id?: string
+          last_error_code?: string | null
           last_sync_at?: string | null
+          needs_reconnect?: boolean
+          sync_lock_until?: string | null
           sync_token?: string | null
           updated_at?: string
           user_id?: string
           webhook_channel_id?: string | null
           webhook_expiration?: string | null
           webhook_resource_id?: string | null
+          webhook_token?: string | null
         }
         Relationships: []
       }
@@ -374,7 +433,10 @@ export type Database = {
           google_updated: string | null
           id: string
           origem: string
+          origem_chave: string
           origem_id: string
+          source_date: string | null
+          source_updated_at: string | null
           updated_at: string
           user_id: string
         }
@@ -386,7 +448,10 @@ export type Database = {
           google_updated?: string | null
           id?: string
           origem?: string
+          origem_chave: string
           origem_id: string
+          source_date?: string | null
+          source_updated_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -398,7 +463,10 @@ export type Database = {
           google_updated?: string | null
           id?: string
           origem?: string
+          origem_chave?: string
           origem_id?: string
+          source_date?: string | null
+          source_updated_at?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -411,6 +479,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      google_calendar_oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          state_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          state_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          state_hash?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       meta_comentarios: {
         Row: {
@@ -1026,6 +1118,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_google_calendar_sync_lock: {
+        Args: { _seconds?: number; _user_id: string }
+        Returns: boolean
+      }
       aplicar_planejamento_semanal: {
         Args: { p_agenda: Json; p_fim: string; p_inicio: string }
         Returns: Json
@@ -1080,6 +1176,10 @@ export type Database = {
         Returns: string
       }
       read_vault_secret: { Args: { p_key: string }; Returns: string }
+      release_google_calendar_sync_lock: {
+        Args: { _user_id: string }
+        Returns: undefined
+      }
       resolve_active_api_key: {
         Args: { p_service_name: string }
         Returns: Json
@@ -1114,12 +1214,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1143,11 +1243,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1168,11 +1268,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1193,11 +1293,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1210,11 +1310,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
