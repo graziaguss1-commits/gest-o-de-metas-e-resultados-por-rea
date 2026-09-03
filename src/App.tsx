@@ -22,6 +22,7 @@ import SettingsPage from "./pages/SettingsPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import NotFound from "./pages/NotFound";
 import GoogleCalendarReturn from "./pages/oauth/GoogleCalendarReturn";
+import { PrivacyPolicyPage, TermsOfUsePage } from "./pages/LegalPages";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false } } });
 function TriggerHealthCheck() { useEffect(() => { const checked = sessionStorage.getItem("auth_trigger_checked"); if (checked) return; supabase.functions.invoke("ensure-auth-trigger").then(({ data, error }) => { sessionStorage.setItem("auth_trigger_checked", "1"); if (error || !(data as { ok?: boolean })?.ok) console.warn("[Auth Setup] Trigger check failed:", error || (data as { message?: string })?.message); }).catch((err) => console.warn("[Auth Setup]", err)); }, []); return null; }
@@ -29,6 +30,8 @@ function TriggerHealthCheck() { useEffect(() => { const checked = sessionStorage
 const App = () => <QueryClientProvider client={queryClient}><TooltipProvider><Toaster /><Sonner /><BrowserRouter><AuthProvider><TriggerHealthCheck /><Routes>
   <Route path="/" element={<Navigate to="/dashboard" replace />} />
   <Route path="/auth" element={<AuthPage />} />
+  <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
+  <Route path="/termos-de-uso" element={<TermsOfUsePage />} />
   <Route path="/pending-approval" element={<ProtectedRoute allowUnapproved><PendingApprovalPage /></ProtectedRoute>} />
   <Route path="/oauth/google-calendar/return" element={<GoogleCalendarReturn />} />
   <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
