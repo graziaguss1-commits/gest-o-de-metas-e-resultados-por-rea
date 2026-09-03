@@ -1,4 +1,5 @@
 import { ArrowLeft, FileText, ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 type LegalPageProps = {
@@ -47,7 +48,7 @@ function LegalShell({ kind }: LegalPageProps) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
       <h2 className="mb-2 font-display text-xl font-semibold text-foreground">{title}</h2>
@@ -100,8 +101,17 @@ function PrivacyContent() {
         <p>
           Os dados obtidos pelas APIs do Google são usados apenas para oferecer a sincronização e os recursos de
           agenda visíveis ao usuário. Eles não são vendidos, não são usados para publicidade e não são transferidos
-          para corretores de dados. O uso e a transferência dessas informações obedecem à Política de Dados do
-          Usuário dos Serviços de API do Google, inclusive aos requisitos de Uso Limitado.
+          para corretores de dados. O uso e a transferência pelo Metas e objetivos de informações recebidas das APIs
+          do Google obedecem à{" "}
+          <a
+            className="font-semibold text-primary underline underline-offset-4"
+            href="https://developers.google.com/terms/api-services-user-data-policy"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Política de Dados do Usuário dos Serviços de API do Google
+          </a>
+          , incluindo os requisitos de Uso Limitado.
         </p>
       </Section>
 
