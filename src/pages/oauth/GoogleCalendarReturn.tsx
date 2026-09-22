@@ -38,11 +38,17 @@ export default function GoogleCalendarReturn() {
       // publicado no Lovable Cloud. O OAuth direto já conclui esta etapa no
       // callback server-side e, por isso, não envia code/gstate para o navegador.
       if (legacyCode || legacyState) {
-        if (!legacyCode || !legacyState) {
-          throw new Error("A autorização terminou sem os dados de segurança necessários.");
+        if (!legacyCode) {
+          throw new Error("O Google não retornou o código necessário para concluir a conexão.");
         }
+        // O Connector Gateway atual devolve somente o código de troca. Versões
+        // anteriores também preservavam o gstate; enviá-lo quando existir mantém
+        // compatibilidade com as duas versões da função publicada.
+        const body = legacyState
+          ? { code: legacyCode, state: legacyState }
+          : { code: legacyCode };
         const { data, error } = await supabase.functions.invoke("google-oauth-complete", {
-          body: { code: legacyCode, state: legacyState },
+          body,
         });
         if (error || !data?.success) {
           throw new Error(data?.error ?? "Não foi possível concluir a conexão.");
