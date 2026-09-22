@@ -8,7 +8,7 @@ Deno.serve(async (req) => {
   if (!user) return jsonResponse({ success: false, error: "Sua sessão expirou. Entre novamente.", code: "unauthorized" }, 401);
   const { data: connection } = await adminClient()
     .from("google_calendar_connections")
-    .select("google_email,calendar_id,calendar_timezone,last_sync_at,needs_reconnect")
+    .select("google_email,calendar_id,calendar_timezone,event_color_id,last_sync_at,needs_reconnect")
     .eq("user_id", user.id)
     .maybeSingle();
   const hasTokens = await hasGoogleConnection(user.id);
@@ -20,6 +20,7 @@ Deno.serve(async (req) => {
     google_email: connection?.google_email ?? null,
     calendar_id: connection?.calendar_id ?? "primary",
     calendar_timezone: connection?.calendar_timezone ?? null,
+    event_color_id: connection?.event_color_id ?? null,
     last_sync_at: connection?.last_sync_at ?? null,
   });
 });
