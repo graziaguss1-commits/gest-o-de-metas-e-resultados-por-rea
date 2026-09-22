@@ -8,6 +8,7 @@ export type GoogleCalendarStatus = {
   google_email: string | null;
   calendar_id: string;
   calendar_timezone: string | null;
+  event_color_id: string | null;
   last_sync_at: string | null;
 };
 
@@ -16,6 +17,17 @@ export type GoogleCalendarOption = {
   summary: string;
   primary: boolean;
   timeZone: string | null;
+};
+
+export type GoogleCalendarEventColor = {
+  id: string;
+  background: string;
+  foreground: string;
+};
+
+export type GoogleCalendarOptions = {
+  calendars: GoogleCalendarOption[];
+  eventColors: GoogleCalendarEventColor[];
 };
 
 export function useGoogleCalendarStatus(enabled = true) {
@@ -32,6 +44,7 @@ export function useGoogleCalendarStatus(enabled = true) {
         google_email: data.google_email ?? null,
         calendar_id: data.calendar_id ?? "primary",
         calendar_timezone: data.calendar_timezone ?? null,
+        event_color_id: data.event_color_id ?? null,
         last_sync_at: data.last_sync_at ?? null,
       };
     },
@@ -47,6 +60,45 @@ export function useGoogleCalendarList(enabled = true) {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error ?? "Falha ao listar calendários.");
       return (data.calendars ?? []) as GoogleCalendarOption[];
+    },
+  });
+}
+
+export function useGoogleCalendarOptions(enabled = true) {
+  return useQuery({
+    queryKey: ["google-calendar-options"],
+    enabled,
+    queryFn: async (): Promise<GoogleCalendarOptions> => {
+      const { data, error } = await supabase.functions.invoke("google-calendar-calendars");
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error ?? "Falha ao carregar as opções do Google Agenda.");
+      return {
+        calendars: (data.calendars ?? []) as GoogleCalendarOption[],
+        eventColors: (data.event_colors ?? []) as GoogleCalendarEventColor[],
+      };
+    },
+  });
+}
+
+export function useSelecionarCorGoogleCalendar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventColorId: string | null) => {
+      const { data, error } = await supabase.functions.invoke("google-calendar-calendars", {
+        method: "POST",
+        body: { event_color_id: eventColorId },
+      });
+      if (error || !data?.success) {
+        throw new Error(data?.error ?? "Não foi possível atualizar a cor dos eventos.");
+      }
+      return data as { recolored_events?: number; recolor_failures?: number };
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-status"] }),
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-list"] }),
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-options"] }),
+      ]);
     },
   });
 }
@@ -71,6 +123,7 @@ export function useSelecionarCalendarioGoogle() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["google-calendar-status"] }),
         queryClient.invalidateQueries({ queryKey: ["google-calendar-list"] }),
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-options"] }),
         queryClient.invalidateQueries({ queryKey: ["google-busy-blocks"] }),
       ]);
     },
@@ -121,6 +174,7 @@ export function useConectarGoogleCalendar() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["google-calendar-status"] }),
         queryClient.invalidateQueries({ queryKey: ["google-calendar-list"] }),
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-options"] }),
         queryClient.invalidateQueries({ queryKey: ["google-busy-blocks"] }),
       ]);
     },
@@ -162,6 +216,7 @@ export function useDesconectarGoogleCalendar() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["google-calendar-status"] }),
         queryClient.invalidateQueries({ queryKey: ["google-calendar-list"] }),
+        queryClient.invalidateQueries({ queryKey: ["google-calendar-options"] }),
         queryClient.invalidateQueries({ queryKey: ["google-busy-blocks"] }),
       ]);
     },
