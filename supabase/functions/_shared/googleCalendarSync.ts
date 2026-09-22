@@ -1,11 +1,9 @@
 // Sincronização bidirecional Google Agenda <-> Metasia (server-only).
 // Eventos externos são reduzidos a intervalos ocupados; nenhum título,
 // participante, descrição ou local é persistido ou enviado ao Claude.
-import { callAsAppUser } from "./appUserConnector.ts";
-import { adminClient, getConnectionKeyForUser } from "./appUserConnections.ts";
+import { adminClient } from "./appUserConnections.ts";
+import { callGoogleApi, hasGoogleConnection } from "./googleOAuth.ts";
 import {
-  CONNECTOR_ID,
-  GATEWAY_BASE_URL,
   TIMEZONE,
   googleDateTimeToLocal,
   sha256Hex,
@@ -96,6 +94,15 @@ type Mirror = {
   hora_inicio: string;
   hora_fim: string;
   updated_at: string;
+};
+
+type GoogleConnectionRow = {
+  calendar_id?: string | null;
+  calendar_timezone?: string | null;
+  sync_token?: string | null;
+  webhook_channel_id?: string | null;
+  webhook_resource_id?: string | null;
+  webhook_expiration?: string | null;
 };
 
 export type SyncStats = {
@@ -211,7 +218,7 @@ async function applyGoogleMove(
   return true;
 }
 
-async function syncUnlocked(userId: string, key: string, conn: Record<string, any>): Promise<SyncStats> {
+async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<SyncStats> {
   const admin = adminClient();
   const calendarId = String(conn.calendar_id || "primary");
   const timeZone = String(conn.calendar_timezone || TIMEZONE);
@@ -256,12 +263,10 @@ async function syncUnlocked(userId: string, key: string, conn: Record<string, an
         params.set("orderBy", "startTime");
       }
       if (pageToken) params.set("pageToken", pageToken);
-      const res = await callAsAppUser({
-        gatewayBaseUrl: GATEWAY_BASE_URL,
-        connectionAPIKey: key,
-        connectorId: CONNECTOR_ID,
-        path: `/calendar/v3/calendars/${enc(calendarId)}/events?${params.toString()}`,
-      });
+      const res = await callGoogleApi(
+        userId,
+        `/calendar/v3/calendars/${enc(calendarId)}/events?${params.toString()}`,
+      );
       if (res.status === 410 && syncToken) return listEvents(null);
       if (!res.ok) throw googleFailure("events_list", res.status);
       const body = await res.json();
@@ -489,25 +494,21 @@ async function syncUnlocked(userId: string, key: string, conn: Record<string, an
     const link = currentByKey.get(mirror.origem_chave);
     if (!link) {
       const eventId = await deterministicEventId(userId, mirror.origem_chave);
-      let res = await callAsAppUser({
-        gatewayBaseUrl: GATEWAY_BASE_URL,
-        connectionAPIKey: key,
-        connectorId: CONNECTOR_ID,
-        path: `/calendar/v3/calendars/${enc(calendarId)}/events`,
-        init: {
+      let res = await callGoogleApi(
+        userId,
+        `/calendar/v3/calendars/${enc(calendarId)}/events`,
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: eventId, ...eventBody }),
         },
-      });
+      );
       const createdNow = res.ok;
       if (res.status === 409) {
-        res = await callAsAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionAPIKey: key,
-          connectorId: CONNECTOR_ID,
-          path: `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(eventId)}`,
-        });
+        res = await callGoogleApi(
+          userId,
+          `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(eventId)}`,
+        );
       }
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) throw googleFailure("event_create", res.status);
@@ -537,13 +538,11 @@ async function syncUnlocked(userId: string, key: string, conn: Record<string, an
 
     const sourceReference = link.source_updated_at ?? link.updated_at;
     if (new Date(mirror.updated_at) <= new Date(sourceReference)) continue;
-    const res = await callAsAppUser({
-      gatewayBaseUrl: GATEWAY_BASE_URL,
-      connectionAPIKey: key,
-      connectorId: CONNECTOR_ID,
-      path: `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(link.google_event_id)}`,
-      init: { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(eventBody) },
-    });
+    const res = await callGoogleApi(
+      userId,
+      `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(link.google_event_id)}`,
+      { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(eventBody) },
+    );
     if (res.status === 404 || res.status === 410) {
       await cancelLocalMirror(admin, userId, link);
       await admin.from("google_calendar_event_links").delete().eq("id", link.id);
@@ -570,13 +569,11 @@ async function syncUnlocked(userId: string, key: string, conn: Record<string, an
   for (const link of links) {
     if (activeKeys.has(link.origem_chave)) continue;
     if (link.source_date && (link.source_date < windowStart || link.source_date > windowEnd)) continue;
-    const res = await callAsAppUser({
-      gatewayBaseUrl: GATEWAY_BASE_URL,
-      connectionAPIKey: key,
-      connectorId: CONNECTOR_ID,
-      path: `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(link.google_event_id)}`,
-      init: { method: "DELETE" },
-    });
+    const res = await callGoogleApi(
+      userId,
+      `/calendar/v3/calendars/${enc(calendarId)}/events/${enc(link.google_event_id)}`,
+      { method: "DELETE" },
+    );
     if (res.ok || res.status === 404 || res.status === 410) {
       await admin.from("google_calendar_event_links").delete().eq("id", link.id);
       stats.eventos_removidos++;
@@ -590,32 +587,28 @@ async function syncUnlocked(userId: string, key: string, conn: Record<string, an
     const expiration = conn.webhook_expiration ? new Date(conn.webhook_expiration).getTime() : 0;
     if (expiration < now + 86400000) {
       if (conn.webhook_channel_id && conn.webhook_resource_id) {
-        await callAsAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionAPIKey: key,
-          connectorId: CONNECTOR_ID,
-          path: "/calendar/v3/channels/stop",
-          init: {
+        await callGoogleApi(
+          userId,
+          "/calendar/v3/channels/stop",
+          {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: conn.webhook_channel_id, resourceId: conn.webhook_resource_id }),
           },
-        });
+        );
       }
       const channelId = crypto.randomUUID();
       const channelToken = crypto.randomUUID().replaceAll("-", "");
       const address = `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-calendar-webhook`;
-      const res = await callAsAppUser({
-        gatewayBaseUrl: GATEWAY_BASE_URL,
-        connectionAPIKey: key,
-        connectorId: CONNECTOR_ID,
-        path: `/calendar/v3/calendars/${enc(calendarId)}/events/watch`,
-        init: {
+      const res = await callGoogleApi(
+        userId,
+        `/calendar/v3/calendars/${enc(calendarId)}/events/watch`,
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: channelId, token: channelToken, type: "web_hook", address }),
         },
-      });
+      );
       if (res.ok) {
         const channel = await res.json();
         await admin.from("google_calendar_connections").update({
@@ -642,8 +635,7 @@ async function syncUnlocked(userId: string, key: string, conn: Record<string, an
 }
 
 export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
-  const key = await getConnectionKeyForUser(userId, CONNECTOR_ID);
-  if (!key) return { connected: false };
+  if (!await hasGoogleConnection(userId)) return { connected: false };
   const admin = adminClient();
   let { data: conn } = await admin
     .from("google_calendar_connections")
@@ -668,7 +660,7 @@ export async function sincronizarUsuario(userId: string): Promise<SyncStats> {
   if (!acquired) return { connected: true, skipped: true };
 
   try {
-    return await syncUnlocked(userId, key, conn);
+    return await syncUnlocked(userId, conn);
   } catch (error) {
     const code = (error as SyncFailure)?.code ?? "sync_failed";
     await admin.from("google_calendar_connections").update({

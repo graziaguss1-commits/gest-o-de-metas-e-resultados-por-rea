@@ -1,10 +1,11 @@
-import { authorizeAppUserOAuth } from "../_shared/appUserConnector.ts";
-import { adminClient, getConnectionKeyForUser } from "../_shared/appUserConnections.ts";
+import { adminClient } from "../_shared/appUserConnections.ts";
 import {
-  CLIENT_KEY_ENV,
-  CONNECTOR_ID,
-  GATEWAY_BASE_URL,
-  GOOGLE_SCOPES,
+  assertGoogleOAuthConfigured,
+  buildGoogleAuthorizationUrl,
+  createGoogleOAuthState,
+  GoogleOAuthError,
+} from "../_shared/googleOAuth.ts";
+import {
   corsHeaders,
   getAuthenticatedUser,
   jsonResponse,
@@ -30,19 +31,15 @@ Deno.serve(async (req) => {
   const user = await getAuthenticatedUser(req);
   if (!user) return jsonResponse({ success: false, error: "Sua sessão expirou. Entre novamente.", code: "unauthorized" }, 401);
 
-  const clientAPIKey = Deno.env.get(CLIENT_KEY_ENV);
-  if (!clientAPIKey) {
-    return jsonResponse({ success: false, error: "A integração ainda não está configurada.", code: "client_not_configured" }, 503);
-  }
-
   const admin = adminClient();
   let stateHash: string | null = null;
   try {
+    assertGoogleOAuthConfigured();
     const payload = await req.json().catch(() => ({}));
     const origin = validOrigin(payload?.origin, req.headers.get("Origin"));
     if (!origin) return jsonResponse({ success: false, error: "Origem inválida.", code: "invalid_origin" }, 400);
 
-    const state = crypto.randomUUID();
+    const state = createGoogleOAuthState(origin);
     stateHash = await sha256Hex(state);
     await admin.from("google_calendar_oauth_states").delete().eq("user_id", user.id);
     const { error: stateError } = await admin.from("google_calendar_oauth_states").insert({
@@ -52,24 +49,20 @@ Deno.serve(async (req) => {
     });
     if (stateError) throw stateError;
 
-    const returnUrl = new URL("/oauth/google-calendar/return", origin);
-    returnUrl.searchParams.set("gstate", state);
-    const connectionAPIKey = await getConnectionKeyForUser(user.id, CONNECTOR_ID);
-    const { authorizationUrl } = await authorizeAppUserOAuth({
-      gatewayBaseUrl: GATEWAY_BASE_URL,
-      connectorId: CONNECTOR_ID,
-      appUserId: user.id,
-      clientAPIKey,
-      returnUrl: returnUrl.toString(),
-      connectionAPIKey: connectionAPIKey ?? undefined,
-      credentialsConfiguration: { scopes: GOOGLE_SCOPES },
-    });
+    const authorizationUrl = buildGoogleAuthorizationUrl(state);
     return jsonResponse({ success: true, authorizationUrl });
-  } catch {
+  } catch (error) {
     if (stateHash) {
       await admin.from("google_calendar_oauth_states").delete().eq("user_id", user.id).eq("state_hash", stateHash);
     }
-    console.error("google-oauth-start failed");
-    return jsonResponse({ success: false, error: "Não foi possível iniciar a conexão com o Google.", code: "oauth_start_failed" }, 502);
+    const notConfigured = error instanceof GoogleOAuthError && error.status === 503;
+    console.error(notConfigured ? "google-oauth-start not configured" : "google-oauth-start failed");
+    return jsonResponse({
+      success: false,
+      error: notConfigured
+        ? "A integração Google ainda não foi ativada no GitHub."
+        : "Não foi possível iniciar a conexão com o Google.",
+      code: notConfigured ? "google_not_configured" : "oauth_start_failed",
+    }, notConfigured ? 503 : 502);
   }
 });

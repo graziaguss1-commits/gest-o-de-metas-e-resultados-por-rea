@@ -1,17 +1,7 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-export const GATEWAY_BASE_URL = "https://connector-gateway.lovable.dev";
-export const CONNECTOR_ID = "google_calendar";
-export const CLIENT_KEY_ENV = "GOOGLE_CALENDAR_APP_USER_CONNECTOR_CLIENT_API_KEY";
 export const TIMEZONE = "America/Sao_Paulo";
-
-export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/userinfo.profile",
-  "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/calendar.events",
-];
 
 export { corsHeaders };
 

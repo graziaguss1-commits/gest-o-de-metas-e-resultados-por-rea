@@ -1,0 +1,109 @@
+name: Deploy Google Calendar
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-google-calendar.yml"
+      - "supabase/config.toml"
+      - "supabase/functions/_shared/appUserConnections.ts"
+      - "supabase/functions/_shared/connectionKeyCrypto.ts"
+      - "supabase/functions/_shared/googleCalendarShared.ts"
+      - "supabase/functions/_shared/googleCalendarSync.ts"
+      - "supabase/functions/_shared/googleOAuth.ts"
+      - "supabase/functions/google-calendar-*/**"
+      - "supabase/functions/google-oauth-*/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-google-calendar-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar configuração
+        id: config
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          APP_USER_CONNECTION_KEY_SECRET: ${{ secrets.APP_USER_CONNECTION_KEY_SECRET }}
+        run: |
+          missing=()
+          for name in SUPABASE_ACCESS_TOKEN GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET APP_USER_CONNECTION_KEY_SECRET; do
+            if [ -z "${!name}" ]; then missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### Deploy aguardando configuração" >> "$GITHUB_STEP_SUMMARY"
+            echo "Adicione estes Repository secrets e execute novamente: ${missing[*]}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar repositório
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Instalar Supabase CLI
+        if: steps.config.outputs.ready == 'true'
+        uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf
+        with:
+          version: latest
+
+      - name: Configurar secrets das funções
+        if: steps.config.outputs.ready == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          APP_USER_CONNECTION_KEY_SECRET: ${{ secrets.APP_USER_CONNECTION_KEY_SECRET }}
+          SUPABASE_PROJECT_REF: jaffscdivzjzcmvjkwss
+        run: |
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" \
+            GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
+            GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET" \
+            APP_USER_CONNECTION_KEY_SECRET="$APP_USER_CONNECTION_KEY_SECRET"
+
+      - name: Publicar funções do Google Agenda
+        if: steps.config.outputs.ready == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: jaffscdivzjzcmvjkwss
+        shell: bash
+        run: |
+          functions=(
+            google-oauth-start
+            google-oauth-callback
+            google-oauth-complete
+            google-calendar-status
+            google-calendar-calendars
+            google-calendar-sync
+            google-calendar-disconnect
+            google-calendar-webhook
+          )
+          for function_name in "${functions[@]}"; do
+            supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF"
+          done
+
+      - name: Validar callback publicado
+        if: steps.config.outputs.ready == 'true'
+        env:
+          CALLBACK_URL: https://jaffscdivzjzcmvjkwss.supabase.co/functions/v1/google-oauth-callback
+        shell: bash
+        run: |
+          status="$(curl --silent --show-error --output /tmp/google-callback-response --write-out '%{http_code}' "$CALLBACK_URL")"
+          if [ "$status" != "400" ]; then
+            echo "Callback respondeu HTTP $status; esperado: 400 sem state." >&2
+            sed -n '1,20p' /tmp/google-callback-response >&2
+            exit 1
+          fi
+

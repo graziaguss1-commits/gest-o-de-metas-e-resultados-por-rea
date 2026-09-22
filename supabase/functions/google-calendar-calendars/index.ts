@@ -1,8 +1,6 @@
-import { callAsAppUser } from "../_shared/appUserConnector.ts";
-import { adminClient, getConnectionKeyForUser } from "../_shared/appUserConnections.ts";
+import { adminClient } from "../_shared/appUserConnections.ts";
+import { callGoogleApi, hasGoogleConnection } from "../_shared/googleOAuth.ts";
 import {
-  CONNECTOR_ID,
-  GATEWAY_BASE_URL,
   corsHeaders,
   getAuthenticatedUser,
   jsonResponse,
@@ -12,15 +10,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const user = await getAuthenticatedUser(req);
   if (!user) return jsonResponse({ success: false, error: "Sua sessão expirou. Entre novamente.", code: "unauthorized" }, 401);
-  const key = await getConnectionKeyForUser(user.id, CONNECTOR_ID);
-  if (!key) return jsonResponse({ success: true, connected: false, calendars: [] });
+  if (!await hasGoogleConnection(user.id)) {
+    return jsonResponse({ success: true, connected: false, calendars: [] });
+  }
 
-  const listResponse = await callAsAppUser({
-    gatewayBaseUrl: GATEWAY_BASE_URL,
-    connectionAPIKey: key,
-    connectorId: CONNECTOR_ID,
-    path: "/calendar/v3/users/me/calendarList?minAccessRole=writer&maxResults=100",
-  });
+  const listResponse = await callGoogleApi(
+    user.id,
+    "/calendar/v3/users/me/calendarList?minAccessRole=writer&maxResults=100",
+  );
   if (!listResponse.ok) {
     const reconnect = listResponse.status === 401 || listResponse.status === 403;
     return jsonResponse({
@@ -65,13 +62,11 @@ Deno.serve(async (req) => {
       .select("id,google_event_id")
       .eq("user_id", user.id);
     for (const link of links ?? []) {
-      const deletion = await callAsAppUser({
-        gatewayBaseUrl: GATEWAY_BASE_URL,
-        connectionAPIKey: key,
-        connectorId: CONNECTOR_ID,
-        path: `/calendar/v3/calendars/${encodeURIComponent(oldCalendarId)}/events/${encodeURIComponent(link.google_event_id)}`,
-        init: { method: "DELETE" },
-      });
+      const deletion = await callGoogleApi(
+        user.id,
+        `/calendar/v3/calendars/${encodeURIComponent(oldCalendarId)}/events/${encodeURIComponent(link.google_event_id)}`,
+        { method: "DELETE" },
+      );
       if (!(deletion.ok || deletion.status === 404 || deletion.status === 410)) {
         return jsonResponse({ success: false, error: "Não foi possível mover todos os eventos. Tente novamente.", code: "calendar_move_failed" }, 502);
       }
@@ -79,17 +74,15 @@ Deno.serve(async (req) => {
     }
 
     if (connection?.webhook_channel_id && connection.webhook_resource_id) {
-      await callAsAppUser({
-        gatewayBaseUrl: GATEWAY_BASE_URL,
-        connectionAPIKey: key,
-        connectorId: CONNECTOR_ID,
-        path: "/calendar/v3/channels/stop",
-        init: {
+      await callGoogleApi(
+        user.id,
+        "/calendar/v3/channels/stop",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: connection.webhook_channel_id, resourceId: connection.webhook_resource_id }),
         },
-      });
+      );
     }
     await admin.from("google_calendar_connections").update({
       calendar_id: selected.id,

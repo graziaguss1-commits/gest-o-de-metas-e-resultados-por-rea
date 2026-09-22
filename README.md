@@ -50,3 +50,7 @@ em [`supabase/migrations`](supabase/migrations) que toca em `handle_new_user`.
 
 ## Stack
 Lovable · React 18 · Supabase · TypeScript · Tailwind · shadcn/ui · TanStack Query
+
+## Google Agenda sem créditos do Lovable
+
+A integração usa OAuth direto entre Google e Supabase e é publicada pelo GitHub Actions. Veja o passo a passo em [`docs/google-calendar-github-setup.md`](docs/google-calendar-github-setup.md).

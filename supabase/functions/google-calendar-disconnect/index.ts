@@ -1,10 +1,6 @@
-import { callAsAppUser, disconnectAppUser } from "../_shared/appUserConnector.ts";
-import {
-  adminClient,
-  deleteConnectionKeyForUser,
-  getConnectionKeyForUser,
-} from "../_shared/appUserConnections.ts";
-import { CONNECTOR_ID, GATEWAY_BASE_URL, corsHeaders, getAuthenticatedUser, jsonResponse } from "../_shared/googleCalendarShared.ts";
+import { adminClient } from "../_shared/appUserConnections.ts";
+import { callGoogleApi, hasGoogleConnection, revokeGoogleConnection } from "../_shared/googleOAuth.ts";
+import { corsHeaders, getAuthenticatedUser, jsonResponse } from "../_shared/googleCalendarShared.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -12,8 +8,7 @@ Deno.serve(async (req) => {
   if (!user) return jsonResponse({ success: false, error: "Sua sessão expirou. Entre novamente.", code: "unauthorized" }, 401);
   const admin = adminClient();
   try {
-    const key = await getConnectionKeyForUser(user.id, CONNECTOR_ID);
-    if (key) {
+    if (await hasGoogleConnection(user.id)) {
       const { data: connection } = await admin
         .from("google_calendar_connections")
         .select("calendar_id,webhook_channel_id,webhook_resource_id")
@@ -24,30 +19,26 @@ Deno.serve(async (req) => {
         .select("google_event_id")
         .eq("user_id", user.id);
       for (const link of links ?? []) {
-        await callAsAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionAPIKey: key,
-          connectorId: CONNECTOR_ID,
-          path: `/calendar/v3/calendars/${encodeURIComponent(connection?.calendar_id || "primary")}/events/${encodeURIComponent(link.google_event_id)}`,
-          init: { method: "DELETE" },
-        }).catch(() => undefined);
+        await callGoogleApi(
+          user.id,
+          `/calendar/v3/calendars/${encodeURIComponent(connection?.calendar_id || "primary")}/events/${encodeURIComponent(link.google_event_id)}`,
+          { method: "DELETE" },
+        ).catch(() => undefined);
       }
       if (connection?.webhook_channel_id && connection.webhook_resource_id) {
-        await callAsAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionAPIKey: key,
-          connectorId: CONNECTOR_ID,
-          path: "/calendar/v3/channels/stop",
-          init: {
+        await callGoogleApi(
+          user.id,
+          "/calendar/v3/channels/stop",
+          {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: connection.webhook_channel_id, resourceId: connection.webhook_resource_id }),
           },
-        }).catch(() => undefined);
+        ).catch(() => undefined);
       }
-      await disconnectAppUser({ gatewayBaseUrl: GATEWAY_BASE_URL, connectionAPIKey: key, connectorId: CONNECTOR_ID }).catch(() => undefined);
-      await deleteConnectionKeyForUser(user.id, CONNECTOR_ID);
     }
+    // Também remove credenciais legadas do antigo conector do Lovable.
+    await revokeGoogleConnection(user.id).catch(() => undefined);
     await admin.from("google_calendar_event_links").delete().eq("user_id", user.id);
     await admin.from("google_busy_blocks").delete().eq("user_id", user.id);
     await admin.from("google_calendar_oauth_states").delete().eq("user_id", user.id);

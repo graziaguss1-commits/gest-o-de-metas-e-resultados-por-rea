@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  access_denied: "A autorização foi cancelada no Google.",
+  invalid_oauth_state: "A autorização expirou. Inicie a conexão novamente.",
+  missing_code: "O Google não retornou a autorização necessária.",
+  oauth_complete_failed: "Não foi possível concluir a conexão com o Google Agenda.",
+};
 
 export default function GoogleCalendarReturn() {
   const [message, setMessage] = useState("Finalizando a conexão com o Google Agenda…");
@@ -15,25 +21,21 @@ export default function GoogleCalendarReturn() {
     };
 
     if (params.get("success") !== "true") {
-      fail("A autorização no Google não foi concluída.");
+      const code = params.get("error") ?? "oauth_complete_failed";
+      fail(ERROR_MESSAGES[code] ?? ERROR_MESSAGES.oauth_complete_failed);
       return;
     }
-    const code = params.get("code");
-    const state = params.get("gstate");
-    if (!code || !state) {
-      fail("A autorização terminou sem os dados de segurança necessários.");
-      return;
-    }
-    void supabase.functions.invoke("google-oauth-complete", { body: { code, state } })
-      .then(({ data, error }) => {
-        if (error || !data?.success) throw new Error(data?.error ?? "Não foi possível concluir a conexão.");
-        setMessage("Google Agenda conectado. Voltando às configurações…");
-        window.location.replace("/configuracoes/google-calendar?google_calendar=connected");
-      })
-      .catch((err) => {
-        const reason = err instanceof Error ? err.message : "Não foi possível concluir a conexão.";
-        fail(reason);
-      });
+
+    const warning = params.get("sync_warning") === "true";
+    setMessage(
+      warning
+        ? "Google Agenda conectado. A primeira sincronização será repetida nas configurações…"
+        : "Google Agenda conectado. Voltando às configurações…",
+    );
+    const timer = window.setTimeout(() => {
+      window.location.replace("/configuracoes/google-calendar?google_calendar=connected");
+    }, 700);
+    return () => window.clearTimeout(timer);
   }, []);
 
   return (

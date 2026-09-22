@@ -2,8 +2,6 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-const CONNECTOR_ID = "google_calendar";
-
 export type GoogleCalendarStatus = {
   connected: boolean;
   needs_reconnect: boolean;

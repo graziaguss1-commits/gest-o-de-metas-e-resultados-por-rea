@@ -1,4 +1,4 @@
-// Lovable auto-provisions APP_USER_CONNECTION_KEY_SECRET (base64, 32 bytes).
+// Chave própria do projeto (base64, 32 bytes), configurada como secret no Supabase.
 async function key(): Promise<CryptoKey> {
   const raw = Deno.env.get("APP_USER_CONNECTION_KEY_SECRET");
   if (!raw) throw new Error("APP_USER_CONNECTION_KEY_SECRET is not set");
