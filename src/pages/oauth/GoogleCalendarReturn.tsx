@@ -30,6 +30,9 @@ export default function GoogleCalendarReturn() {
       return;
     }
 
+    // O código OAuth é temporário e não deve permanecer no histórico/endereço.
+    window.history.replaceState(null, document.title, window.location.pathname);
+
     const finishConnection = async () => {
       const legacyCode = params.get("code");
       const legacyState = params.get("gstate");
