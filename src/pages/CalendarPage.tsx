@@ -69,7 +69,6 @@ import {
 import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
 import type { Tarefa } from "@/lib/metas";
 import {
-  useAutoSyncGoogleCalendar,
   useGoogleBusyBlocks,
 } from "@/hooks/useGoogleCalendar";
 
@@ -141,8 +140,9 @@ export default function CalendarPage() {
   const queryStart = iso(startOfWeek(days[0]));
   const queryEnd = iso(addDays(startOfWeek(days[days.length - 1]), 6));
   const { data: googleBusy = [] } = useGoogleBusyBlocks(queryStart, queryEnd);
-  // Sincroniza ao abrir a tela e a cada troca de período exibido.
-  useAutoSyncGoogleCalendar(`${queryStart}:${queryEnd}`, true);
+  // A sincronização automática fica desativada por segurança. Sincronizar ao
+  // abrir ou navegar pela agenda pode reenviar eventos quando o backend ainda
+  // não registrou o vínculo com o Google Calendar.
   const queryDates = useMemo(() => {
     const datas: string[] = [];
     let atual = new Date(`${queryStart}T12:00:00`);
