@@ -99,6 +99,7 @@ type Mirror = {
 type GoogleConnectionRow = {
   calendar_id?: string | null;
   calendar_timezone?: string | null;
+  event_color_id?: string | null;
   sync_token?: string | null;
   webhook_channel_id?: string | null;
   webhook_resource_id?: string | null;
@@ -489,6 +490,7 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
       summary: mirror.summary,
       start: { dateTime: `${mirror.data}T${mirror.hora_inicio}`, timeZone },
       end: { dateTime: `${mirror.data_fim}T${mirror.hora_fim}`, timeZone },
+      ...(conn.event_color_id ? { colorId: conn.event_color_id } : {}),
       extendedProperties: { private: { metasia: mirror.origem_chave } },
     };
     const link = currentByKey.get(mirror.origem_chave);
