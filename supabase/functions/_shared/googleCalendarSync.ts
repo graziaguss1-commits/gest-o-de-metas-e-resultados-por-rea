@@ -9,6 +9,9 @@ import {
   sha256Hex,
 } from "./googleCalendarShared.ts";
 
+// Teto de criacoes por execucao. Ver valvula de seguranca abaixo.
+const LIMITE_CRIACOES_POR_SYNC = 30;
+
 const WINDOW_PAST_DAYS = 7;
 const WINDOW_FUTURE_DAYS = 60;
 const OBSERVACAO_CANCELADA = "Ocorrência cancelada";
@@ -535,6 +538,16 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
       );
       if (error) throw error;
       if (createdNow) stats.eventos_criados++;
+      // Valvula de seguranca: 30 criacoes novas numa unica sincronizacao e
+      // anormal. Se passar disso, a deducplicacao por google_calendar_event_links
+      // nao esta funcionando e a execucao morre aqui, em vez de virar bola de neve.
+      if (stats.eventos_criados > LIMITE_CRIACOES_POR_SYNC) {
+        throw new Error(
+          `Limite de seguranca atingido: ${stats.eventos_criados} eventos criados ` +
+          "numa unica sincronizacao. Execucao abortada. Verifique se a tabela " +
+          "google_calendar_event_links esta recebendo os vinculos."
+        );
+      }
       continue;
     }
 
@@ -584,10 +597,18 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
     }
   }
 
-  // Push real do Google: canal autenticado por id, resource id e token aleatório.
+  // Push real do Google: DESATIVADO em 27/09/2026.
+  // O webhook chamava a sincronizacao completa (sincronizarUsuario), que por
+  // sua vez alterava a agenda, que disparava o webhook de novo. Esse ciclo de
+  // realimentacao criou 15.155 eventos duplicados em 22/09/2026, a 1,8 por
+  // segundo durante 4h44min.
+  // Para reativar: corrigir google-calendar-webhook para rodar APENAS o
+  // sentido Google -> app (google_busy_blocks e movimentacoes de eventos ja
+  // vinculados), nunca o sentido app -> Google. So depois voltar esta flag.
+  const WEBHOOK_HABILITADO = false;
   try {
     const expiration = conn.webhook_expiration ? new Date(conn.webhook_expiration).getTime() : 0;
-    if (expiration < now + 86400000) {
+    if (WEBHOOK_HABILITADO && expiration < now + 86400000) {
       if (conn.webhook_channel_id && conn.webhook_resource_id) {
         await callGoogleApi(
           userId,
