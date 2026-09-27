@@ -372,7 +372,6 @@ export type Database = {
           calendar_id: string
           calendar_timezone: string | null
           created_at: string
-          event_color_id: string | null
           google_email: string | null
           id: string
           last_error_code: string | null
@@ -391,7 +390,6 @@ export type Database = {
           calendar_id?: string
           calendar_timezone?: string | null
           created_at?: string
-          event_color_id?: string | null
           google_email?: string | null
           id?: string
           last_error_code?: string | null
@@ -410,7 +408,6 @@ export type Database = {
           calendar_id?: string
           calendar_timezone?: string | null
           created_at?: string
-          event_color_id?: string | null
           google_email?: string | null
           id?: string
           last_error_code?: string | null
