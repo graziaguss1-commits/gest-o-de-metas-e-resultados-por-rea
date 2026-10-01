@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useActions } from "@/hooks/useActions";
 import { useAgendamentos } from "@/hooks/useAgendamentos";
 import { useCompromissos } from "@/hooks/useCompromissos";
+import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
 import { usePlanos } from "@/hooks/usePlanos";
 import { hhmm, horaFim } from "@/lib/agenda";
 import { todayISO } from "@/lib/metas";
@@ -12,7 +13,7 @@ export type BlocoAgendaDia = {
   detalhe: string;
   inicio: string;
   fim: string;
-  tipo: "plano" | "avulsa" | "compromisso";
+  tipo: "plano" | "avulsa" | "compromisso" | "google";
   concluido?: boolean;
 };
 
@@ -29,6 +30,11 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
     useCompromissos(dataConsulta, dataConsulta);
   const { data: actions = [], isLoading: carregandoAcoes } = useActions();
   const { data: planos = [], isLoading: carregandoPlanos } = usePlanos();
+  // Horarios ocupados vindos da agenda do Google (sem titulo, so o intervalo).
+  // Sem isto o painel mostrava apenas os blocos do proprio app e sugeria
+  // horarios que na verdade ja estavam ocupados.
+  const { data: googleBusy = [], isLoading: carregandoGoogle } =
+    useGoogleBusyBlocks(dataConsulta, dataConsulta);
 
   const tarefas = useMemo(() => {
     const mapa = new Map<string, { titulo: string; detalhe: string }>();
@@ -90,7 +96,16 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
       concluido: compromisso.concluido,
     }));
 
-    return [...dosPlanos, ...avulsas, ...fixos].sort((a, b) =>
+    const doGoogle = googleBusy.map((bloco): BlocoAgendaDia => ({
+      id: `google-${bloco.id}`,
+      titulo: "Horário ocupado",
+      detalhe: "Google Agenda",
+      inicio: hhmm(bloco.hora_inicio),
+      fim: hhmm(bloco.hora_fim),
+      tipo: "google",
+    }));
+
+    return [...dosPlanos, ...avulsas, ...fixos, ...doGoogle].sort((a, b) =>
       a.inicio.localeCompare(b.inicio),
     );
   }, [
@@ -98,6 +113,7 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
     agendamentos,
     compromissos,
     dataConsulta,
+    googleBusy,
     options.excluirAcaoId,
     options.excluirAgendamentoId,
     tarefas,
@@ -107,6 +123,7 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
     blocos,
     isLoading:
       carregandoAgendamentos ||
+      carregandoGoogle ||
       carregandoCompromissos ||
       carregandoAcoes ||
       carregandoPlanos,
