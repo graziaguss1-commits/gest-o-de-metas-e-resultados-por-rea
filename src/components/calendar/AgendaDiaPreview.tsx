@@ -38,6 +38,8 @@ const estiloTipo: Record<BlocoAgendaDia["tipo"], string> = {
     "border-[var(--color-green)]/35 bg-[var(--color-green-bg)] text-[var(--color-green)]",
   compromisso:
     "border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]",
+  google:
+    "border-muted-foreground/30 bg-muted text-muted-foreground",
 };
 
 function posicaoVisual(inicio: string, fim: string) {
