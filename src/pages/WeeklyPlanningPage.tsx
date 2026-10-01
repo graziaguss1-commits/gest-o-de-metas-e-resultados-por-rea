@@ -239,6 +239,20 @@ export default function WeeklyPlanningPage() {
     useState<PlanejamentoClaudeResponse | null>(null);
 
   const { data: agendamentos = [] } = useAgendamentos(weekStartISO, weekEndISO);
+  // Agendamentos ja existentes nesta semana, agrupados por tarefa. Serve para
+  // avisar no cartao que a tarefa ja tem bloco na agenda, sem impedir que ela
+  // seja agendada de novo (ha tarefas que precisam de mais de um bloco).
+  const agendamentosPorTarefa = useMemo(() => {
+    const mapa = new Map<string, { data: string; hora_inicio: string }[]>();
+    agendamentos.forEach((bloco) => {
+      if (!bloco.tarefa_id) return;
+      const lista = mapa.get(bloco.tarefa_id) ?? [];
+      lista.push({ data: bloco.data, hora_inicio: bloco.hora_inicio });
+      mapa.set(bloco.tarefa_id, lista);
+    });
+    return mapa;
+  }, [agendamentos]);
+
   const { data: googleBusy = [], refetch: refetchGoogleBusy } = useGoogleBusyBlocks(
     weekStartISO,
     weekEndISO,
@@ -888,6 +902,24 @@ export default function WeeklyPlanningPage() {
                                 {expectedBlocks} blocos nesta semana
                               </span>
                             )}
+                            {(() => {
+                              const blocos = agendamentosPorTarefa.get(task.id);
+                              if (!blocos || blocos.length === 0) return null;
+                              const rotulos = blocos.map((bloco) => {
+                                const dia = new Date(
+                                  `${bloco.data}T12:00:00`,
+                                ).toLocaleDateString("pt-BR", {
+                                  weekday: "short",
+                                  day: "2-digit",
+                                });
+                                return `${dia} ${bloco.hora_inicio.slice(0, 5)}`;
+                              });
+                              return (
+                                <span className="rounded-full bg-[var(--brand-accent-soft)] px-2 py-1 text-[var(--brand-primary)]">
+                                  Já na agenda: {rotulos.join(" · ")}
+                                </span>
+                              );
+                            })()}
                           </div>
                           <div className="mt-4 flex flex-wrap gap-2">
                             <Button
