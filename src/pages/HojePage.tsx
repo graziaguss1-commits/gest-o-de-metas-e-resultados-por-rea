@@ -19,6 +19,7 @@ import {
   useAlternarCronometroAgendamento,
   useFinalizarCronometroAgendamento,
 } from "@/hooks/useAgendamentos";
+import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
 import { useToggleAction } from "@/hooks/useActions";
 import { useAtualizarCompromisso } from "@/hooks/useCompromissos";
 import {
@@ -38,7 +39,6 @@ import {
   escolherPrioridadeDoDia,
   fimDoBloco,
   isoLocal,
-  lerPrioridadesTop,
   segundaDaSemana,
 } from "@/lib/hoje";
 
@@ -62,7 +62,9 @@ export default function HojePage() {
 
   const { blocos, isLoading } = useAgendaPeriodo(segundaISO, domingoISO);
   const { data: planos = [] } = usePlanos();
-  const prioridadesTop = useMemo(() => lerPrioridadesTop(segunda), [segunda]);
+  useMigrarPlanejamentoLocal();
+  const { data: planejamento } = usePlanejamentoSemanal(segundaISO);
+  const prioridadesTop = useMemo(() => planejamento?.priorityIds ?? [], [planejamento]);
 
   const blocosHoje = useMemo(
     () => blocos.filter((b) => b.data === hojeISO && b.tipo !== "google"),
