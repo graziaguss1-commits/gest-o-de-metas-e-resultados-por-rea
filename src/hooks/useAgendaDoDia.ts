@@ -3,18 +3,25 @@ import { useActions } from "@/hooks/useActions";
 import { useAgendamentos } from "@/hooks/useAgendamentos";
 import { useCompromissos } from "@/hooks/useCompromissos";
 import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
-import { usePlanos } from "@/hooks/usePlanos";
-import { hhmm, horaFim } from "@/lib/agenda";
+import { useExecucoes, usePlanos } from "@/hooks/usePlanos";
+import { hhmm, horaFim, type Agendamento } from "@/lib/agenda";
 import { todayISO } from "@/lib/metas";
 
 export type BlocoAgendaDia = {
   id: string;
+  /** Data do bloco (YYYY-MM-DD). */
+  data: string;
+  /** Id do registro de origem (agendamento, ação avulsa, ocorrência de compromisso ou bloco Google). */
+  origemId: string;
   titulo: string;
   detalhe: string;
   inicio: string;
   fim: string;
   tipo: "plano" | "avulsa" | "compromisso" | "google";
   concluido?: boolean;
+  /** Apenas para blocos de plano. */
+  tarefaId?: string;
+  agendamento?: Agendamento;
 };
 
 type AgendaOptions = {
@@ -22,19 +29,22 @@ type AgendaOptions = {
   excluirAcaoId?: string;
 };
 
-export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
-  const dataConsulta = data || todayISO();
+/** Blocos de agenda num intervalo de datas (inclusive), de todas as fontes. */
+export function useAgendaPeriodo(
+  inicio: string,
+  fim: string,
+  options: AgendaOptions = {},
+) {
   const { data: agendamentos = [], isLoading: carregandoAgendamentos } =
-    useAgendamentos(dataConsulta, dataConsulta);
+    useAgendamentos(inicio, fim);
   const { data: compromissos = [], isLoading: carregandoCompromissos } =
-    useCompromissos(dataConsulta, dataConsulta);
+    useCompromissos(inicio, fim);
   const { data: actions = [], isLoading: carregandoAcoes } = useActions();
   const { data: planos = [], isLoading: carregandoPlanos } = usePlanos();
+  const { data: execucoes = [] } = useExecucoes();
   // Horarios ocupados vindos da agenda do Google (sem titulo, so o intervalo).
-  // Sem isto o painel mostrava apenas os blocos do proprio app e sugeria
-  // horarios que na verdade ja estavam ocupados.
   const { data: googleBusy = [], isLoading: carregandoGoogle } =
-    useGoogleBusyBlocks(dataConsulta, dataConsulta);
+    useGoogleBusyBlocks(inicio, fim);
 
   const tarefas = useMemo(() => {
     const mapa = new Map<string, { titulo: string; detalhe: string }>();
@@ -49,19 +59,34 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
     return mapa;
   }, [planos]);
 
+  const agendamentosFeitos = useMemo(
+    () =>
+      new Set(
+        execucoes
+          .map((execucao) => execucao.agendamento_id)
+          .filter(Boolean) as string[],
+      ),
+    [execucoes],
+  );
+
   const blocos = useMemo<BlocoAgendaDia[]>(() => {
     const dosPlanos = agendamentos
       .filter((item) => item.id !== options.excluirAgendamentoId)
       .map((item): BlocoAgendaDia => {
         const tarefa = tarefas.get(item.tarefa_id);
-        const inicio = hhmm(item.hora_inicio);
+        const hInicio = hhmm(item.hora_inicio);
         return {
           id: `plano-${item.id}`,
+          data: item.data,
+          origemId: item.id,
           titulo: tarefa?.titulo ?? "Plano de ação",
           detalhe: tarefa?.detalhe ?? "Ação planejada",
-          inicio,
-          fim: horaFim(inicio, item.duracao_minutos),
+          inicio: hInicio,
+          fim: horaFim(hInicio, item.duracao_minutos),
           tipo: "plano",
+          concluido: agendamentosFeitos.has(item.id),
+          tarefaId: item.tarefa_id,
+          agendamento: item,
         };
       });
 
@@ -69,18 +94,22 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
       .filter(
         (action) =>
           action.id !== options.excluirAcaoId &&
-          action.data_agendada === dataConsulta &&
+          action.data_agendada &&
+          action.data_agendada >= inicio &&
+          action.data_agendada <= fim &&
           action.hora_inicio &&
           action.duracao_minutos,
       )
       .map((action): BlocoAgendaDia => {
-        const inicio = hhmm(action.hora_inicio);
+        const hInicio = hhmm(action.hora_inicio);
         return {
           id: `avulsa-${action.id}`,
+          data: action.data_agendada as string,
+          origemId: action.id,
           titulo: action.descricao,
           detalhe: `${action.area} · ação avulsa`,
-          inicio,
-          fim: horaFim(inicio, action.duracao_minutos ?? 0),
+          inicio: hInicio,
+          fim: horaFim(hInicio, action.duracao_minutos ?? 0),
           tipo: "avulsa",
           concluido: action.concluida,
         };
@@ -88,6 +117,8 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
 
     const fixos = compromissos.map((compromisso): BlocoAgendaDia => ({
       id: `compromisso-${compromisso.id}`,
+      data: compromisso.data,
+      origemId: compromisso.id,
       titulo: compromisso.titulo,
       detalhe: `${compromisso.area} · compromisso`,
       inicio: hhmm(compromisso.hora_inicio),
@@ -98,6 +129,8 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
 
     const doGoogle = googleBusy.map((bloco): BlocoAgendaDia => ({
       id: `google-${bloco.id}`,
+      data: bloco.data,
+      origemId: bloco.id,
       titulo: "Horário ocupado",
       detalhe: "Google Agenda",
       inicio: hhmm(bloco.hora_inicio),
@@ -105,15 +138,17 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
       tipo: "google",
     }));
 
-    return [...dosPlanos, ...avulsas, ...fixos, ...doGoogle].sort((a, b) =>
-      a.inicio.localeCompare(b.inicio),
+    return [...dosPlanos, ...avulsas, ...fixos, ...doGoogle].sort(
+      (a, b) => a.data.localeCompare(b.data) || a.inicio.localeCompare(b.inicio),
     );
   }, [
     actions,
     agendamentos,
+    agendamentosFeitos,
     compromissos,
-    dataConsulta,
+    fim,
     googleBusy,
+    inicio,
     options.excluirAcaoId,
     options.excluirAgendamentoId,
     tarefas,
@@ -128,4 +163,9 @@ export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
       carregandoAcoes ||
       carregandoPlanos,
   };
+}
+
+export function useAgendaDoDia(data: string, options: AgendaOptions = {}) {
+  const dataConsulta = data || todayISO();
+  return useAgendaPeriodo(dataConsulta, dataConsulta, options);
 }
