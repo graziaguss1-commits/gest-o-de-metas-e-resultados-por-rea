@@ -1,1 +1,2 @@
 - Weekly planning (top priorities, focus, review) lives in the `planejamento_semanal` table, one row per user and week, accessed via `usePlanejamentoSemanal`; localStorage is only read once to migrate old data — so plans follow the user across devices.
+- WhatsApp reminders run server-side in the `whatsapp-agenda` edge function, triggered by pg_cron with a secret from `cron_segredos`; every send is reserved first in `whatsapp_envios` (unique per user/type/block/day), capped per day, logged in `whatsapp_log`, and never retried — so a repeating job can never send duplicates.
