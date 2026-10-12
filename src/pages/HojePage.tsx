@@ -20,11 +20,12 @@ import { useAgendaPeriodo, type BlocoAgendaDia } from "@/hooks/useAgendaDoDia";
 import {
   useAlternarCronometroAgendamento,
   useFinalizarCronometroAgendamento,
+  useReagendarTarefa,
 } from "@/hooks/useAgendamentos";
 import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
 import { useMotivosBloco, useRegistrarMotivo } from "@/hooks/useMotivosBloco";
 import { chaveMotivo, exigeTexto, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
-import { useToggleAction } from "@/hooks/useActions";
+import { useScheduleAction, useToggleAction } from "@/hooks/useActions";
 import { useAtualizarCompromisso } from "@/hooks/useCompromissos";
 import {
   usePlanos,
@@ -128,8 +129,12 @@ export default function HojePage() {
   const toggleTarefa = useToggleTarefa();
   const toggleAction = useToggleAction();
   const atualizarCompromisso = useAtualizarCompromisso();
+  const reagendarTarefa = useReagendarTarefa();
+  const remarcarAvulsa = useScheduleAction();
   const [concluindoId, setConcluindoId] = useState<string | null>(null);
+  const [remarcando, setRemarcando] = useState<{ id: string; data: string; hora: string } | null>(null);
   const [timersLocais, setTimersLocais] = useState<Record<string, number>>({});
+  const amanhaISO = isoLocal(new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1));
 
   const inicioLocal = (id: string) => {
     if (timersLocais[id]) return timersLocais[id];
@@ -169,6 +174,41 @@ export default function HojePage() {
       toast.error(error instanceof Error ? error.message : "Não foi possível marcar como feito.");
     } finally {
       setConcluindoId(null);
+    }
+  };
+
+  /**
+   * Tarefa única precisa ser refeita; rotina volta sozinha no próximo dia.
+   * Compromisso fica de fora: o bloco não carrega a recorrência, e remarcar
+   * um compromisso recorrente moveria a série inteira.
+   */
+  const ehTarefaUnica = (bloco: BlocoAgendaDia) => {
+    if (bloco.tipo === "avulsa") return true;
+    if (bloco.tipo !== "plano" || !bloco.tarefaId) return false;
+    const tarefa = taskById.get(bloco.tarefaId);
+    return tarefa ? getFrequencia(tarefa) === "unica" : false;
+  };
+
+  const confirmarRemarcacao = async (bloco: BlocoAgendaDia) => {
+    if (!remarcando || remarcando.id !== bloco.id) return;
+    const duracao = Math.max(
+      5,
+      horarioEmMinutos(bloco.fim) - horarioEmMinutos(bloco.inicio),
+    );
+    const entrada = {
+      id: bloco.origemId,
+      data: remarcando.data,
+      horaInicio: remarcando.hora,
+      duracaoMinutos: duracao,
+    };
+    try {
+      if (bloco.tipo === "plano") await reagendarTarefa.mutateAsync(entrada);
+      else await remarcarAvulsa.mutateAsync(entrada);
+      toast.success("Bloco remarcado.");
+      setRemarcando(null);
+      setBlocoAberto(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível remarcar.");
     }
   };
 
@@ -356,6 +396,58 @@ export default function HojePage() {
                           {concluindoId === bloco.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Circle className="h-3.5 w-3.5" />}
                           {perdido ? "Fiz depois" : "Marcar feito"}
                         </Button>
+                      )}
+
+                      {aberto && perdido && !bloco.concluido && (
+                        <div className="mt-2 border-t pt-2">
+                          {!ehTarefaUnica(bloco) ? (
+                            <p className="text-[11px] text-muted-foreground">
+                              Rotina: volta sozinha no próximo dia. Segue como não cumprida no gráfico e no % da meta.
+                            </p>
+                          ) : remarcando?.id === bloco.id ? (
+                            <div className="space-y-1.5">
+                              <p className="text-[11px] text-muted-foreground">Tarefa única: continua pendente até ser feita.</p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <input
+                                  type="date"
+                                  min={hojeISO}
+                                  value={remarcando.data}
+                                  onChange={(e) => setRemarcando((r) => (r ? { ...r, data: e.target.value } : r))}
+                                  className="h-7 rounded-md border bg-background px-2 text-[11px]"
+                                />
+                                <input
+                                  type="time"
+                                  value={remarcando.hora}
+                                  onChange={(e) => setRemarcando((r) => (r ? { ...r, hora: e.target.value } : r))}
+                                  className="h-7 rounded-md border bg-background px-2 text-[11px]"
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2.5 text-[11px]"
+                                  disabled={!remarcando.data || !remarcando.hora || reagendarTarefa.isPending || remarcarAvulsa.isPending}
+                                  onClick={() => confirmarRemarcacao(bloco)}
+                                >
+                                  Confirmar
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setRemarcando(null)}>
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-[11px] text-muted-foreground">Tarefa única: continua pendente até ser feita.</p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1.5 px-2.5 text-[11px]"
+                                onClick={() => setRemarcando({ id: bloco.id, data: amanhaISO, hora: bloco.inicio })}
+                              >
+                                <CalendarCheck className="h-3.5 w-3.5" />Remarcar
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </>
                   );
