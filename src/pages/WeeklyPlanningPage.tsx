@@ -60,6 +60,7 @@ import {
 import type { Tarefa } from "@/lib/metas";
 import { toast } from "sonner";
 
+import { capacidadePlanejavel } from "@/lib/capacidade";
 import { emptyPlanningState, type PlanningState } from "@/lib/planejamento";
 import {
   useMigrarPlanejamentoLocal,
@@ -514,8 +515,10 @@ export default function WeeklyPlanningPage() {
       const suggestion = await gerarPlanejamento.mutateAsync({
         week_start: weekStartISO,
         week_end: weekEndISO,
-        capacidade_diaria_minutos:
-          settings?.capacidade_diaria_minutos ?? 480,
+        // Folga de 30%: o Claude planeja sobre 70% da capacidade diária.
+        capacidade_diaria_minutos: capacidadePlanejavel(
+          settings?.capacidade_diaria_minutos,
+        ),
         revisao: {
           conquistas: state.wins,
           pendencias: state.pending,
