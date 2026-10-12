@@ -24,7 +24,7 @@ export default function PendingApprovalPage() {
       setChecking(false);
       if (p?.is_approved && p?.is_active) {
         toast.success("Conta aprovada! Redirecionando...");
-        navigate("/dashboard", { replace: true });
+        navigate("/", { replace: true });
         return;
       }
     } else {

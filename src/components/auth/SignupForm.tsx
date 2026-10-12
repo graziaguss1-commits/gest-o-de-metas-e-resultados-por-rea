@@ -48,7 +48,7 @@ export function SignupForm() {
       navigate("/pending-approval", { replace: true });
     } else if (isApproved === true) {
       toast.success("Conta criada com sucesso!");
-      navigate("/dashboard", { replace: true });
+      navigate("/", { replace: true });
     } else {
       // Fallback when profile not yet readable (email confirmation required)
       toast.info("Conta criada! Verifique seu email para confirmar o cadastro.");
