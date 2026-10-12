@@ -13,6 +13,7 @@ import {
   Target,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { GradeHoras } from "@/components/hoje/GradeHoras";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgendaPeriodo, type BlocoAgendaDia } from "@/hooks/useAgendaDoDia";
@@ -40,7 +41,6 @@ import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
 import {
   cumprimentoAgenda,
   escolherPrioridadeDoDia,
-  fimDoBloco,
   isoLocal,
   segundaDaSemana,
 } from "@/lib/hoje";
@@ -69,18 +69,29 @@ export default function HojePage() {
   const { data: planejamento } = usePlanejamentoSemanal(segundaISO);
   const prioridadesTop = useMemo(() => planejamento?.priorityIds ?? [], [planejamento]);
 
-  const blocosHoje = useMemo(
-    () => blocos.filter((b) => b.data === hojeISO && b.tipo !== "google"),
+  // Tudo que ocupa o dia, inclusive os horários vindos do Google: a grade
+  // precisa mostrá-los, senão um compromisso de fora some da tela.
+  const blocosDoDia = useMemo(
+    () => blocos.filter((b) => b.data === hojeISO),
     [blocos, hojeISO],
   );
-  const ocupadosGoogle = blocos.filter((b) => b.data === hojeISO && b.tipo === "google").length;
+  // Só os blocos próprios entram em métrica, prioridade e motivo.
+  const blocosHoje = useMemo(
+    () => blocosDoDia.filter((b) => b.tipo !== "google"),
+    [blocosDoDia],
+  );
+  const ocupadosGoogle = blocosDoDia.length - blocosHoje.length;
   const metrica = cumprimentoAgenda(blocos, agora);
-  const blocosEmDia = blocosHoje.filter((b) => !naoExecutado(b, agora));
   const blocosPerdidos = blocosHoje.filter((b) => naoExecutado(b, agora));
   const { data: motivos } = useMotivosBloco(hojeISO, hojeISO);
+  const semMotivo = blocosPerdidos.filter((b) => {
+    const ref = referenciaBloco(b);
+    return !ref || !motivos?.get(chaveMotivo(ref, b.data));
+  }).length;
   const registrarMotivo = useRegistrarMotivo();
   const [obs, setObs] = useState<Record<string, string>>({});
   const [obsAberta, setObsAberta] = useState<string | null>(null);
+  const [blocoAberto, setBlocoAberto] = useState<string | null>(null);
   const escolherMotivo = (bloco: BlocoAgendaDia, motivo: MotivoId) => {
     const referencia = referenciaBloco(bloco);
     if (!referencia) return;
@@ -212,99 +223,113 @@ export default function HojePage() {
         )}
 
         <section className="rounded-2xl border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Blocos de hoje</h2>
-            {ocupadosGoogle > 0 && <span className="text-[11px] text-muted-foreground">+{ocupadosGoogle} ocupado(s) no Google</span>}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Agenda de hoje</h2>
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              {ocupadosGoogle > 0 && <span>{ocupadosGoogle} ocupado(s) no Google</span>}
+              {semMotivo > 0 && (
+                <span className="flex items-center gap-1 font-semibold text-[var(--color-amber)]">
+                  <CircleSlash className="h-3.5 w-3.5" />
+                  {semMotivo} sem motivo
+                </span>
+              )}
+            </div>
           </div>
           {isLoading ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
-          ) : blocosEmDia.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">{blocosHoje.length ? "Nenhum bloco pendente." : "Sem blocos hoje."}</p>
+          ) : blocosDoDia.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Sem blocos hoje.</p>
           ) : (
-            <ul className="space-y-2">
-              {blocosEmDia.map((bloco) => {
-                const passou = fimDoBloco(bloco).getTime() <= agora.getTime();
-                const agoraNele = !passou && horarioEmMinutos(bloco.inicio) <= agora.getHours() * 60 + agora.getMinutes();
-                const bloqueado = bloco.tipo === "plano" && bloco.concluido;
-                return (
-                  <li key={bloco.id} className={`flex items-center gap-3 rounded-xl border p-3 ${bloco.concluido ? "border-[var(--color-green)]/40 bg-[var(--color-green-bg)]" : agoraNele ? "border-[var(--brand-accent)]" : ""}`}>
-                    <div className="w-24 shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{bloco.inicio}–{bloco.fim}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className={`truncate text-sm font-semibold ${bloco.concluido ? "line-through opacity-70" : ""}`}>{bloco.titulo}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {bloco.detalhe}
-                        {prioridadesTop.includes(bloco.tarefaId ?? "") && " · prioridade top"}
-                        {!bloco.concluido && passou && " · horário passou"}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={bloco.concluido ? "ghost" : "outline"}
-                      disabled={bloqueado || concluindoId === bloco.id}
-                      onClick={() => marcarFeito(bloco)}
-                      className="shrink-0 gap-1.5"
-                    >
-                      {concluindoId === bloco.id ? <Loader2 className="h-4 w-4 animate-spin" /> : bloco.concluido ? <CheckCircle2 className="h-4 w-4 text-[var(--color-green)]" /> : <Circle className="h-4 w-4" />}
-                      {bloco.concluido ? "Feito" : "Marcar feito"}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {!isLoading && blocosPerdidos.length > 0 && (
-          <section className="rounded-2xl border border-[var(--color-red)]/30 bg-card p-4">
-            <div className="mb-1 flex items-center gap-2">
-              <CircleSlash className="h-4 w-4 text-[var(--color-red)]" />
-              <h2 className="text-sm font-semibold">Não executados</h2>
-            </div>
-            <p className="mb-3 text-[11px] text-muted-foreground">O horário passou sem o bloco ser feito. O que aconteceu? Um clique basta.</p>
-            <ul className="space-y-2">
-              {blocosPerdidos.map((bloco) => {
-                const ref = referenciaBloco(bloco);
-                const motivo = ref ? motivos?.get(chaveMotivo(ref, bloco.data)) : undefined;
-                return (
-                  <li key={bloco.id} className={`rounded-xl border p-3 ${motivo ? "bg-muted/40" : ""}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-24 shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{bloco.inicio}–{bloco.fim}</div>
-                      <div className={`min-w-0 flex-1 truncate text-sm font-semibold ${motivo ? "text-muted-foreground" : ""}`}>{bloco.titulo}</div>
-                      {motivo ? (
-                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-                          <CheckCircle2 className="h-3.5 w-3.5" />{MOTIVO_LABEL[motivo]}
-                        </span>
-                      ) : (
-                        <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-[11px]" disabled={concluindoId === bloco.id} onClick={() => marcarFeito(bloco)}>Fiz depois</Button>
-                      )}
-                    </div>
-                    {!motivo && (
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-0 md:pl-[108px]">
-                        {MOTIVOS.map((m) => (
-                          <Button key={m.id} size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" disabled={registrarMotivo.isPending} onClick={() => escolherMotivo(bloco, m.id)}>
-                            {m.label}
-                          </Button>
-                        ))}
-                        {obsAberta === bloco.id ? (
-                          <input
-                            autoFocus
-                            maxLength={500}
-                            placeholder="Observação (opcional)"
-                            value={obs[bloco.id] ?? ""}
-                            onChange={(e) => setObs((o) => ({ ...o, [bloco.id]: e.target.value }))}
-                            className="h-7 min-w-[180px] flex-1 rounded-md border bg-background px-2 text-[11px]"
-                          />
-                        ) : (
-                          <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setObsAberta(bloco.id)}>+ observação</button>
+            <>
+              <GradeHoras
+                blocos={blocosDoDia}
+                agora={agora}
+                abertoId={blocoAberto}
+                onAbrir={setBlocoAberto}
+                renderBloco={(bloco, { aberto }) => {
+                  const ref = referenciaBloco(bloco);
+                  const motivo = ref ? motivos?.get(chaveMotivo(ref, bloco.data)) : undefined;
+                  const perdido = naoExecutado(bloco, agora);
+                  const ehTop = prioridadesTop.includes(bloco.tarefaId ?? "");
+                  const bloqueado = bloco.tipo === "plano" && bloco.concluido;
+                  return (
+                    <>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-xs font-semibold ${aberto ? "" : "truncate"} ${bloco.concluido ? "line-through opacity-70" : ""}`}>
+                            {bloco.titulo}
+                          </div>
+                          <div className={`text-[10px] text-muted-foreground ${aberto ? "" : "truncate"}`}>
+                            {bloco.inicio}–{bloco.fim}
+                            {ehTop && " · prioridade top"}
+                            {bloco.tipo === "google" && " · Google Agenda"}
+                          </div>
+                        </div>
+                        {aberto && (
+                          <button
+                            type="button"
+                            aria-label="Fechar bloco"
+                            className="-mr-1 -mt-0.5 shrink-0 rounded-full px-1.5 text-sm leading-none text-muted-foreground hover:text-foreground"
+                            onClick={() => setBlocoAberto(null)}
+                          >
+                            ×
+                          </button>
                         )}
                       </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+
+                      {aberto && motivo && (
+                        <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                          <CheckCircle2 className="h-3.5 w-3.5" />{MOTIVO_LABEL[motivo]}
+                        </span>
+                      )}
+
+                      {aberto && perdido && !motivo && (
+                        <div className="mt-2 space-y-2">
+                          <p className="text-[11px] text-muted-foreground">O horário passou. O que aconteceu?</p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {MOTIVOS.map((m) => (
+                              <Button key={m.id} size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" disabled={registrarMotivo.isPending} onClick={() => escolherMotivo(bloco, m.id)}>
+                                {m.label}
+                              </Button>
+                            ))}
+                          </div>
+                          {obsAberta === bloco.id ? (
+                            <input
+                              autoFocus
+                              maxLength={500}
+                              placeholder="Observação (opcional)"
+                              value={obs[bloco.id] ?? ""}
+                              onChange={(e) => setObs((o) => ({ ...o, [bloco.id]: e.target.value }))}
+                              className="h-7 w-full rounded-md border bg-background px-2 text-[11px]"
+                            />
+                          ) : (
+                            <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setObsAberta(bloco.id)}>+ observação</button>
+                          )}
+                        </div>
+                      )}
+
+                      {aberto && !bloqueado && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 h-7 gap-1.5 px-2.5 text-[11px]"
+                          disabled={concluindoId === bloco.id}
+                          onClick={() => marcarFeito(bloco)}
+                        >
+                          {concluindoId === bloco.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Circle className="h-3.5 w-3.5" />}
+                          {perdido ? "Fiz depois" : "Marcar feito"}
+                        </Button>
+                      )}
+                    </>
+                  );
+                }}
+              />
+              <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
+                Toque num bloco para abrir. Registrar o motivo explica o que houve, mas não marca o bloco como feito.
+              </p>
+            </>
+          )}
+        </section>
       </div>
     </AppShell>
   );
