@@ -365,6 +365,23 @@ function PrioridadeCard({
         </div>
       )}
 
+      {iniciado && (bloco.primeiroPasso || bloco.versaoMinima) && (
+        <div className="mt-4 space-y-2 rounded-xl border bg-muted/40 p-3">
+          {bloco.primeiroPasso && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--brand-primary)]">Primeiro passo (2 min)</div>
+              <p className="text-sm font-medium">{bloco.primeiroPasso}</p>
+            </div>
+          )}
+          {bloco.versaoMinima && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Versão mínima aceitável</div>
+              <p className="text-sm font-medium">{bloco.versaoMinima}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
         <Button className="brand-button gap-2" disabled={pendente} onClick={onTimer}>
           {ativo ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
