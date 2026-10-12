@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   CalendarCheck,
   CheckCircle2,
+  CircleSlash,
   Circle,
   Loader2,
   Pause,
@@ -20,6 +21,8 @@ import {
   useFinalizarCronometroAgendamento,
 } from "@/hooks/useAgendamentos";
 import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
+import { useMotivosBloco, useRegistrarMotivo } from "@/hooks/useMotivosBloco";
+import { chaveMotivo, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
 import { useToggleAction } from "@/hooks/useActions";
 import { useAtualizarCompromisso } from "@/hooks/useCompromissos";
 import {
@@ -72,6 +75,23 @@ export default function HojePage() {
   );
   const ocupadosGoogle = blocos.filter((b) => b.data === hojeISO && b.tipo === "google").length;
   const metrica = cumprimentoAgenda(blocos, agora);
+  const blocosEmDia = blocosHoje.filter((b) => !naoExecutado(b, agora));
+  const blocosPerdidos = blocosHoje.filter((b) => naoExecutado(b, agora));
+  const { data: motivos } = useMotivosBloco(hojeISO, hojeISO);
+  const registrarMotivo = useRegistrarMotivo();
+  const [obs, setObs] = useState<Record<string, string>>({});
+  const [obsAberta, setObsAberta] = useState<string | null>(null);
+  const escolherMotivo = (bloco: BlocoAgendaDia, motivo: MotivoId) => {
+    const referencia = referenciaBloco(bloco);
+    if (!referencia) return;
+    registrarMotivo.mutate(
+      { referencia, data: bloco.data, motivo, observacao: obs[bloco.id] },
+      {
+        onSuccess: () => toast.success(`Motivo registrado: ${MOTIVO_LABEL[motivo]}.`),
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível registrar o motivo."),
+      },
+    );
+  };
   const prioridade = escolherPrioridadeDoDia(blocosHoje, prioridadesTop, agora);
 
   const taskById = useMemo(() => {
@@ -198,11 +218,11 @@ export default function HojePage() {
           </div>
           {isLoading ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
-          ) : blocosHoje.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Sem blocos hoje.</p>
+          ) : blocosEmDia.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{blocosHoje.length ? "Nenhum bloco pendente." : "Sem blocos hoje."}</p>
           ) : (
             <ul className="space-y-2">
-              {blocosHoje.map((bloco) => {
+              {blocosEmDia.map((bloco) => {
                 const passou = fimDoBloco(bloco).getTime() <= agora.getTime();
                 const agoraNele = !passou && horarioEmMinutos(bloco.inicio) <= agora.getHours() * 60 + agora.getMinutes();
                 const bloqueado = bloco.tipo === "plano" && bloco.concluido;
@@ -233,6 +253,58 @@ export default function HojePage() {
             </ul>
           )}
         </section>
+
+        {!isLoading && blocosPerdidos.length > 0 && (
+          <section className="rounded-2xl border border-[var(--color-red)]/30 bg-card p-4">
+            <div className="mb-1 flex items-center gap-2">
+              <CircleSlash className="h-4 w-4 text-[var(--color-red)]" />
+              <h2 className="text-sm font-semibold">Não executados</h2>
+            </div>
+            <p className="mb-3 text-[11px] text-muted-foreground">O horário passou sem o bloco ser feito. O que aconteceu? Um clique basta.</p>
+            <ul className="space-y-2">
+              {blocosPerdidos.map((bloco) => {
+                const ref = referenciaBloco(bloco);
+                const motivo = ref ? motivos?.get(chaveMotivo(ref, bloco.data)) : undefined;
+                return (
+                  <li key={bloco.id} className={`rounded-xl border p-3 ${motivo ? "bg-muted/40" : ""}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-24 shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{bloco.inicio}–{bloco.fim}</div>
+                      <div className={`min-w-0 flex-1 truncate text-sm font-semibold ${motivo ? "text-muted-foreground" : ""}`}>{bloco.titulo}</div>
+                      {motivo ? (
+                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                          <CheckCircle2 className="h-3.5 w-3.5" />{MOTIVO_LABEL[motivo]}
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-[11px]" disabled={concluindoId === bloco.id} onClick={() => marcarFeito(bloco)}>Fiz depois</Button>
+                      )}
+                    </div>
+                    {!motivo && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-0 md:pl-[108px]">
+                        {MOTIVOS.map((m) => (
+                          <Button key={m.id} size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" disabled={registrarMotivo.isPending} onClick={() => escolherMotivo(bloco, m.id)}>
+                            {m.label}
+                          </Button>
+                        ))}
+                        {obsAberta === bloco.id ? (
+                          <input
+                            autoFocus
+                            maxLength={500}
+                            placeholder="Observação (opcional)"
+                            value={obs[bloco.id] ?? ""}
+                            onChange={(e) => setObs((o) => ({ ...o, [bloco.id]: e.target.value }))}
+                            className="h-7 min-w-[180px] flex-1 rounded-md border bg-background px-2 text-[11px]"
+                          />
+                        ) : (
+                          <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setObsAberta(bloco.id)}>+ observação</button>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </div>
     </AppShell>
   );
