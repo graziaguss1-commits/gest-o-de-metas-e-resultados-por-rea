@@ -1,0 +1,1 @@
+- Weekly planning (top priorities, focus, review) lives in the `planejamento_semanal` table, one row per user and week, accessed via `usePlanejamentoSemanal`; localStorage is only read once to migrate old data — so plans follow the user across devices.
