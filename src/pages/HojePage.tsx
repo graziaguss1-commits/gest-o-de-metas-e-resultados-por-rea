@@ -303,6 +303,18 @@ export default function HojePage() {
                   const perdido = naoExecutado(bloco, agora);
                   const ehTop = prioridadesTop.includes(bloco.tarefaId ?? "");
                   const bloqueado = bloco.tipo === "plano" && bloco.concluido;
+                  // Cronômetro: tarefa de plano guarda no banco e atravessa
+                  // dispositivos; avulsa e compromisso contam só neste navegador.
+                  const inicio = inicioLocal(bloco.id);
+                  const segundos = bloco.agendamento
+                    ? segundosDoCronometro(bloco.agendamento, agora.getTime())
+                    : inicio
+                      ? Math.floor((agora.getTime() - inicio) / 1000)
+                      : 0;
+                  const timerAtivo = bloco.agendamento
+                    ? Boolean(bloco.agendamento.cronometro_iniciado_em)
+                    : Boolean(inicio);
+                  const minutosMedidos = minutosReaisDoCronometro(segundos);
                   return (
                     <>
                       <div className="flex items-start gap-2">
@@ -316,6 +328,15 @@ export default function HojePage() {
                             {bloco.tipo === "google" && " · Google Agenda"}
                           </div>
                         </div>
+                        {timerAtivo ? (
+                          <span className="shrink-0 text-[11px] font-bold tabular-nums text-[var(--brand-accent)]">
+                            {formatCronometro(segundos)}
+                          </span>
+                        ) : bloco.concluido && minutosMedidos ? (
+                          <span className="shrink-0 text-[10px] font-bold text-muted-foreground">
+                            {minutosMedidos} min
+                          </span>
+                        ) : null}
                         {aberto && (
                           <button
                             type="button"
@@ -386,16 +407,27 @@ export default function HojePage() {
                       )}
 
                       {aberto && !bloqueado && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-2 h-7 gap-1.5 px-2.5 text-[11px]"
-                          disabled={concluindoId === bloco.id}
-                          onClick={() => marcarFeito(bloco)}
-                        >
-                          {concluindoId === bloco.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Circle className="h-3.5 w-3.5" />}
-                          {perdido ? "Fiz depois" : "Marcar feito"}
-                        </Button>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            className="h-7 gap-1.5 px-2.5 text-[11px]"
+                            disabled={alternarCronometro.isPending}
+                            onClick={() => alternarTimer(bloco)}
+                          >
+                            {timerAtivo ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                            {timerAtivo ? "Pausar" : segundos > 0 ? "Continuar" : "Iniciar"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1.5 px-2.5 text-[11px]"
+                            disabled={concluindoId === bloco.id}
+                            onClick={() => marcarFeito(bloco)}
+                          >
+                            {concluindoId === bloco.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Circle className="h-3.5 w-3.5" />}
+                            {perdido ? "Fiz depois" : "Concluir"}
+                          </Button>
+                        </div>
                       )}
 
                       {aberto && perdido && !bloco.concluido && (
