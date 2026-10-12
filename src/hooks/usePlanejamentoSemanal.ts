@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -91,6 +91,7 @@ async function migrarPlanejamentosLocais(): Promise<boolean> {
 /** Executa a migração local → banco uma vez por sessão do navegador. */
 export function useMigrarPlanejamentoLocal() {
   const qc = useQueryClient();
+  const [pronto, setPronto] = useState(false);
   useEffect(() => {
     if (!migracao) {
       migracao = migrarPlanejamentosLocais().catch((e) => {
@@ -101,6 +102,8 @@ export function useMigrarPlanejamentoLocal() {
     }
     migracao.then((migrou) => {
       if (migrou) qc.invalidateQueries({ queryKey: KEY });
+      setPronto(true);
     });
   }, [qc]);
+  return pronto;
 }
