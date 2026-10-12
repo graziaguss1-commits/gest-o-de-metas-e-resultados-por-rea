@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { BarChart3, CalendarDays, CalendarCheck, HelpCircle, LayoutDashboard, Lightbulb, ListChecks, LogOut, Plus, Settings, Target } from "lucide-react";
+import { BarChart3, CalendarDays, CalendarCheck, Sun, HelpCircle, LayoutDashboard, Lightbulb, ListChecks, LogOut, Plus, Settings, Target } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,8 @@ export function AppSidebar({ onLancarResultado }: { onLancarResultado?: () => vo
   const { pathname } = useLocation();
   const { signOut, profile, isAdmin } = useAuth();
   const items: NavItem[] = [
-    { title: "Visão geral", url: "/dashboard", icon: LayoutDashboard },
+    { title: "Hoje", url: "/", icon: Sun },
+    { title: "Performance", url: "/dashboard", icon: LayoutDashboard },
     { title: "Metas e objetivos", url: "/metas", icon: Target },
     { title: "Planos de ação", url: "/planos", icon: ListChecks },
     { title: "Impacto × esforço", url: "/acoes", icon: Lightbulb },
@@ -25,7 +26,7 @@ export function AppSidebar({ onLancarResultado }: { onLancarResultado?: () => vo
     { title: "Configurações", url: "/configuracoes", icon: Settings },
   ];
   const initials = (profile?.full_name || "?").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
-  const isActive = (url: string) => url === "/dashboard" ? pathname === "/" || pathname === "/dashboard" : pathname.startsWith(url);
+  const isActive = (url: string) => url === "/" ? pathname === "/" : pathname.startsWith(url);
   const menu = (entries: NavItem[]) => <SidebarMenu>{entries.filter((i) => !i.adminOnly || isAdmin).map((item) => {
     const active = isActive(item.url);
     return <SidebarMenuItem key={item.url}><SidebarMenuButton asChild isActive={active} tooltip={item.title} className={active ? "bg-white/10 text-white relative before:absolute before:left-0 before:top-1 before:bottom-1 before:w-1 before:rounded-r before:bg-[var(--brand-accent)]" : "text-white/75 hover:bg-white/5 hover:text-white"}><NavLink to={item.url} className="flex items-center gap-3 py-2"><item.icon className="h-4 w-4 shrink-0" />{!collapsed && <span className="text-sm font-medium">{item.title}</span>}</NavLink></SidebarMenuButton></SidebarMenuItem>;

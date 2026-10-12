@@ -66,7 +66,7 @@ export default function OnboardingPage() {
   const [metaInverse, setMetaInverse] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isCompleted) navigate("/dashboard", { replace: true });
+    if (!isLoading && isCompleted) navigate("/", { replace: true });
   }, [isLoading, isCompleted, navigate]);
 
   useEffect(() => {
@@ -211,12 +211,12 @@ export default function OnboardingPage() {
   const handleFinish = async () => {
     await completeOnboarding();
     toast.success("Tudo pronto! Bem-vindo ao MetasIA.");
-    navigate("/dashboard", { replace: true });
+    navigate("/", { replace: true });
   };
 
   const handleSkip = async () => {
     await completeOnboarding();
-    navigate("/dashboard", { replace: true });
+    navigate("/", { replace: true });
   };
 
   if (isLoading || loadingProfile) {

@@ -37,7 +37,7 @@ export function LoginForm() {
       return;
     }
     toast.success("Login realizado");
-    navigate("/dashboard", { replace: true });
+    navigate("/", { replace: true });
   };
 
   return (

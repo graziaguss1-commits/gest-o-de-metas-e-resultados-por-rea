@@ -8,7 +8,7 @@ export default function AuthPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) navigate(isApproved ? "/dashboard" : "/pending-approval", { replace: true });
+    if (user) navigate(isApproved ? "/" : "/pending-approval", { replace: true });
   }, [user, isApproved, navigate]);
 
   return <AuthLayout />;
