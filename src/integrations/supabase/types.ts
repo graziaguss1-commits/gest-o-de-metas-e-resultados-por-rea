@@ -894,9 +894,11 @@ export type Database = {
           ordem: number
           plano_id: string
           prazo: string | null
+          primeiro_passo: string | null
           quantidade_planejada: number
           responsavel_id: string | null
           unidade: string
+          versao_minima: string | null
         }
         Insert: {
           concluida?: boolean
@@ -915,9 +917,11 @@ export type Database = {
           ordem?: number
           plano_id: string
           prazo?: string | null
+          primeiro_passo?: string | null
           quantidade_planejada?: number
           responsavel_id?: string | null
           unidade?: string
+          versao_minima?: string | null
         }
         Update: {
           concluida?: boolean
@@ -936,9 +940,11 @@ export type Database = {
           ordem?: number
           plano_id?: string
           prazo?: string | null
+          primeiro_passo?: string | null
           quantidade_planejada?: number
           responsavel_id?: string | null
           unidade?: string
+          versao_minima?: string | null
         }
         Relationships: [
           {
