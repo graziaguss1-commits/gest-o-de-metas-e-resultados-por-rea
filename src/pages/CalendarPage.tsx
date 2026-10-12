@@ -69,6 +69,7 @@ import {
 import { getFrequencia, quantidadePorExecucao } from "@/lib/execucao";
 import type { Tarefa } from "@/lib/metas";
 import {
+  useAutoSyncGoogleCalendar,
   useGoogleBusyBlocks,
 } from "@/hooks/useGoogleCalendar";
 
@@ -140,9 +141,12 @@ export default function CalendarPage() {
   const queryStart = iso(startOfWeek(days[0]));
   const queryEnd = iso(addDays(startOfWeek(days[days.length - 1]), 6));
   const { data: googleBusy = [] } = useGoogleBusyBlocks(queryStart, queryEnd);
-  // A sincronização automática fica desativada por segurança. Sincronizar ao
-  // abrir ou navegar pela agenda pode reenviar eventos quando o backend ainda
-  // não registrou o vínculo com o Google Calendar.
+  // Sincroniza ao abrir a agenda e a cada troca de semana.
+  // Religado em 12/10/2026, depois que o deploy das edge functions passou a
+  // acontecer de verdade: o ciclo que multiplicava execucoes vinha do webhook
+  // (WEBHOOK_HABILITADO = false em googleCalendarSync.ts), nao deste gatilho,
+  // e o teto LIMITE_CRIACOES_POR_SYNC aborta qualquer rodada anormal.
+  useAutoSyncGoogleCalendar(`${queryStart}:${queryEnd}`, true);
   const queryDates = useMemo(() => {
     const datas: string[] = [];
     let atual = new Date(`${queryStart}T12:00:00`);
