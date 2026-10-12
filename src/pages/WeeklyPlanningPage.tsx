@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarClock,
@@ -219,7 +219,6 @@ export default function WeeklyPlanningPage() {
   );
 
   useEffect(() => {
-    setState(emptyState());
     setStep(1);
     setClaudeOpen(false);
     setClaudeSuggestion(null);
