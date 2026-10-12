@@ -780,6 +780,51 @@ export type Database = {
         }
         Relationships: []
       }
+      planejamento_semanal: {
+        Row: {
+          complementary_ids: string[]
+          created_at: string
+          foco: string
+          id: string
+          lesson: string
+          pending: string
+          priority_ids: string[]
+          saved_at: string | null
+          semana_inicio: string
+          updated_at: string
+          user_id: string
+          wins: string
+        }
+        Insert: {
+          complementary_ids?: string[]
+          created_at?: string
+          foco?: string
+          id?: string
+          lesson?: string
+          pending?: string
+          priority_ids?: string[]
+          saved_at?: string | null
+          semana_inicio: string
+          updated_at?: string
+          user_id?: string
+          wins?: string
+        }
+        Update: {
+          complementary_ids?: string[]
+          created_at?: string
+          foco?: string
+          id?: string
+          lesson?: string
+          pending?: string
+          priority_ids?: string[]
+          saved_at?: string | null
+          semana_inicio?: string
+          updated_at?: string
+          user_id?: string
+          wins?: string
+        }
+        Relationships: []
+      }
       plano_tarefas: {
         Row: {
           concluida: boolean
