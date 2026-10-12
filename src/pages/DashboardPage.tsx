@@ -37,6 +37,7 @@ import { NovaMetaModal } from "@/components/metas/NovaMetaModal";
 type Universo = "Tudo" | "Clínica" | "Mentoria" | "Pessoal";
 
 const UNIVERSOS: Universo[] = ["Tudo", "Clínica", "Mentoria", "Pessoal"];
+const STATUS_RANK: Record<Status, number> = { verde: 0, amarelo: 1, vermelho: 2 };
 const UNIVERSO_STYLE: Record<Exclude<Universo, "Tudo">, { color: string; soft: string }> = {
   Clínica: { color: "var(--brand-navy)", soft: "var(--brand-navy-soft)" },
   Mentoria: { color: "var(--brand-primary)", soft: "var(--brand-primary-soft)" },
