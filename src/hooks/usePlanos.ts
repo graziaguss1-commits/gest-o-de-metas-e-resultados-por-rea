@@ -237,6 +237,10 @@ export type NovoTarefaInput = {
   duracao_minutos?: number | null;
   horario_preferencial?: string | null;
   dias_semana?: number[] | null;
+  /** Menor ação concreta que destrava a tarefa (máx. 140 caracteres). */
+  primeiro_passo?: string | null;
+  /** Critério mínimo de entrega, contra o perfeccionismo (máx. 140 caracteres). */
+  versao_minima?: string | null;
 };
 
 export type NovoPlanoInput = {
@@ -284,6 +288,8 @@ export function useCreatePlano() {
           duracao_minutos: t.duracao_minutos ?? null,
           horario_preferencial: t.horario_preferencial || null,
           dias_semana: t.dias_semana ?? null,
+          primeiro_passo: t.primeiro_passo?.trim() || null,
+          versao_minima: t.versao_minima?.trim() || null,
         }));
 
       if (taskRows.length > 0) {
@@ -489,6 +495,8 @@ export function useUpdateTarefa() {
       duracao_minutos?: number | null;
       horario_preferencial?: string | null;
       dias_semana?: number[] | null;
+      primeiro_passo?: string | null;
+      versao_minima?: string | null;
     }) => {
       const { data: anterior, error: readError } = await supabase
         .from("plano_tarefas")

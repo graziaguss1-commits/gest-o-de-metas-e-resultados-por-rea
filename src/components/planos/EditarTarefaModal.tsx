@@ -56,6 +56,8 @@ type FormState = {
   impacto: number;
   esforco: number;
   responsavelId: string;
+  primeiroPasso: string;
+  versaoMinima: string;
 };
 
 const estadoDaTarefa = (tarefa: Tarefa): FormState => {
@@ -75,6 +77,8 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     impacto: tarefa.impacto ?? 5,
     esforco: tarefa.esforco ?? 5,
     responsavelId: tarefa.responsavel_id ?? "",
+    primeiroPasso: tarefa.primeiro_passo ?? "",
+    versaoMinima: tarefa.versao_minima ?? "",
   };
 };
 
@@ -151,6 +155,8 @@ export function EditarTarefaModal({
         impacto: form.impacto,
         esforco: form.esforco,
         responsavel_id: form.responsavelId,
+        primeiro_passo: form.primeiroPasso.trim() || null,
+        versao_minima: form.versaoMinima.trim() || null,
       });
       toast.success("Ação atualizada e agenda recalculada");
       onOpenChange(false);
@@ -276,6 +282,43 @@ export function EditarTarefaModal({
             onHorarioChange={(horario) => patch({ horario })}
             onDiasChange={(dias) => patch({ dias })}
           />
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`primeiro-passo-${tarefa.id}`}>
+              Primeiro passo (2 min) — opcional
+            </Label>
+            <Input
+              id={`primeiro-passo-${tarefa.id}`}
+              value={form.primeiroPasso}
+              maxLength={140}
+              onChange={(event) =>
+                patch({ primeiroPasso: event.target.value })
+              }
+              placeholder="Ex.: Abrir a planilha de leads da semana"
+            />
+            <p className="text-xs text-muted-foreground">
+              A menor ação concreta que destrava o resto. Aparece na tela Hoje
+              quando você clicar em "Começar".
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`versao-minima-${tarefa.id}`}>
+              Versão mínima aceitável — opcional
+            </Label>
+            <Input
+              id={`versao-minima-${tarefa.id}`}
+              value={form.versaoMinima}
+              maxLength={140}
+              onChange={(event) =>
+                patch({ versaoMinima: event.target.value })
+              }
+              placeholder="Ex.: 3 mensagens enviadas, mesmo sem resposta"
+            />
+            <p className="text-xs text-muted-foreground">
+              O que já conta como entregue, para não travar buscando perfeição.
+            </p>
+          </div>
 
           <ImpactoEsforcoPicker
             impacto={form.impacto}

@@ -22,6 +22,10 @@ export type BlocoAgendaDia = {
   /** Apenas para blocos de plano. */
   tarefaId?: string;
   agendamento?: Agendamento;
+  /** Apenas para blocos de plano: menor ação que destrava a tarefa. */
+  primeiroPasso?: string | null;
+  /** Apenas para blocos de plano: critério mínimo de entrega. */
+  versaoMinima?: string | null;
 };
 
 type AgendaOptions = {
@@ -47,12 +51,22 @@ export function useAgendaPeriodo(
     useGoogleBusyBlocks(inicio, fim);
 
   const tarefas = useMemo(() => {
-    const mapa = new Map<string, { titulo: string; detalhe: string }>();
+    const mapa = new Map<
+      string,
+      {
+        titulo: string;
+        detalhe: string;
+        primeiroPasso: string | null;
+        versaoMinima: string | null;
+      }
+    >();
     planos.forEach((plano) =>
       plano.tarefas.forEach((tarefa) =>
         mapa.set(tarefa.id, {
           titulo: tarefa.descricao,
           detalhe: `${plano.titulo}${plano.meta?.area ? ` · ${plano.meta.area}` : ""}`,
+          primeiroPasso: tarefa.primeiro_passo,
+          versaoMinima: tarefa.versao_minima,
         }),
       ),
     );
@@ -87,6 +101,8 @@ export function useAgendaPeriodo(
           concluido: agendamentosFeitos.has(item.id),
           tarefaId: item.tarefa_id,
           agendamento: item,
+          primeiroPasso: tarefa?.primeiroPasso ?? null,
+          versaoMinima: tarefa?.versaoMinima ?? null,
         };
       });
 

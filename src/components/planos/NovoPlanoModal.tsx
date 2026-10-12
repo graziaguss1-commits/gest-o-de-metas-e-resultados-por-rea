@@ -51,6 +51,8 @@ type LinhaTarefa = {
   horario: string;
   dias: number[] | null;
   responsavelId: string;
+  primeiroPasso: string;
+  versaoMinima: string;
 };
 
 const linhaVazia = (responsavelId = ""): LinhaTarefa => ({
@@ -66,6 +68,8 @@ const linhaVazia = (responsavelId = ""): LinhaTarefa => ({
   horario: "",
   dias: null,
   responsavelId,
+  primeiroPasso: "",
+  versaoMinima: "",
 });
 
 export function NovoPlanoModal({ open, onOpenChange }: Props) {
@@ -200,6 +204,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           duracao_minutos: t.duracao,
           horario_preferencial: t.horario || null,
           dias_semana: t.frequencia !== "unica" ? t.dias : null,
+          primeiro_passo: t.primeiroPasso.trim() || null,
+          versao_minima: t.versaoMinima.trim() || null,
         })),
       });
       toast.success("Plano criado");
@@ -290,6 +296,41 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                     value={t.responsavelId}
                     onChange={(responsavelId) => patch(i, { responsavelId })}
                   />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      Primeiro passo (2 min) — opcional
+                    </Label>
+                    <Input
+                      value={t.primeiroPasso}
+                      maxLength={140}
+                      onChange={(e) =>
+                        patch(i, { primeiroPasso: e.target.value })
+                      }
+                      placeholder="Ex.: Abrir a planilha de leads da semana"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      A menor ação que destrava o resto. Aparece ao clicar em
+                      "Começar" na tela Hoje.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      Versão mínima aceitável — opcional
+                    </Label>
+                    <Input
+                      value={t.versaoMinima}
+                      maxLength={140}
+                      onChange={(e) =>
+                        patch(i, { versaoMinima: e.target.value })
+                      }
+                      placeholder="Ex.: 3 mensagens enviadas, mesmo sem resposta"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      O que já conta como entregue, sem buscar perfeição.
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Select
