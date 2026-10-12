@@ -6,6 +6,7 @@ import { useCompromissos } from "@/hooks/useCompromissos";
 import { useGoogleBusyBlocks } from "@/hooks/useGoogleCalendar";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { capacidadeDoDia, formatTotalHoras, totalSemana } from "@/lib/agenda";
+import { capacidadePlanejavel } from "@/lib/capacidade";
 
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -35,7 +36,9 @@ export function CapacidadeSemana({ inicioSemana }: { inicioSemana?: string }) {
   const { data: agendamentos = [] } = useAgendamentos(iso(dias[0]), iso(dias[6]));
   const { data: compromissos = [] } = useCompromissos(iso(dias[0]), iso(dias[6]));
   const { data: googleBusy = [] } = useGoogleBusyBlocks(iso(dias[0]), iso(dias[6]));
-  const capacidade = settings?.capacidade_diaria_minutos ?? 480;
+  // Folga de 30%: planeja-se 70% da capacidade diária configurada.
+  const capacidadeConfigurada = settings?.capacidade_diaria_minutos ?? 480;
+  const capacidade = capacidadePlanejavel(capacidadeConfigurada);
 
   const minutosAvulsos = (data: string) =>
     actions
@@ -99,7 +102,8 @@ export function CapacidadeSemana({ inicioSemana }: { inicioSemana?: string }) {
           planejadas nesta semana
         </span>
         <span className="text-xs text-muted-foreground">
-          · capacidade diária {formatTotalHoras(capacidade)}
+          · planejável {formatTotalHoras(capacidade)} de{" "}
+          {formatTotalHoras(capacidadeConfigurada)} (30% de folga)
         </span>
       </div>
 
