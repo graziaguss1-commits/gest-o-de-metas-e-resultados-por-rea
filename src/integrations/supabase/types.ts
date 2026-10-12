@@ -334,6 +334,24 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_segredos: {
+        Row: {
+          created_at: string
+          nome: string
+          valor: string
+        }
+        Insert: {
+          created_at?: string
+          nome: string
+          valor: string
+        }
+        Update: {
+          created_at?: string
+          nome?: string
+          valor?: string
+        }
+        Relationships: []
+      }
       google_busy_blocks: {
         Row: {
           created_at: string
@@ -1129,6 +1147,72 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_envios: {
+        Row: {
+          created_at: string
+          data: string
+          id: string
+          referencia: string
+          status: string
+          tipo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          id?: string
+          referencia: string
+          status?: string
+          tipo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          id?: string
+          referencia?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_log: {
+        Row: {
+          criado_em: string
+          destino_mascarado: string | null
+          erro: string | null
+          id: string
+          referencia: string | null
+          status: string
+          tipo: string
+          user_id: string | null
+        }
+        Insert: {
+          criado_em?: string
+          destino_mascarado?: string | null
+          erro?: string | null
+          id?: string
+          referencia?: string | null
+          status: string
+          tipo: string
+          user_id?: string | null
+        }
+        Update: {
+          criado_em?: string
+          destino_mascarado?: string | null
+          erro?: string | null
+          id?: string
+          referencia?: string | null
+          status?: string
+          tipo?: string
+          user_id?: string | null
         }
         Relationships: []
       }
