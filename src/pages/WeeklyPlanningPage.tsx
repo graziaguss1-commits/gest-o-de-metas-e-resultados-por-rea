@@ -48,6 +48,8 @@ import {
   type PlanejamentoClaudeDraft,
 } from "@/components/planos/PlanejamentoClaudeModal";
 import { RevisaoIndicadores } from "@/components/metas/RevisaoIndicadores";
+import { NaoExecutadosSemana } from "@/components/planos/NaoExecutadosSemana";
+import { CircleSlash } from "lucide-react";
 import {
   execucoesEsperadasNaSemana,
   formatDuracao,
@@ -670,6 +672,13 @@ export default function WeeklyPlanningPage() {
               subtitle="Resultado da meta, execução dos planos e prazo consumido — indicadores independentes."
             >
               <RevisaoIndicadores />
+            </Panel>
+            <Panel
+              icon={<CircleSlash className="h-5 w-5" />}
+              title="Blocos não executados"
+              subtitle="O que ficou para trás na semana passada e por quê."
+            >
+              <NaoExecutadosSemana weekStart={weekStart} />
             </Panel>
             <Panel
               icon={<RotateCcw className="h-5 w-5" />}
