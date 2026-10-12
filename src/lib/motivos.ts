@@ -6,9 +6,17 @@ export const MOTIVOS = [
   { id: "sem_clareza", label: "Não tinha clareza" },
   { id: "cansaco", label: "Cansaço" },
   { id: "adiei", label: "Adiei" },
+  { id: "outro", label: "Outro" },
 ] as const;
 
 export type MotivoId = (typeof MOTIVOS)[number]["id"];
+
+/**
+ * "Outro" só existe com a descrição escrita: sem texto ele não explica nada,
+ * e o banco rejeita (constraint bloco_motivos_outro_com_texto).
+ */
+export const MOTIVO_EXIGE_TEXTO: MotivoId = "outro";
+export const exigeTexto = (motivo: MotivoId) => motivo === MOTIVO_EXIGE_TEXTO;
 export const MOTIVO_LABEL: Record<MotivoId, string> = Object.fromEntries(
   MOTIVOS.map((m) => [m.id, m.label]),
 ) as Record<MotivoId, string>;

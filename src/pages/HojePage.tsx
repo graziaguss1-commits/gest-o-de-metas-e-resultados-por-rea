@@ -23,7 +23,7 @@ import {
 } from "@/hooks/useAgendamentos";
 import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
 import { useMotivosBloco, useRegistrarMotivo } from "@/hooks/useMotivosBloco";
-import { chaveMotivo, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
+import { chaveMotivo, exigeTexto, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
 import { useToggleAction } from "@/hooks/useActions";
 import { useAtualizarCompromisso } from "@/hooks/useCompromissos";
 import {
@@ -91,14 +91,25 @@ export default function HojePage() {
   const registrarMotivo = useRegistrarMotivo();
   const [obs, setObs] = useState<Record<string, string>>({});
   const [obsAberta, setObsAberta] = useState<string | null>(null);
+  const [outroAberto, setOutroAberto] = useState<string | null>(null);
   const [blocoAberto, setBlocoAberto] = useState<string | null>(null);
   const escolherMotivo = (bloco: BlocoAgendaDia, motivo: MotivoId) => {
     const referencia = referenciaBloco(bloco);
     if (!referencia) return;
+    const observacao = obs[bloco.id]?.trim();
+    // "Outro" sem texto não explica nada, e o banco rejeita.
+    if (exigeTexto(motivo) && !observacao) {
+      toast.error("Escreva o motivo para salvar como Outro.");
+      return;
+    }
     registrarMotivo.mutate(
-      { referencia, data: bloco.data, motivo, observacao: obs[bloco.id] },
+      { referencia, data: bloco.data, motivo, observacao },
       {
-        onSuccess: () => toast.success(`Motivo registrado: ${MOTIVO_LABEL[motivo]}.`),
+        onSuccess: () => {
+          toast.success(`Motivo registrado: ${MOTIVO_LABEL[motivo]}.`);
+          setOutroAberto(null);
+          setObsAberta(null);
+        },
         onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível registrar o motivo."),
       },
     );
@@ -288,20 +299,46 @@ export default function HojePage() {
                           <p className="text-[11px] text-muted-foreground">O horário passou. O que aconteceu?</p>
                           <div className="flex flex-wrap items-center gap-1.5">
                             {MOTIVOS.map((m) => (
-                              <Button key={m.id} size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" disabled={registrarMotivo.isPending} onClick={() => escolherMotivo(bloco, m.id)}>
+                              <Button
+                                key={m.id}
+                                size="sm"
+                                variant={exigeTexto(m.id) && outroAberto === bloco.id ? "default" : "outline"}
+                                className="h-7 px-2.5 text-[11px]"
+                                disabled={registrarMotivo.isPending}
+                                onClick={() =>
+                                  exigeTexto(m.id)
+                                    ? (setOutroAberto(bloco.id), setObsAberta(bloco.id))
+                                    : escolherMotivo(bloco, m.id)
+                                }
+                              >
                                 {m.label}
                               </Button>
                             ))}
                           </div>
-                          {obsAberta === bloco.id ? (
-                            <input
-                              autoFocus
-                              maxLength={500}
-                              placeholder="Observação (opcional)"
-                              value={obs[bloco.id] ?? ""}
-                              onChange={(e) => setObs((o) => ({ ...o, [bloco.id]: e.target.value }))}
-                              className="h-7 w-full rounded-md border bg-background px-2 text-[11px]"
-                            />
+                          {obsAberta === bloco.id || outroAberto === bloco.id ? (
+                            <div className="space-y-1.5">
+                              <input
+                                autoFocus
+                                maxLength={500}
+                                placeholder={outroAberto === bloco.id ? "Qual foi o motivo" : "Observação (opcional)"}
+                                value={obs[bloco.id] ?? ""}
+                                onChange={(e) => setObs((o) => ({ ...o, [bloco.id]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && outroAberto === bloco.id) escolherMotivo(bloco, "outro");
+                                }}
+                                className="h-7 w-full rounded-md border bg-background px-2 text-[11px]"
+                              />
+                              {outroAberto === bloco.id && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2.5 text-[11px]"
+                                  disabled={!obs[bloco.id]?.trim() || registrarMotivo.isPending}
+                                  onClick={() => escolherMotivo(bloco, "outro")}
+                                >
+                                  Salvar motivo
+                                </Button>
+                              )}
+                            </div>
                           ) : (
                             <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setObsAberta(bloco.id)}>+ observação</button>
                           )}

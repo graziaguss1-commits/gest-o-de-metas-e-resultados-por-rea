@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chaveMotivo, referenciaBloco, resumoNaoExecutados, type MotivoId } from "./motivos";
+import { chaveMotivo, exigeTexto, MOTIVOS, referenciaBloco, resumoNaoExecutados, type MotivoId } from "./motivos";
 
 const agora = new Date(2026, 9, 12, 12, 0);
 const b = (id: string, p: Record<string, unknown> = {}) => ({
@@ -30,5 +30,16 @@ describe("motivos de blocos não executados", () => {
     expect(r.total).toBe(4);
     expect(r.semMotivo).toBe(1);
     expect(r.porMotivo.map((m) => [m.motivo, m.total])).toEqual([["cansaco", 2], ["adiei", 1]]);
+  });
+});
+
+describe("motivo Outro", () => {
+  it("está na lista de motivos oferecidos", () => {
+    expect(MOTIVOS.some((m) => m.id === "outro")).toBe(true);
+  });
+
+  it("é o único que exige texto escrito", () => {
+    const comTexto = MOTIVOS.filter((m) => exigeTexto(m.id)).map((m) => m.id);
+    expect(comTexto).toEqual(["outro"]);
   });
 });
