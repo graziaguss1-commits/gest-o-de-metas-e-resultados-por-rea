@@ -8,6 +8,13 @@
       "when": 1791830618776,
       "tag": "0000_planejamento_semanal",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791830910205,
+      "tag": "0001_whatsapp_agenda",
+      "breakpoints": true
     }
   ]
 }
