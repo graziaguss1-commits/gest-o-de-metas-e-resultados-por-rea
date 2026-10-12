@@ -28,8 +28,8 @@ async function log(db: Db, e: { user_id: string | null; tipo: string; referencia
 }
 
 /** Reserva a chave (user, tipo, referência, data). false = já existe → não enviar. */
-async function reservar(db: Db, user_id: string, tipo: string, referencia: string, data: string) {
-  const { error } = await db.from("whatsapp_envios").insert({ user_id, tipo, referencia, data, status: "enviando" });
+async function reservar(db: Db, user_id: string, tipo: string, referencia: string, data: string, status = "enviando") {
+  const { error } = await db.from("whatsapp_envios").insert({ user_id, tipo, referencia, data, status });
   if (!error) return true;
   if (error.code === "23505") return false;
   throw error;
@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
     try {
       if (!configurada) {
         // Registra uma única vez por dia e para.
-        if (await reservar(db, uid, "erro_configuracao", "evolution", hoje)) {
+        if (await reservar(db, uid, "erro_configuracao", "evolution", hoje, "registrado")) {
           await log(db, { user_id: uid, tipo: modo, status: "erro", destino: cfgRow?.whatsapp_destino, erro: "Evolution API ou número de destino não configurados" });
         }
         resultados[uid] = { abortado: "nao_configurada" };
