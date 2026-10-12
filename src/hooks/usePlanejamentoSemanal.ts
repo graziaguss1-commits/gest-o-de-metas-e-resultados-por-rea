@@ -100,10 +100,15 @@ export function useMigrarPlanejamentoLocal() {
         return false;
       });
     }
-    migracao.then((migrou) => {
-      if (migrou) qc.invalidateQueries({ queryKey: KEY });
+    let vivo = true;
+    migracao.then(async (migrou) => {
+      if (migrou) await qc.invalidateQueries({ queryKey: KEY });
+      if (!vivo) return;
       setPronto(true);
     });
+    return () => {
+      vivo = false;
+    };
   }, [qc]);
   return pronto;
 }
