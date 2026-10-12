@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarClock,
@@ -58,15 +58,12 @@ import {
 import type { Tarefa } from "@/lib/metas";
 import { toast } from "sonner";
 
-type PlanningState = {
-  wins: string;
-  pending: string;
-  lesson: string;
-  focus: string;
-  priorityIds: string[];
-  complementaryIds: string[];
-  savedAt?: string;
-};
+import { emptyPlanningState, type PlanningState } from "@/lib/planejamento";
+import {
+  useMigrarPlanejamentoLocal,
+  usePlanejamentoSemanal,
+  useSalvarPlanejamentoSemanal,
+} from "@/hooks/usePlanejamentoSemanal";
 
 type PlanningTaskBase = {
   id: string;
@@ -115,14 +112,7 @@ const QUADRANT_STYLE: Record<string, { color: string; soft: string }> = {
   },
 };
 
-const emptyState = (): PlanningState => ({
-  wins: "",
-  pending: "",
-  lesson: "",
-  focus: "",
-  priorityIds: [],
-  complementaryIds: [],
-});
+const emptyState = emptyPlanningState;
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -146,45 +136,6 @@ const defaultPlanningWeek = (base = new Date()) => {
   const start = mondayOf(base);
   return base.getDay() === 0 ? addDays(start, 7) : start;
 };
-
-const planningStorageKey = (weekStart: string) =>
-  `performance-week-${weekStart}`;
-
-const legacyStorageKey = () => {
-  const now = new Date();
-  const first = new Date(now.getFullYear(), 0, 1);
-  const week = Math.ceil(
-    ((now.getTime() - first.getTime()) / 86400000 + first.getDay() + 1) / 7,
-  );
-  return `performance-week-${now.getFullYear()}-${week}`;
-};
-
-function readPlanningState(...keys: Array<string | undefined>): PlanningState {
-  for (const key of keys) {
-    if (!key) continue;
-    try {
-      const parsed = JSON.parse(
-        localStorage.getItem(key) ?? "null",
-      ) as PlanningState | null;
-      if (parsed) {
-        const priorityIds = Array.isArray(parsed.priorityIds)
-          ? parsed.priorityIds
-          : [];
-        return {
-          ...emptyState(),
-          ...parsed,
-          priorityIds,
-          complementaryIds: Array.isArray(parsed.complementaryIds)
-            ? parsed.complementaryIds.filter((id) => !priorityIds.includes(id))
-            : [],
-        };
-      }
-    } catch {
-      // Um planejamento local inválido não pode bloquear a semana.
-    }
-  }
-  return emptyState();
-}
 
 const weekLabel = (start: Date, end: Date) =>
   `${start.toLocaleDateString("pt-BR", {
@@ -223,12 +174,17 @@ export default function WeeklyPlanningPage() {
   const weekStartISO = weekDates[0];
   const weekEndISO = weekDates[6];
   const defaultWeekISO = useMemo(() => iso(defaultPlanningWeek()), []);
-  const [state, setState] = useState<PlanningState>(() =>
-    readPlanningState(
-      planningStorageKey(iso(defaultPlanningWeek())),
-      legacyStorageKey(),
-    ),
-  );
+  const [state, setState] = useState<PlanningState>(emptyState);
+  const migracaoPronta = useMigrarPlanejamentoLocal();
+  const planejamentoSalvo = usePlanejamentoSemanal(weekStartISO);
+  const salvarPlanejamento = useSalvarPlanejamentoSemanal();
+  const semanaCarregada = useRef<string | null>(null);
+  useEffect(() => {
+    if (!migracaoPronta || !planejamentoSalvo.isFetched || planejamentoSalvo.isFetching) return;
+    if (semanaCarregada.current === weekStartISO) return;
+    semanaCarregada.current = weekStartISO;
+    setState(planejamentoSalvo.data ?? emptyState());
+  }, [migracaoPronta, planejamentoSalvo.isFetched, planejamentoSalvo.isFetching, planejamentoSalvo.data, weekStartISO]);
   const [agendarAvulsa, setAgendarAvulsa] = useState<ActionItem | null>(null);
   const [agendarPlano, setAgendarPlano] = useState<{
     task: PlanPlanningTask;
@@ -263,12 +219,6 @@ export default function WeeklyPlanningPage() {
   );
 
   useEffect(() => {
-    setState(
-      readPlanningState(
-        planningStorageKey(weekStartISO),
-        weekStartISO === defaultWeekISO ? legacyStorageKey() : undefined,
-      ),
-    );
     setStep(1);
     setClaudeOpen(false);
     setClaudeSuggestion(null);
@@ -606,10 +556,7 @@ export default function WeeklyPlanningPage() {
         complementaryIds,
         savedAt: undefined,
       };
-      localStorage.setItem(
-        planningStorageKey(weekStartISO),
-        JSON.stringify(next),
-      );
+      await salvarPlanejamento.mutateAsync({ semanaInicio: weekStartISO, estado: next });
       setState(next);
       setClaudeOpen(false);
       setStep(3);
@@ -627,7 +574,7 @@ export default function WeeklyPlanningPage() {
     }
   };
 
-  const save = () => {
+  const save = async () => {
     if (actionsWithoutSchedule.length > 0) {
       toast.error(
         `Ainda faltam ${missingExecutions} ${missingExecutions === 1 ? "execução" : "execuções"} no calendário.`,
@@ -635,10 +582,12 @@ export default function WeeklyPlanningPage() {
       return;
     }
     const next = { ...state, savedAt: new Date().toISOString() };
-    localStorage.setItem(
-      planningStorageKey(weekStartISO),
-      JSON.stringify(next),
-    );
+    try {
+      await salvarPlanejamento.mutateAsync({ semanaInicio: weekStartISO, estado: next });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o planejamento.");
+      return;
+    }
     setState(next);
     toast.success("Planejamento salvo e horários enviados ao calendário");
     setStep(4);

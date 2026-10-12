@@ -48,19 +48,6 @@ export function cumprimentoAgenda(blocos: BlocoExecucao[], agora: Date) {
   };
 }
 
-/** Lê as prioridades top da semana salvas pelo planejamento semanal. */
-export function lerPrioridadesTop(segunda: Date): string[] {
-  try {
-    const raw = localStorage.getItem(`performance-week-${isoLocal(segunda)}`);
-    const parsed = raw ? (JSON.parse(raw) as { priorityIds?: unknown }) : null;
-    return Array.isArray(parsed?.priorityIds)
-      ? (parsed.priorityIds as string[])
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Prioridade do dia: primeiro bloco pendente de hoje de uma prioridade top
  * (na ordem das prioridades); sem isso, o próximo bloco pendente do dia.

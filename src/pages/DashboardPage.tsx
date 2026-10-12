@@ -18,6 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useMetas } from "@/hooks/useMetas";
+import { usePlanos } from "@/hooks/usePlanos";
+import { useActions } from "@/hooks/useActions";
+import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
+import { isoLocal, segundaDaSemana } from "@/lib/hoje";
 import {
   formatDateISOToBR,
   formatProgresso,
@@ -91,15 +95,17 @@ export default function DashboardPage() {
     return { progresso, emRisco, atencao, execucao };
   }, [filtered]);
 
-  const prioridades = useMemo(
-    () => [...filtered]
-      .sort((a, b) => {
-        const risk = STATUS_RANK[b.status as Status] - STATUS_RANK[a.status as Status];
-        return risk || new Date(a.data_fim).getTime() - new Date(b.data_fim).getTime();
-      })
-      .slice(0, 3),
-    [filtered],
-  );
+  useMigrarPlanejamentoLocal();
+  const semanaAtual = useMemo(() => isoLocal(segundaDaSemana(new Date())), []);
+  const { data: planejamento, isLoading: carregandoPlanejamento } = usePlanejamentoSemanal(semanaAtual);
+  const { data: planos = [] } = usePlanos();
+  const { data: acoesAvulsas = [] } = useActions();
+  const acoesTop = useMemo(() => {
+    const nomes = new Map<string, { titulo: string; detalhe: string }>();
+    planos.forEach((p) => p.tarefas.forEach((t) => nomes.set(t.id, { titulo: t.descricao, detalhe: p.titulo })));
+    acoesAvulsas.forEach((a) => nomes.set(a.id, { titulo: a.descricao, detalhe: `${a.area} · ação avulsa` }));
+    return (planejamento?.priorityIds ?? []).slice(0, 3).map((id) => ({ id, ...(nomes.get(id) ?? { titulo: "Ação não encontrada", detalhe: "Removida dos planos" }) }));
+  }, [planejamento, planos, acoesAvulsas]);
 
   const proximosPrazos = useMemo(
     () => [...filtered]
@@ -171,11 +177,14 @@ export default function DashboardPage() {
 
         <section>
           <SectionHeading title="Prioridades da semana" subtitle="Seu foco estratégico para os próximos dias" action="Planejar" href="/planejamento-semanal" />
-          {isLoading ? <Skeleton className="h-44 w-full" /> : prioridades.length === 0 ? (
-            <EmptyState title="Defina o foco da sua semana" text="Crie sua primeira meta e transforme intenção em execução." onCreate={() => setNovaOpen(true)} />
+          {carregandoPlanejamento ? <Skeleton className="h-44 w-full" /> : !planejamento || (acoesTop.length === 0 && !planejamento.focus) ? (
+            <div className="performance-card flex flex-col items-center p-10 text-center"><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]"><CalendarDays className="h-5 w-5" /></div><h3 className="font-display text-lg font-semibold">Semana ainda não planejada</h3><p className="mt-1 max-w-sm text-sm text-muted-foreground">Escolha suas 3 ações top e o foco da semana para vê-los aqui.</p><Button asChild size="sm" className="brand-button mt-4"><Link to="/planejamento-semanal">Planejar a semana</Link></Button></div>
           ) : (
-            <div className="grid gap-3 lg:grid-cols-3">
-              {prioridades.map((meta, index) => <PriorityCard key={meta.id} meta={meta} index={index + 1} />)}
+            <div className="space-y-3">
+              {planejamento.focus && <div className="performance-card p-4"><div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Foco da semana</div><p className="mt-1 text-sm font-semibold">{planejamento.focus}</p></div>}
+              {acoesTop.length > 0 && <div className="grid gap-3 lg:grid-cols-3">
+                {acoesTop.map((acao, index) => <div key={acao.id} className="performance-card p-5"><span className="font-display text-2xl text-muted-foreground/40">0{index + 1}</span><h3 className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold leading-snug">{acao.titulo}</h3><p className="mt-2 truncate text-xs text-muted-foreground">{acao.detalhe}</p></div>)}
+              </div>}
             </div>
           )}
         </section>
@@ -251,13 +260,6 @@ function MetricCard({ label, value, detail, icon: Icon, loading, accent }: { lab
 
 function SectionHeading({ title, subtitle, action, href }: { title: string; subtitle: string; action?: string; href?: string }) {
   return <div className="mb-3 flex items-end justify-between gap-4"><div><h2 className="font-display text-xl font-semibold">{title}</h2><p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p></div>{action && href && <Link to={href} className="text-xs font-semibold text-[var(--brand-primary)] hover:underline">{action} →</Link>}</div>;
-}
-
-function PriorityCard({ meta, index }: { meta: MetaWithResponsavel; index: number }) {
-  const universo = universoDaArea(meta.area);
-  const style = UNIVERSO_STYLE[universo];
-  const progress = percentualMeta(meta);
-  return <Link to={`/metas/${meta.id}/analise`} className="performance-card group p-5 transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-start justify-between"><span className="font-display text-2xl text-muted-foreground/40">0{index}</span><span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: style.color, background: style.soft }}>{universo}</span></div><h3 className="mt-5 line-clamp-2 min-h-10 text-sm font-semibold leading-snug">{meta.nome}</h3><div className="mt-4 flex items-center justify-between text-xs"><span className="text-muted-foreground">Prazo {formatDateISOToBR(meta.data_fim)}</span><span className="font-bold" style={{ color: STATUS_COLOR[meta.status as Status].fg }}>{progress}%</span></div><div className="mt-2"><ProgressBar value={progress / 100} status={meta.status as Status} height={6} /></div></Link>;
 }
 
 function GoalRow({ meta }: { meta: MetaWithResponsavel }) {
