@@ -1075,6 +1075,7 @@ export default function CalendarPage() {
               icon={<CircleAlert className="h-4 w-4 text-[var(--color-red)]" />}
               tasks={overdue}
               onToggle={(id, value) => toggle.mutate({ id, concluida: value })}
+              onAgendar={(task) => setAgendar({ tarefa: task, data: iso(new Date()) })}
             />
           </section>
         )}
@@ -1163,12 +1164,17 @@ function TaskList({
   icon,
   tasks,
   onToggle,
+  onAgendar,
 }: {
   title: string;
   icon: React.ReactNode;
   tasks: CalendarTask[];
   onToggle: (id: string, value: boolean) => void;
+  /** Quando informado, cada ação ganha o botão de remarcar. */
+  onAgendar?: (task: CalendarTask) => void;
 }) {
+  const mostradas = tasks.slice(0, 6);
+  const restantes = tasks.length - mostradas.length;
   return (
     <div className="performance-card p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -1176,17 +1182,17 @@ function TaskList({
         <h2 className="font-display text-lg font-semibold">{title}</h2>
       </div>
       <div className="divide-y">
-        {tasks.slice(0, 6).map((task) => (
-          <label
-            key={task.id}
-            className="flex cursor-pointer items-start gap-3 py-3"
-          >
+        {mostradas.map((task) => (
+          // Linha não é mais um label inteiro: tocar no texto marcava a ação
+          // como concluída sem querer. Só a caixa conclui.
+          <div key={task.id} className="flex items-start gap-3 py-3">
             <Checkbox
               checked={task.concluida}
+              aria-label={`Marcar "${task.descricao}" como concluída`}
               onCheckedChange={(v) => onToggle(task.id, v === true)}
-              className="mt-0.5"
+              className="mt-0.5 shrink-0"
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{task.descricao}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">
                 {task.plano}
@@ -1195,9 +1201,25 @@ function TaskList({
                   : ""}
               </div>
             </div>
-          </label>
+            {onAgendar && !task.concluida && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => onAgendar(task)}
+              >
+                <CalendarClock className="mr-1 h-3.5 w-3.5" />
+                Remarcar
+              </Button>
+            )}
+          </div>
         ))}
       </div>
+      {restantes > 0 && (
+        <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
+          Mais {restantes} além destas.
+        </p>
+      )}
     </div>
   );
 }
