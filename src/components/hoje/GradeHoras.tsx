@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { BlocoAgendaDia } from "@/hooks/useAgendaDoDia";
+import { horarioEmMinutos } from "@/lib/agenda";
 import {
+  ALTURA_MINIMA,
+  PASSO_ARRASTE,
   PX_POR_HORA,
   PX_POR_MINUTO,
   faixaHoras,
+  minutosDestino,
   minutosDoDia,
   posicionarBlocos,
 } from "@/lib/grade";
@@ -14,8 +18,6 @@ const HACHURA =
   "repeating-linear-gradient(135deg, var(--muted-bg,hsl(var(--muted))) 0px, var(--muted-bg,hsl(var(--muted))) 6px, transparent 6px, transparent 12px)";
 
 const LARGURA_REGUA = 44;
-/** Granularidade do arraste, igual à do calendário. */
-const PASSO_MINUTOS = 15;
 
 const comoHora = (minutos: number) =>
   `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
@@ -65,6 +67,13 @@ export function GradeHoras({
   onMover,
 }: Props) {
   const podeHover = usePodeHover();
+  const [arrastando, setArrastando] = useState<{
+    id: string;
+    /** Distância do topo do bloco até o ponto onde ele foi segurado. */
+    offsetY: number;
+    duracao: number;
+    minutos: number;
+  } | null>(null);
   const minutosAgora = minutosDoDia(agora);
   const { primeira, ultima } = faixaHoras(blocos, mostrarAgora ? minutosAgora : null);
   const horas = Array.from({ length: ultima - primeira + 1 }, (_, i) => primeira + i);
@@ -84,36 +93,58 @@ export function GradeHoras({
     return () => document.removeEventListener("mousedown", fechar);
   }, [abertoId, onAbrir]);
 
-  const porId = new Map(blocos.map((b) => [b.id, b]));
-  const soltar = (e: React.DragEvent, minutos: number) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData("text/plain");
-    const bloco = porId.get(id);
-    if (bloco && onMover) onMover(bloco, comoHora(minutos));
+  const alvoDoArraste = (e: React.DragEvent, offsetY: number, duracao: number) => {
+    const caixa = containerRef.current?.getBoundingClientRect();
+    if (!caixa) return null;
+    return minutosDestino({
+      yCursor: e.clientY - caixa.top,
+      offsetY,
+      primeiraHora: primeira,
+      ultimaHora: ultima,
+      duracaoMinutos: duracao,
+    });
   };
 
-  // Faixas de 15 min que recebem o bloco arrastado. Ficam atrás de tudo, e só
-  // à direita da régua, para não virar alvo de soltura em cima dos horários.
-  const faixas: number[] = [];
-  if (onMover) {
-    for (let m = primeira * 60; m < ultima * 60; m += PASSO_MINUTOS) faixas.push(m);
-  }
+  const aoPassarArrastando = (e: React.DragEvent) => {
+    if (!arrastando) return;
+    e.preventDefault();
+    const minutos = alvoDoArraste(e, arrastando.offsetY, arrastando.duracao);
+    if (minutos != null && minutos !== arrastando.minutos) {
+      setArrastando({ ...arrastando, minutos });
+    }
+  };
+
+  const aoSoltar = (e: React.DragEvent) => {
+    if (!arrastando || !onMover) return;
+    e.preventDefault();
+    const minutos = alvoDoArraste(e, arrastando.offsetY, arrastando.duracao);
+    const bloco = blocos.find((b) => b.id === arrastando.id);
+    if (bloco && minutos != null) onMover(bloco, comoHora(minutos));
+    setArrastando(null);
+  };
 
   return (
-    <div ref={containerRef} className="relative" style={{ height: altura }}>
-      {faixas.map((minutos) => (
+    <div
+      ref={containerRef}
+      className="relative"
+      style={{ height: altura }}
+      onDragOver={aoPassarArrastando}
+      onDrop={aoSoltar}
+    >
+      {arrastando && (
         <div
-          key={minutos}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => soltar(e, minutos)}
-          className="absolute right-0 z-0 rounded-sm hover:bg-[var(--brand-accent-soft)]"
+          className="pointer-events-none absolute right-0 z-40 rounded-md border-2 border-dashed border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]/50"
           style={{
-            top: (minutos - primeira * 60) * PX_POR_MINUTO,
-            height: PASSO_MINUTOS * PX_POR_MINUTO,
+            top: (arrastando.minutos - primeira * 60) * PX_POR_MINUTO,
+            height: Math.max(ALTURA_MINIMA, arrastando.duracao * PX_POR_MINUTO),
             left: LARGURA_REGUA,
           }}
-        />
-      ))}
+        >
+          <span className="absolute -top-2 left-1 rounded bg-[var(--brand-accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
+            {comoHora(arrastando.minutos)}
+          </span>
+        </div>
+      )}
 
       {horas.map((hora) => (
         <div
@@ -164,9 +195,24 @@ export function GradeHoras({
           );
         }
 
-        const arrastavel = Boolean(onMover);
-        const aoArrastar = (e: React.DragEvent) =>
+        const arrastavel = Boolean(onMover) && !doGoogle;
+        const duracao = Math.max(
+          PASSO_ARRASTE,
+          horarioEmMinutos(bloco.fim) - horarioEmMinutos(bloco.inicio),
+        );
+        const aoArrastar = (e: React.DragEvent) => {
           e.dataTransfer.setData("text/plain", bloco.id);
+          e.dataTransfer.effectAllowed = "move";
+          // Fecha o bloco: aberto, ele cresce e encobre a faixa de destino.
+          onAbrir(null);
+          setArrastando({
+            id: bloco.id,
+            offsetY: e.nativeEvent.offsetY,
+            duracao,
+            minutos: horarioEmMinutos(bloco.inicio),
+          });
+        };
+        const aoTerminarArraste = () => setArrastando(null);
 
         // Aberto vira container: dentro há botões de verdade, e botão
         // dentro de botão é inválido.
@@ -178,6 +224,7 @@ export function GradeHoras({
               style={estilo}
               draggable={arrastavel}
               onDragStart={aoArrastar}
+              onDragEnd={aoTerminarArraste}
             >
               {renderBloco(bloco, { aberto: true })}
             </div>
@@ -188,11 +235,14 @@ export function GradeHoras({
           <button
             key={bloco.id}
             type="button"
-            className={`${classes} w-full ${arrastavel ? "cursor-grab active:cursor-grabbing" : ""}`}
+            className={`${classes} w-full ${arrastavel ? "cursor-grab active:cursor-grabbing" : ""} ${arrastando?.id === bloco.id ? "opacity-40" : ""}`}
             style={estilo}
             draggable={arrastavel}
             onDragStart={aoArrastar}
-            onMouseEnter={podeHover ? () => onAbrir(bloco.id) : undefined}
+            onDragEnd={aoTerminarArraste}
+            // Durante o arraste o hover não abre nada: abrir faria o bloco
+            // crescer no meio do movimento.
+            onMouseEnter={podeHover && !arrastando ? () => onAbrir(bloco.id) : undefined}
             onClick={() => onAbrir(bloco.id)}
           >
             {renderBloco(bloco, { aberto: false })}

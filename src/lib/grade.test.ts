@@ -3,6 +3,7 @@ import {
   ALTURA_MINIMA,
   PX_POR_HORA,
   faixaHoras,
+  minutosDestino,
   posicionarBlocos,
 } from "@/lib/grade";
 
@@ -72,5 +73,40 @@ describe("posicionarBlocos", () => {
     // curto2 começa depois de curto1 terminar, então volta para a mesma coluna.
     expect(porId.get("curto2")?.coluna).toBe(1);
     expect(porId.get("longo")?.colunas).toBe(2);
+  });
+});
+
+describe("minutosDestino", () => {
+  const base = { primeiraHora: 6, ultimaHora: 22, duracaoMinutos: 30 };
+
+  it("usa o topo do bloco, descontando onde ele foi segurado", () => {
+    // Bloco de 30 min (28px). Segurado no meio (14px) e solto com o cursor
+    // na altura das 10:00 => o topo cai nas 10:00, não nas 10:15.
+    const yCursor = (10 - 6) * PX_POR_HORA + 14;
+    expect(minutosDestino({ ...base, yCursor, offsetY: 14 })).toBe(10 * 60);
+  });
+
+  it("sem desconto, o mesmo gesto erraria o horário", () => {
+    const yCursor = (10 - 6) * PX_POR_HORA + 14;
+    expect(minutosDestino({ ...base, yCursor, offsetY: 0 })).toBe(10 * 60 + 15);
+  });
+
+  it("encaixa de 15 em 15 minutos", () => {
+    const yCursor = (9 - 6) * PX_POR_HORA + 5;
+    expect(minutosDestino({ ...base, yCursor, offsetY: 0 }) % 15).toBe(0);
+  });
+
+  it("não deixa o bloco começar antes da grade", () => {
+    expect(minutosDestino({ ...base, yCursor: -500, offsetY: 0 })).toBe(6 * 60);
+  });
+
+  it("não deixa o bloco terminar depois da grade", () => {
+    const destino = minutosDestino({
+      ...base,
+      duracaoMinutos: 120,
+      yCursor: 10000,
+      offsetY: 0,
+    });
+    expect(destino).toBe(22 * 60 - 120);
   });
 });

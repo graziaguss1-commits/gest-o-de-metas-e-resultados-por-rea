@@ -116,3 +116,38 @@ export function posicionarBlocos<T extends ComHorario>(
 
 /** Minutos desde a meia-noite, no fuso local. */
 export const minutosDoDia = (data: Date) => data.getHours() * 60 + data.getMinutes();
+
+/** Granularidade do arraste: o bloco encaixa de 15 em 15 minutos. */
+export const PASSO_ARRASTE = 15;
+
+/**
+ * Horário em que o bloco arrastado vai cair, em minutos do dia.
+ *
+ * O cálculo parte do TOPO do bloco, não do cursor: quem arrasta segura o
+ * bloco pelo meio, e usar a posição do cursor jogava o bloco para baixo pela
+ * distância entre o topo e o ponto segurado. Por isso `offsetY` é descontado.
+ *
+ * O resultado encaixa no passo de 15 min e nunca sai da faixa desenhada —
+ * um bloco de 2h não pode começar às 21:50 numa grade que termina às 22h.
+ */
+export function minutosDestino({
+  yCursor,
+  offsetY,
+  primeiraHora,
+  ultimaHora,
+  duracaoMinutos,
+  passo = PASSO_ARRASTE,
+}: {
+  /** Posição vertical do cursor, relativa ao topo da grade. */
+  yCursor: number;
+  offsetY: number;
+  primeiraHora: number;
+  ultimaHora: number;
+  duracaoMinutos: number;
+  passo?: number;
+}): number {
+  const bruto = primeiraHora * 60 + (yCursor - offsetY) / PX_POR_MINUTO;
+  const encaixado = Math.round(bruto / passo) * passo;
+  const maximo = ultimaHora * 60 - duracaoMinutos;
+  return Math.min(Math.max(encaixado, primeiraHora * 60), Math.max(primeiraHora * 60, maximo));
+}
