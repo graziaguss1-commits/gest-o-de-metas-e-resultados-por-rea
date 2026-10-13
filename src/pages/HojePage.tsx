@@ -212,6 +212,43 @@ export default function HojePage() {
     }
   };
 
+  /** Arrastar um bloco para outro horário do mesmo dia, como no Calendário. */
+  const moverBloco = async (bloco: BlocoAgendaDia, hora: string) => {
+    if (bloco.tipo === "google" || hora === bloco.inicio) return;
+    const duracao = Math.max(
+      5,
+      horarioEmMinutos(bloco.fim) - horarioEmMinutos(bloco.inicio),
+    );
+    try {
+      if (bloco.tipo === "plano") {
+        await reagendarTarefa.mutateAsync({
+          id: bloco.origemId,
+          data: bloco.data,
+          horaInicio: hora,
+          duracaoMinutos: duracao,
+        });
+      } else if (bloco.tipo === "avulsa") {
+        await remarcarAvulsa.mutateAsync({
+          id: bloco.origemId,
+          data: bloco.data,
+          horaInicio: hora,
+          duracaoMinutos: duracao,
+        });
+      } else {
+        const fim = horarioEmMinutos(hora) + duracao;
+        await atualizarCompromisso.mutateAsync({
+          id: bloco.origemId,
+          data: bloco.data,
+          hora_inicio: hora,
+          hora_fim: `${String(Math.floor(fim / 60)).padStart(2, "0")}:${String(fim % 60).padStart(2, "0")}`,
+        });
+      }
+      setBlocoAberto(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível mover o bloco.");
+    }
+  };
+
   const alternarTimer = (bloco: BlocoAgendaDia) => {
     if (bloco.tipo === "plano" && bloco.agendamento) {
       alternarCronometro.mutate(bloco.agendamento, {
@@ -297,6 +334,7 @@ export default function HojePage() {
                 agora={agora}
                 abertoId={blocoAberto}
                 onAbrir={setBlocoAberto}
+                onMover={moverBloco}
                 renderBloco={(bloco, { aberto }) => {
                   const ref = referenciaBloco(bloco);
                   const motivo = ref ? motivos?.get(chaveMotivo(ref, bloco.data)) : undefined;
@@ -486,7 +524,7 @@ export default function HojePage() {
                 }}
               />
               <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
-                Toque num bloco para abrir. Registrar o motivo explica o que houve, mas não marca o bloco como feito.
+                Toque num bloco para abrir, arraste para mudar o horário. Registrar o motivo explica o que houve, mas não marca o bloco como feito.
               </p>
             </>
           )}

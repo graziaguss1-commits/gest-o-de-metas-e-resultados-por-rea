@@ -14,6 +14,11 @@ const HACHURA =
   "repeating-linear-gradient(135deg, var(--muted-bg,hsl(var(--muted))) 0px, var(--muted-bg,hsl(var(--muted))) 6px, transparent 6px, transparent 12px)";
 
 const LARGURA_REGUA = 44;
+/** Granularidade do arraste, igual à do calendário. */
+const PASSO_MINUTOS = 15;
+
+const comoHora = (minutos: number) =>
+  `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
 
 type Props = {
   blocos: BlocoAgendaDia[];
@@ -24,6 +29,8 @@ type Props = {
   onAbrir: (id: string | null) => void;
   /** Conteúdo do bloco. `aberto` indica se deve mostrar as ações. */
   renderBloco: (bloco: BlocoAgendaDia, estado: { aberto: boolean }) => ReactNode;
+  /** Quando informado, os blocos podem ser arrastados para outro horário. */
+  onMover?: (bloco: BlocoAgendaDia, hora: string) => void;
 };
 
 /** No desktop o bloco abre ao passar o mouse; no celular, só ao tocar. */
@@ -55,6 +62,7 @@ export function GradeHoras({
   abertoId,
   onAbrir,
   renderBloco,
+  onMover,
 }: Props) {
   const podeHover = usePodeHover();
   const minutosAgora = minutosDoDia(agora);
@@ -76,8 +84,37 @@ export function GradeHoras({
     return () => document.removeEventListener("mousedown", fechar);
   }, [abertoId, onAbrir]);
 
+  const porId = new Map(blocos.map((b) => [b.id, b]));
+  const soltar = (e: React.DragEvent, minutos: number) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    const bloco = porId.get(id);
+    if (bloco && onMover) onMover(bloco, comoHora(minutos));
+  };
+
+  // Faixas de 15 min que recebem o bloco arrastado. Ficam atrás de tudo, e só
+  // à direita da régua, para não virar alvo de soltura em cima dos horários.
+  const faixas: number[] = [];
+  if (onMover) {
+    for (let m = primeira * 60; m < ultima * 60; m += PASSO_MINUTOS) faixas.push(m);
+  }
+
   return (
     <div ref={containerRef} className="relative" style={{ height: altura }}>
+      {faixas.map((minutos) => (
+        <div
+          key={minutos}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => soltar(e, minutos)}
+          className="absolute right-0 z-0 rounded-sm hover:bg-[var(--brand-accent-soft)]"
+          style={{
+            top: (minutos - primeira * 60) * PX_POR_MINUTO,
+            height: PASSO_MINUTOS * PX_POR_MINUTO,
+            left: LARGURA_REGUA,
+          }}
+        />
+      ))}
+
       {horas.map((hora) => (
         <div
           key={hora}
@@ -127,11 +164,21 @@ export function GradeHoras({
           );
         }
 
+        const arrastavel = Boolean(onMover);
+        const aoArrastar = (e: React.DragEvent) =>
+          e.dataTransfer.setData("text/plain", bloco.id);
+
         // Aberto vira container: dentro há botões de verdade, e botão
         // dentro de botão é inválido.
         if (aberto) {
           return (
-            <div key={bloco.id} className={classes} style={estilo}>
+            <div
+              key={bloco.id}
+              className={classes}
+              style={estilo}
+              draggable={arrastavel}
+              onDragStart={aoArrastar}
+            >
               {renderBloco(bloco, { aberto: true })}
             </div>
           );
@@ -141,8 +188,10 @@ export function GradeHoras({
           <button
             key={bloco.id}
             type="button"
-            className={`${classes} w-full`}
+            className={`${classes} w-full ${arrastavel ? "cursor-grab active:cursor-grabbing" : ""}`}
             style={estilo}
+            draggable={arrastavel}
+            onDragStart={aoArrastar}
             onMouseEnter={podeHover ? () => onAbrir(bloco.id) : undefined}
             onClick={() => onAbrir(bloco.id)}
           >
