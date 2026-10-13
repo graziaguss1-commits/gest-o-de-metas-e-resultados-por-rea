@@ -22,7 +22,7 @@ export default function SecuritySettings() {
     (async () => {
       const { data } = await supabase.from("project_config").select("key, value");
       const map: Record<string, string> = {};
-      (data ?? []).forEach((r: any) => { map[r.key] = r.value; });
+      (data ?? []).forEach((r) => { map[r.key] = r.value; });
       setRequireApproval(map.require_account_approval === "true");
       setRestrictDomain(map.restrict_signup_by_domain === "true");
       setDomains((map.allowed_email_domains ?? "").split(",").map((d) => d.trim()).filter(Boolean));
@@ -30,8 +30,15 @@ export default function SecuritySettings() {
     })();
   }, []);
 
+  /**
+   * Upsert, nunca update: project_config comeca vazia, e um UPDATE que nao casa
+   * nenhuma linha nao e erro no Postgres. A tela avisava "Atualizado" e nao
+   * gravava nada -- foi assim que o cadastro ficou aberto sem ninguem perceber.
+   */
   const updateConfig = async (key: string, value: string) => {
-    const { error } = await supabase.from("project_config").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+    const { error } = await supabase
+      .from("project_config")
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
     if (error) { toast.error(error.message); return false; }
     return true;
   };
