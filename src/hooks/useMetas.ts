@@ -96,6 +96,28 @@ export function useLancamentos(metaId: string | undefined) {
   });
 }
 
+/**
+ * Lançamentos de todas as metas, do mais antigo para o mais novo.
+ *
+ * O resumo semanal precisa do valor de cada meta NAS DUAS pontas da semana, e
+ * o valor numa data é o último lançamento até ela — inclusive um anterior à
+ * semana. Por isso carrega tudo, em vez de recortar por período.
+ */
+export function useTodosLancamentos() {
+  return useQuery({
+    queryKey: [...METAS_KEY, "lancamentos-todos"],
+    queryFn: async (): Promise<Lancamento[]> => {
+      const { data, error } = await supabase
+        .from("meta_lancamentos")
+        .select("*")
+        .order("data_lancamento", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data as Lancamento[]) ?? [];
+    },
+  });
+}
+
 export function useComentarios(metaId: string | undefined) {
   return useQuery({
     queryKey: ["metas", metaId, "comentarios"],
