@@ -48,6 +48,8 @@ import {
   type PlanejamentoClaudeDraft,
 } from "@/components/planos/PlanejamentoClaudeModal";
 import { RevisaoIndicadores } from "@/components/metas/RevisaoIndicadores";
+import { isoLocal } from "@/lib/hoje";
+import { agruparPorSemanaDePrazo } from "@/lib/prazos";
 import { NaoExecutadosSemana } from "@/components/planos/NaoExecutadosSemana";
 import { CircleSlash } from "lucide-react";
 import {
@@ -286,6 +288,16 @@ export default function WeeklyPlanningPage() {
         (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999"),
     );
   }, [planos, actions, user?.id]);
+
+  /**
+   * A semana do prazo agrupa; a pontuação só ordena dentro do grupo. Antes a
+   * ordem era só pontuação, e uma tarefa que vencia nesta semana podia cair
+   * abaixo de outra sem prazo nenhum.
+   */
+  const gruposDePrazo = useMemo(
+    () => agruparPorSemanaDePrazo(tasks, isoLocal(new Date())),
+    [tasks],
+  );
 
   const recurringTasks = useMemo(
     () =>
@@ -794,8 +806,26 @@ export default function WeeklyPlanningPage() {
                   </p>
                 </div>
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {tasks.map((task, index) => {
+              <div className="space-y-5">
+                {gruposDePrazo.map((grupo) => (
+                  <div key={grupo.chave}>
+                    <div className="mb-2 flex items-baseline justify-between gap-2 border-b pb-1.5">
+                      <h3
+                        className={`text-sm font-semibold ${
+                          grupo.chave === "atrasadas"
+                            ? "text-[var(--color-red)]"
+                            : ""
+                        }`}
+                      >
+                        {grupo.titulo}
+                      </h3>
+                      <span className="text-[11px] text-muted-foreground">
+                        {grupo.tarefas.length}{" "}
+                        {grupo.tarefas.length === 1 ? "ação" : "ações"}
+                      </span>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                {grupo.tarefas.map((task, index) => {
                   const isTop = state.priorityIds.includes(task.id);
                   const isComplementary = state.complementaryIds.includes(
                     task.id,
@@ -918,6 +948,9 @@ export default function WeeklyPlanningPage() {
                     </div>
                   );
                 })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </Panel>
             <Next
