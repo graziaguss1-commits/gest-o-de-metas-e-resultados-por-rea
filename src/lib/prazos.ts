@@ -11,6 +11,8 @@ export type GrupoPrazo<T> = {
   titulo: string;
   /** Segunda-feira da semana do grupo, quando for um grupo de semana. */
   semanaInicio: string | null;
+  /** A semana em que estamos. Decide o que já vem aberto na tela. */
+  ehSemanaAtual: boolean;
   tarefas: T[];
 };
 
@@ -79,6 +81,7 @@ export function agruparPorSemanaDePrazo<T extends ComPrazo>(
       chave: "atrasadas",
       titulo: "Atrasadas",
       semanaInicio: null,
+      ehSemanaAtual: false,
       tarefas: ordenar(atrasadas),
     });
   }
@@ -93,6 +96,7 @@ export function agruparPorSemanaDePrazo<T extends ComPrazo>(
             ? `Esta semana · ${rotuloSemana(segunda).replace("Semana de ", "")}`
             : rotuloSemana(segunda),
         semanaInicio: segunda,
+        ehSemanaAtual: segunda === semanaDeHoje,
         tarefas: ordenar(porSemana.get(segunda) ?? []),
       });
     });
@@ -102,6 +106,7 @@ export function agruparPorSemanaDePrazo<T extends ComPrazo>(
       chave: "sem-data",
       titulo: "Sem data",
       semanaInicio: null,
+      ehSemanaAtual: false,
       tarefas: ordenar(semData),
     });
   }

@@ -87,3 +87,22 @@ describe("agruparPorSemanaDePrazo", () => {
     expect(agruparPorSemanaDePrazo([], HOJE)).toEqual([]);
   });
 });
+
+describe("ehSemanaAtual", () => {
+  it("marca só o grupo da semana corrente", () => {
+    const grupos = agruparPorSemanaDePrazo(
+      [t("agora", "2026-10-22", 1), t("depois", "2026-11-03", 1), t("velha", "2026-09-01", 1)],
+      HOJE,
+    );
+    const marcados = grupos.filter((g) => g.ehSemanaAtual).map((g) => g.chave);
+    expect(marcados).toEqual(["2026-10-19"]);
+  });
+
+  it("atrasadas e sem data nunca são a semana corrente", () => {
+    const grupos = agruparPorSemanaDePrazo(
+      [t("velha", "2026-09-01", 1), t("sem", null, 1)],
+      HOJE,
+    );
+    expect(grupos.every((g) => !g.ehSemanaAtual)).toBe(true);
+  });
+});

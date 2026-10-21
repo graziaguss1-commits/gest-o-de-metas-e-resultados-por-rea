@@ -298,6 +298,16 @@ export default function WeeklyPlanningPage() {
     () => agruparPorSemanaDePrazo(tasks, isoLocal(new Date())),
     [tasks],
   );
+  /**
+   * Grupos recolhíveis. Já vêm abertos os dois que exigem decisão agora —
+   * atrasadas e a semana corrente —, e o resto fica fechado: com dezenas de
+   * ações sem data, a página virava rolagem sem fim. O que o usuário abre ou
+   * fecha sobrescreve esse padrão.
+   */
+  const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({});
+  const grupoAberto = (grupo: { chave: string; ehSemanaAtual: boolean }) =>
+    gruposAbertos[grupo.chave] ??
+    (grupo.chave === "atrasadas" || grupo.ehSemanaAtual);
 
   const recurringTasks = useMemo(
     () =>
@@ -806,24 +816,52 @@ export default function WeeklyPlanningPage() {
                   </p>
                 </div>
               </div>
-              <div className="space-y-5">
-                {gruposDePrazo.map((grupo) => (
+              <div className="space-y-3">
+                {gruposDePrazo.map((grupo) => {
+                  const aberto = grupoAberto(grupo);
+                  const escolhidasNoGrupo = grupo.tarefas.filter(
+                    (t) =>
+                      state.priorityIds.includes(t.id) ||
+                      state.complementaryIds.includes(t.id),
+                  ).length;
+                  return (
                   <div key={grupo.chave}>
-                    <div className="mb-2 flex items-baseline justify-between gap-2 border-b pb-1.5">
-                      <h3
-                        className={`text-sm font-semibold ${
-                          grupo.chave === "atrasadas"
-                            ? "text-[var(--color-red)]"
-                            : ""
-                        }`}
-                      >
-                        {grupo.titulo}
-                      </h3>
-                      <span className="text-[11px] text-muted-foreground">
+                    <button
+                      type="button"
+                      aria-expanded={aberto}
+                      onClick={() =>
+                        setGruposAbertos((atual) => ({
+                          ...atual,
+                          [grupo.chave]: !aberto,
+                        }))
+                      }
+                      className="mb-2 flex w-full items-baseline justify-between gap-2 border-b pb-1.5 text-left hover:border-[var(--brand-primary)]/40"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <ChevronRight
+                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${aberto ? "rotate-90" : ""}`}
+                        />
+                        <span
+                          className={`text-sm font-semibold ${
+                            grupo.chave === "atrasadas"
+                              ? "text-[var(--color-red)]"
+                              : ""
+                          }`}
+                        >
+                          {grupo.titulo}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {escolhidasNoGrupo > 0 && (
+                          <span className="mr-2 font-semibold text-[var(--brand-primary)]">
+                            {escolhidasNoGrupo} na semana
+                          </span>
+                        )}
                         {grupo.tarefas.length}{" "}
                         {grupo.tarefas.length === 1 ? "ação" : "ações"}
                       </span>
-                    </div>
+                    </button>
+                    {aberto && (
                     <div className="grid gap-2 md:grid-cols-2">
                 {grupo.tarefas.map((task, index) => {
                   const isTop = state.priorityIds.includes(task.id);
@@ -949,8 +987,10 @@ export default function WeeklyPlanningPage() {
                   );
                 })}
                     </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Panel>
             <Next
