@@ -18,6 +18,8 @@ export type BlocoAgendaDia = {
   inicio: string;
   fim: string;
   tipo: "plano" | "avulsa" | "compromisso" | "google";
+  /** Área da meta (plano), da ação avulsa ou do compromisso. Dá a cor do bloco. */
+  area?: string | null;
   concluido?: boolean;
   /** Apenas para blocos de plano. */
   tarefaId?: string;
@@ -56,6 +58,7 @@ export function useAgendaPeriodo(
       {
         titulo: string;
         detalhe: string;
+        area: string | null;
         primeiroPasso: string | null;
         versaoMinima: string | null;
       }
@@ -65,6 +68,7 @@ export function useAgendaPeriodo(
         mapa.set(tarefa.id, {
           titulo: tarefa.descricao,
           detalhe: `${plano.titulo}${plano.meta?.area ? ` · ${plano.meta.area}` : ""}`,
+          area: plano.meta?.area ?? null,
           primeiroPasso: tarefa.primeiro_passo,
           versaoMinima: tarefa.versao_minima,
         }),
@@ -98,6 +102,7 @@ export function useAgendaPeriodo(
           inicio: hInicio,
           fim: horaFim(hInicio, item.duracao_minutos),
           tipo: "plano",
+          area: tarefa?.area ?? null,
           concluido: agendamentosFeitos.has(item.id),
           tarefaId: item.tarefa_id,
           agendamento: item,
@@ -127,6 +132,7 @@ export function useAgendaPeriodo(
           inicio: hInicio,
           fim: horaFim(hInicio, action.duracao_minutos ?? 0),
           tipo: "avulsa",
+          area: action.area ?? null,
           concluido: action.concluida,
         };
       });
@@ -140,6 +146,7 @@ export function useAgendaPeriodo(
       inicio: hhmm(compromisso.hora_inicio),
       fim: hhmm(compromisso.hora_fim),
       tipo: "compromisso",
+      area: compromisso.area ?? null,
       concluido: compromisso.concluido,
     }));
 
@@ -152,6 +159,7 @@ export function useAgendaPeriodo(
       inicio: hhmm(bloco.hora_inicio),
       fim: hhmm(bloco.hora_fim),
       tipo: "google",
+      area: null,
     }));
 
     return [...dosPlanos, ...avulsas, ...fixos, ...doGoogle].sort(

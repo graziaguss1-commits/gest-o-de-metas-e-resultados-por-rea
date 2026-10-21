@@ -11,6 +11,7 @@ import {
   minutosDoDia,
   posicionarBlocos,
 } from "@/lib/grade";
+import { coresDoBloco } from "@/lib/coresArea";
 import { naoExecutado } from "@/lib/motivos";
 
 /** Hachura dos horários ocupados vindos do Google. */
@@ -165,12 +166,25 @@ export function GradeHoras({
         const largura = `calc((100% - ${LARGURA_REGUA}px) / ${colunas} - 4px)`;
         const esquerda = `calc(${LARGURA_REGUA}px + (100% - ${LARGURA_REGUA}px) * ${coluna} / ${colunas})`;
 
+        // A área da meta dá a cor; concluído é a mesma cor, mais clara.
+        // Bloco não cumprido mantém o âmbar: é um estado que precisa saltar,
+        // e a cor da área não pode esconder isso.
+        const cores = coresDoBloco(bloco.area, Boolean(bloco.concluido));
+        const pintar = !doGoogle && !perdido;
+
         const estilo = {
           top: topo,
           left: esquerda,
           width: largura,
           ...(aberto ? { minHeight: alturaBloco } : { height: alturaBloco }),
           ...(doGoogle ? { backgroundImage: HACHURA } : {}),
+          ...(pintar
+            ? {
+                background: cores.fundo,
+                borderColor: aberto ? "var(--brand-accent)" : cores.borda,
+                color: cores.texto,
+              }
+            : {}),
         } as const;
 
         const classes = [
@@ -178,12 +192,10 @@ export function GradeHoras({
           aberto ? "z-20 shadow-lg" : "z-10 overflow-hidden",
           doGoogle
             ? "border-dashed border-muted-foreground/40 bg-muted/40 text-muted-foreground"
-            : bloco.concluido
-              ? "bg-muted text-muted-foreground"
-              : perdido
-                ? "border-[var(--color-amber)]/60 bg-[var(--color-amber-bg)]"
-                : "bg-card",
-          aberto && !doGoogle ? "border-[var(--brand-accent)]" : "",
+            : perdido
+              ? "border-[var(--color-amber)]/60 bg-[var(--color-amber-bg)]"
+              : "",
+          aberto && !doGoogle && !pintar ? "border-[var(--brand-accent)]" : "",
         ].join(" ");
 
         // Bloco do Google não tem ação nenhuma, então não é botão.

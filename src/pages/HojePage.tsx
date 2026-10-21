@@ -24,6 +24,7 @@ import {
 } from "@/hooks/useAgendamentos";
 import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
 import { useMotivosBloco, useRegistrarMotivo } from "@/hooks/useMotivosBloco";
+import { corDaArea } from "@/lib/coresArea";
 import { chaveMotivo, exigeTexto, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
 import { useScheduleAction, useToggleAction } from "@/hooks/useActions";
 import { useAtualizarCompromisso } from "@/hooks/useCompromissos";
@@ -82,6 +83,14 @@ export default function HojePage() {
     [blocosDoDia],
   );
   const ocupadosGoogle = blocosDoDia.length - blocosHoje.length;
+  /** Legenda: só as áreas que têm bloco hoje, na ordem em que aparecem. */
+  const areasDoDia = useMemo(() => {
+    const vistas = new Map<string, string>();
+    blocosHoje.forEach((b) => {
+      if (b.area && !vistas.has(b.area)) vistas.set(b.area, corDaArea(b.area));
+    });
+    return [...vistas].map(([area, cor]) => ({ area, cor }));
+  }, [blocosHoje]);
   const metrica = cumprimentoAgenda(blocos, agora);
   const blocosPerdidos = blocosHoje.filter((b) => naoExecutado(b, agora));
   const { data: motivos } = useMotivosBloco(hojeISO, hojeISO);
@@ -313,7 +322,17 @@ export default function HojePage() {
         <section className="rounded-2xl border bg-card p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">Agenda de hoje</h2>
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
+              {areasDoDia.map(({ area, cor }) => (
+                <span key={area} className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: cor }}
+                  />
+                  {area}
+                </span>
+              ))}
               {ocupadosGoogle > 0 && <span>{ocupadosGoogle} ocupado(s) no Google</span>}
               {semMotivo > 0 && (
                 <span className="flex items-center gap-1 font-semibold text-[var(--color-amber)]">
@@ -357,11 +376,15 @@ export default function HojePage() {
                     <>
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className={`text-xs font-semibold ${aberto ? "" : "truncate"} ${bloco.concluido ? "line-through opacity-70" : ""}`}>
+                          {/* Sem opacity nem text-muted: a cor do bloco já vem
+                              da área, medida para ter contraste nos dois
+                              estados. Baixar a opacidade quebraria isso. */}
+                          <div className={`text-xs font-semibold ${aberto ? "" : "truncate"} ${bloco.concluido ? "line-through" : ""}`}>
                             {bloco.titulo}
                           </div>
-                          <div className={`text-[10px] text-muted-foreground ${aberto ? "" : "truncate"}`}>
+                          <div className={`text-[10px] opacity-90 ${aberto ? "" : "truncate"}`}>
                             {bloco.inicio}–{bloco.fim}
+                            {bloco.area ? ` · ${bloco.area}` : ""}
                             {ehTop && " · prioridade top"}
                             {bloco.tipo === "google" && " · Google Agenda"}
                           </div>
