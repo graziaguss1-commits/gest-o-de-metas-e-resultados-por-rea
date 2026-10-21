@@ -147,6 +147,25 @@ export function execucaoTarefa(
   return { planejado, realizado, pct, periodoLabel: label, texto };
 }
 
+/**
+ * A ação está em dia no período corrente?
+ *
+ * Ação única usa o checkbox `concluida`: ela acaba e não volta. Ação
+ * recorrente nunca fica "concluída" — ela volta amanhã —, então o que vale é
+ * ter cumprido a quantidade planejada do período de hoje.
+ *
+ * Sem essa separação, marcar uma rotina como feita não mudava nada na tela:
+ * o contador do plano olhava `concluida`, que por definição continua falso.
+ */
+export function tarefaEmDia(
+  tarefa: TarefaMensuravel,
+  execucoes: Execucao[] = [],
+  hoje: Date = new Date(),
+): boolean {
+  if (getFrequencia(tarefa) === "unica") return Boolean(tarefa.concluida);
+  return execucaoTarefa(tarefa, execucoes, hoje).pct >= 1;
+}
+
 function fmt(n: number): string {
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }

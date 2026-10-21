@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Trash2, ExternalLink, Pencil } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,6 +40,7 @@ import {
   FREQUENCIAS,
   FREQUENCIA_LABEL,
   getFrequencia,
+  tarefaEmDia,
   type Execucao,
   type Frequencia,
 } from "@/lib/execucao";
@@ -103,7 +104,9 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
   });
 
   const total = plano.tarefas.length;
-  const done = plano.tarefas.filter((t) => t.concluida).length;
+  // Em dia, não "marcadas": rotina nunca fica concluída, então contar
+  // `concluida` mostrava 0 de 3 mesmo com a rotina do dia cumprida.
+  const done = plano.tarefas.filter((t) => tarefaEmDia(t, execucoes)).length;
   // Execução = média ponderada pelo impacto das ações (ver src/lib/execucao.ts)
   const pct = Math.round(execucaoPlano(plano.tarefas, execucoes) * 100);
 
@@ -193,7 +196,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             {plano.meta && <StatusChip status={plano.meta.status} size="sm" />}
           </div>
           <div className="text-xs text-muted-foreground">
-            Execução do plano: {pct}% · {done}/{total} marcadas · criado em{" "}
+            Execução do plano: {pct}% · {done}/{total} em dia · criado em{" "}
             {new Date(plano.created_at).toLocaleDateString("pt-BR")}
           </div>
         </div>
@@ -474,19 +477,38 @@ function TarefaLinha({
   return (
     <li className="rounded-lg border bg-card/60 px-3 py-2 space-y-1.5">
       <div className="flex items-start gap-2">
-        <Checkbox
-          checked={tarefa.concluida}
-          onCheckedChange={(v) => podeExecutar && onToggle(v === true)}
-          disabled={!podeExecutar}
-          title={
-            podeExecutar
-              ? "Concluir ação"
-              : `Somente ${responsavelNome} pode concluir`
-          }
-          className="mt-0.5"
-        />
+        {/* Rotina não tem checkbox: ela não "acaba", volta no próximo período.
+            O que vale ali é se o período de hoje está cumprido. */}
+        {freq === "unica" ? (
+          <Checkbox
+            checked={tarefa.concluida}
+            onCheckedChange={(v) => podeExecutar && onToggle(v === true)}
+            disabled={!podeExecutar}
+            title={
+              podeExecutar
+                ? "Concluir ação"
+                : `Somente ${responsavelNome} pode concluir`
+            }
+            className="mt-0.5"
+          />
+        ) : (
+          <span
+            title={`Rotina ${FREQUENCIA_LABEL[freq].toLowerCase()} · ${exec.texto} (${exec.periodoLabel})`}
+            className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+            style={
+              exec.pct >= 1
+                ? {
+                    borderColor: "var(--color-green)",
+                    background: "var(--color-green)",
+                  }
+                : { borderColor: "hsl(var(--border))" }
+            }
+          >
+            {exec.pct >= 1 && <Check className="h-3 w-3 text-white" />}
+          </span>
+        )}
         <span
-          className={`text-sm flex-1 leading-snug ${tarefa.concluida ? "line-through text-muted-foreground" : ""}`}
+          className={`text-sm flex-1 leading-snug ${tarefa.concluida || (freq !== "unica" && exec.pct >= 1) ? "line-through text-muted-foreground" : ""}`}
         >
           {tarefa.descricao}
         </span>

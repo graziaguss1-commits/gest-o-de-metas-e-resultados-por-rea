@@ -8,6 +8,7 @@ import {
   periodoCorrente,
   prazoConsumido,
   quantidadePorExecucao,
+  tarefaEmDia,
   taxasFunil,
   type Execucao,
   type TarefaMensuravel,
@@ -158,5 +159,41 @@ describe("funil", () => {
 
   it("identifica o maior gargalo", () => {
     expect(gargaloFunil(etapas)?.para).toBe("Reuniões");
+  });
+});
+
+describe("tarefaEmDia", () => {
+  const diaria = {
+    id: "t1",
+    descricao: "Eu sou + gratidão",
+    concluida: false,
+    frequencia: "diaria",
+    quantidade_planejada: 1,
+  };
+  const hoje = new Date(2026, 9, 21);
+  const execHoje = [
+    { id: "e1", tarefa_id: "t1", data_referencia: "2026-10-21", quantidade: 1 },
+  ];
+
+  it("rotina cumprida hoje está em dia, mesmo sem concluida", () => {
+    expect(tarefaEmDia(diaria, execHoje, hoje)).toBe(true);
+    expect(diaria.concluida).toBe(false);
+  });
+
+  it("rotina sem registro no dia não está em dia", () => {
+    expect(tarefaEmDia(diaria, [], hoje)).toBe(false);
+  });
+
+  it("rotina registrada ontem não conta para hoje", () => {
+    const ontem = [
+      { id: "e0", tarefa_id: "t1", data_referencia: "2026-10-20", quantidade: 1 },
+    ];
+    expect(tarefaEmDia(diaria, ontem, hoje)).toBe(false);
+  });
+
+  it("ação única continua usando o checkbox", () => {
+    const unica = { ...diaria, frequencia: "unica" };
+    expect(tarefaEmDia(unica, [], hoje)).toBe(false);
+    expect(tarefaEmDia({ ...unica, concluida: true }, [], hoje)).toBe(true);
   });
 });
