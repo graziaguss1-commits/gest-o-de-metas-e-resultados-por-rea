@@ -47,7 +47,7 @@ export function AuthLayout() {
           left: -250%;
           width: 300%;
           height: 100%;
-          background: hsl(var(--accent-primary));
+          background: hsl(var(--accent));
           border-radius: 150px;
           z-index: 2;
           transition: 1.8s ease-in-out;

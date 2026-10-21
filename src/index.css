@@ -18,7 +18,9 @@
     --secondary-foreground: 18 35% 16%;
     --muted: 31 25% 92%;
     --muted-foreground: 20 10% 42%;
-    --accent: 28 57% 46%;
+    /* 40% de luminosidade dá 4,9:1 com texto branco; 46% dava 3,86:1 e
+       reprovava no mínimo de contraste para texto de 14px. */
+    --accent: 28 57% 40%;
     --accent-foreground: 0 0% 100%;
     --destructive: 6 64% 46%;
     --destructive-foreground: 0 0% 100%;
@@ -63,7 +65,7 @@
     --shadow-raised: 0 14px 40px rgba(58,34,24,.14);
     --sidebar-w: 248px;
   }
-  .dark { --background: 18 36% 8%; --foreground: 30 33% 95%; --card: 18 32% 11%; --card-foreground: 30 33% 95%; --popover: 18 32% 11%; --popover-foreground: 30 33% 95%; --primary: 28 57% 55%; --primary-foreground: 18 36% 8%; --secondary: 18 25% 15%; --secondary-foreground: 30 33% 95%; --muted: 18 25% 15%; --muted-foreground: 30 10% 65%; --accent: 28 57% 46%; --accent-foreground: 0 0% 100%; --border: 18 20% 20%; --input: 18 20% 20%; --ring: 28 57% 55%; }
+  .dark { --background: 18 36% 8%; --foreground: 30 33% 95%; --card: 18 32% 11%; --card-foreground: 30 33% 95%; --popover: 18 32% 11%; --popover-foreground: 30 33% 95%; --primary: 28 57% 55%; --primary-foreground: 18 36% 8%; --secondary: 18 25% 15%; --secondary-foreground: 30 33% 95%; --muted: 18 25% 15%; --muted-foreground: 30 10% 65%; --accent: 28 57% 40%; --accent-foreground: 0 0% 100%; --border: 18 20% 20%; --input: 18 20% 20%; --ring: 28 57% 55%; }
   * { @apply border-border; }
   body { @apply bg-background text-foreground antialiased; font-family: 'DM Sans', sans-serif; }
 }

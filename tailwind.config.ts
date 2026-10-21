@@ -23,8 +23,11 @@ export default {
           accent: "hsl(var(--sidebar-accent))", "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))", ring: "hsl(var(--sidebar-ring))",
         },
-        accent: { DEFAULT: "hsl(var(--accent-primary))", hover: "hsl(var(--accent-primary-hover))", light: "hsl(var(--accent-primary-light))", foreground: "hsl(var(--accent-foreground))" },
-        warm: { DEFAULT: "hsl(var(--accent-warm))" },
+        // --accent-primary, --accent-primary-hover, --accent-primary-light e
+        // --accent-warm nunca existiram no CSS. bg-accent virava hsl() vazio e
+        // não pintava nada, enquanto text-accent-foreground (esse existe)
+        // pintava o texto de branco: branco sobre fundo claro, texto sumindo.
+        accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
         // MetasIA named colors (use directly as e.g. bg-navy, text-blue, border-green)
         navy: { DEFAULT: "var(--color-navy)", 2: "var(--color-navy-2)", 3: "var(--color-navy-3)" },
         blue: { DEFAULT: "var(--color-blue)", hover: "var(--color-blue-hover)", soft: "var(--color-blue-soft)" },
