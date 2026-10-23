@@ -4,6 +4,7 @@ import {
   blocosParaLembrar,
   mascararNumero,
   prioridadeDoDia,
+  semanaDoPlano,
   type Bloco,
 } from "../../supabase/functions/whatsapp-agenda/logica";
 
@@ -33,5 +34,29 @@ describe("whatsapp-agenda", () => {
 
   it("mascara o número de destino", () => {
     expect(mascararNumero("+55 11 98765-4321")).toBe("5511*******21");
+  });
+});
+
+describe("semanaDoPlano", () => {
+  it("sem data de início, não há plano em curso", () => {
+    expect(semanaDoPlano(null, "2026-10-23")).toBeNull();
+  });
+
+  it("o próprio dia do início já é a semana 1", () => {
+    expect(semanaDoPlano("2026-10-23", "2026-10-23")).toBe(1);
+  });
+
+  it("avança de 7 em 7 dias", () => {
+    expect(semanaDoPlano("2026-10-23", "2026-10-29")).toBe(1);
+    expect(semanaDoPlano("2026-10-23", "2026-10-30")).toBe(2);
+    expect(semanaDoPlano("2026-10-23", "2026-11-13")).toBe(4);
+  });
+
+  it("encerra depois da quarta semana", () => {
+    expect(semanaDoPlano("2026-10-23", "2026-11-20")).toBeNull();
+  });
+
+  it("data futura não começa o plano antes da hora", () => {
+    expect(semanaDoPlano("2026-11-01", "2026-10-23")).toBeNull();
   });
 });

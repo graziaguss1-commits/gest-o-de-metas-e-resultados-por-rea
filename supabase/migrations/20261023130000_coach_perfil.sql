@@ -42,3 +42,17 @@ CREATE POLICY "admins write coach" ON public.coach_perfil
 DROP TRIGGER IF EXISTS set_updated_at_coach_perfil ON public.coach_perfil;
 CREATE TRIGGER set_updated_at_coach_perfil BEFORE UPDATE ON public.coach_perfil
   FOR EACH ROW EXECUTE FUNCTION public.tg_set_updated_at();
+
+-- Perfil de vendas e plano de evolucao de 4 semanas.
+--
+-- O conteudo destes campos e pessoal e fica SO no banco: este repositorio e
+-- publico. A migracao cria as colunas vazias.
+--
+-- plano_inicio guarda a data em que o plano comecou; a semana ativa (1 a 4) e
+-- calculada a partir dela, em vez de um contador guardado, para a semana
+-- avancar sozinha e nao existir estado para dessincronizar.
+
+ALTER TABLE public.coach_perfil
+  ADD COLUMN IF NOT EXISTS perfil_vendas text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS plano_evolucao text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS plano_inicio date;

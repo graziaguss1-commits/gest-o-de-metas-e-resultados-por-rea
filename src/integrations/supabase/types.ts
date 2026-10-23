@@ -245,6 +245,9 @@ export type Database = {
           contexto: string
           id: number
           limite_caracteres: number
+          perfil_vendas: string
+          plano_evolucao: string
+          plano_inicio: string | null
           regras: string
           tom: string
           updated_at: string
@@ -254,6 +257,9 @@ export type Database = {
           contexto?: string
           id: number
           limite_caracteres?: number
+          perfil_vendas?: string
+          plano_evolucao?: string
+          plano_inicio?: string | null
           regras?: string
           tom?: string
           updated_at?: string
@@ -263,6 +269,9 @@ export type Database = {
           contexto?: string
           id?: number
           limite_caracteres?: number
+          perfil_vendas?: string
+          plano_evolucao?: string
+          plano_inicio?: string | null
           regras?: string
           tom?: string
           updated_at?: string

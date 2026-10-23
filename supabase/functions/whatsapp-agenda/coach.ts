@@ -17,7 +17,7 @@ import {
   createAnthropicMessage,
   estimatedSonnetCost,
 } from "../_shared/anthropic.ts";
-import type { Bloco } from "./logica.ts";
+import { semanaDoPlano, type Bloco } from "./logica.ts";
 
 type Db = {
   from: (t: string) => any;
@@ -29,8 +29,13 @@ type PerfilCoach = {
   contexto: string;
   tom: string;
   regras: string;
+  perfil_vendas: string;
+  plano_evolucao: string;
+  /** Data em que o plano de evolucao comecou. Null = plano desligado. */
+  plano_inicio: string | null;
   limite_caracteres: number;
 };
+
 
 export type ContextoDia = {
   data: string;
@@ -56,7 +61,7 @@ export async function textoDoCoach(
   try {
     const { data } = await db
       .from("coach_perfil")
-      .select("ativo, contexto, tom, regras, limite_caracteres")
+      .select("ativo, contexto, tom, regras, perfil_vendas, plano_evolucao, plano_inicio, limite_caracteres")
       .eq("id", 1)
       .maybeSingle();
     perfil = (data as PerfilCoach | null) ?? null;
@@ -81,6 +86,7 @@ export async function textoDoCoach(
     titulo: b.titulo,
     feito: Boolean(b.concluido),
   }));
+  const semanaAtiva = semanaDoPlano(perfil.plano_inicio, ctx.data);
   const carga = ctx.capacidadePlanejavel
     ? Math.round((ctx.minutosPlanejados / ctx.capacidadePlanejavel) * 100)
     : null;
@@ -94,6 +100,17 @@ export async function textoDoCoach(
     "",
     "QUEM É ELA:",
     perfil.contexto,
+    ...(perfil.perfil_vendas
+      ? ["", "PERFIL DE VENDAS E PADRÃO DE TRAVA:", perfil.perfil_vendas]
+      : []),
+    ...(semanaAtiva
+      ? [
+        "",
+        "PLANO DE EVOLUÇÃO — ela está na SEMANA " + semanaAtiva + " de 4.",
+        "Cobre só o tema desta semana, não os outros.",
+        perfil.plano_evolucao,
+      ]
+      : []),
     "",
     "COMO FALAR:",
     perfil.tom,

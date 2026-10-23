@@ -74,3 +74,23 @@ export function mensagemDiaria(foco: string, prioridade: Bloco | null, primeiro:
 export function mensagemLembrete(bloco: Bloco): string {
   return `⏰ Em 5 minutos (${bloco.inicio}): ${bloco.titulo}\nÉ uma prioridade top da semana. Bora começar!`;
 }
+
+/**
+ * Semana ativa do plano de evolução do coach, de 1 a 4.
+ *
+ * Sai da data de início, não de um contador guardado: a semana avança
+ * sozinha e não há estado para dessincronizar. Passadas as 4 semanas o
+ * plano se encerra e o coach para de cobrar o tema.
+ */
+export function semanaDoPlano(
+  inicio: string | null,
+  hoje: string,
+): number | null {
+  if (!inicio) return null;
+  const ini = new Date(`${inicio}T12:00:00`);
+  const agora = new Date(`${hoje}T12:00:00`);
+  const dias = Math.floor((agora.getTime() - ini.getTime()) / 86400000);
+  if (dias < 0) return null;
+  const semana = Math.floor(dias / 7) + 1;
+  return semana > 4 ? null : semana;
+}

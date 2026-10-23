@@ -6,6 +6,10 @@ export type CoachPerfil = {
   contexto: string;
   tom: string;
   regras: string;
+  perfil_vendas: string;
+  plano_evolucao: string;
+  /** Data em que o plano de 4 semanas começou. null = plano desligado. */
+  plano_inicio: string | null;
   limite_caracteres: number;
 };
 
@@ -21,7 +25,7 @@ export function useCoachPerfil() {
     queryFn: async (): Promise<CoachPerfil | null> => {
       const { data, error } = await supabase
         .from("coach_perfil")
-        .select("ativo, contexto, tom, regras, limite_caracteres")
+        .select("ativo, contexto, tom, regras, perfil_vendas, plano_evolucao, plano_inicio, limite_caracteres")
         .eq("id", 1)
         .maybeSingle();
       if (error) throw error;
