@@ -10,11 +10,17 @@ import {
   prioridadeDoDia,
   type Bloco,
 } from "./logica.ts";
+import { textoDoCoach } from "./coach.ts";
 
 type Db = ReturnType<typeof createServiceClient>;
 type Modo = "diario" | "lembretes";
 
 const CANCELADAS = ["Ocorrência cancelada"];
+
+/** Minutos ja planejados no dia, para a regra de sobrecarga do coach. */
+function minutosPlanejadosDe(blocos: Bloco[]): number {
+  return blocos.reduce((total, b) => total + (b.duracaoMinutos ?? 30), 0);
+}
 
 async function log(db: Db, e: { user_id: string | null; tipo: string; referencia?: string; destino?: string | null; status: string; erro?: string }) {
   await db.from("whatsapp_log").insert({
@@ -53,14 +59,14 @@ function proximaData(iso: string, recorrencia: string) {
 async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]> {
   const [ag, av, cp, oc] = await Promise.all([
     db.from("tarefa_agendamentos")
-      .select("id, tarefa_id, hora_inicio, observacao, plano_tarefas!inner(descricao, responsavel_id)")
+      .select("id, tarefa_id, hora_inicio, duracao_minutos, observacao, plano_tarefas!inner(descricao, responsavel_id)")
       .eq("data", hoje)
       .eq("plano_tarefas.responsavel_id", uid),
-    db.from("acoes_avulsas").select("id, descricao, hora_inicio, concluida")
+    db.from("acoes_avulsas").select("id, descricao, hora_inicio, duracao_minutos, concluida")
       .eq("criado_por", uid).eq("data_agendada", hoje).not("hora_inicio", "is", null),
-    db.from("compromissos").select("id, titulo, data, hora_inicio, concluido, recorrencia, recorrencia_fim")
+    db.from("compromissos").select("id, titulo, data, hora_inicio, hora_fim, concluido, recorrencia, recorrencia_fim")
       .eq("criado_por", uid).lte("data", hoje),
-    db.from("compromisso_ocorrencias").select("compromisso_id, data_original, data, hora_inicio, cancelado").eq("user_id", uid),
+    db.from("compromisso_ocorrencias").select("compromisso_id, data_original, data, hora_inicio, hora_fim, cancelado").eq("user_id", uid),
   ]);
   for (const r of [ag, av, cp, oc]) if (r.error) throw r.error;
 
@@ -80,10 +86,10 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
     if (vistos.has(chave)) continue;
     vistos.add(chave);
     const tarefa = a.plano_tarefas as unknown as { descricao: string };
-    blocos.push({ ref: `ag:${a.id}`, titulo: tarefa.descricao, inicio: a.hora_inicio.slice(0, 5), tarefaId: a.tarefa_id, concluido: feitos.has(a.id) });
+    blocos.push({ ref: `ag:${a.id}`, titulo: tarefa.descricao, inicio: a.hora_inicio.slice(0, 5), tarefaId: a.tarefa_id, concluido: feitos.has(a.id), duracaoMinutos: Number(a.duracao_minutos ?? 30) });
   }
   for (const a of av.data ?? []) {
-    blocos.push({ ref: `av:${a.id}`, titulo: a.descricao, inicio: String(a.hora_inicio).slice(0, 5), tarefaId: a.id, concluido: a.concluida });
+    blocos.push({ ref: `av:${a.id}`, titulo: a.descricao, inicio: String(a.hora_inicio).slice(0, 5), tarefaId: a.id, concluido: a.concluida, duracaoMinutos: Number(a.duracao_minutos ?? 30) });
   }
   const alt = new Map((oc.data ?? []).map((o) => [`${o.compromisso_id}|${o.data_original}`, o]));
   for (const c of cp.data ?? []) {
@@ -95,7 +101,9 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
       const o = alt.get(`${c.id}|${original}`);
       const data = o?.data ?? original;
       if (!o?.cancelado && data === hoje) {
-        blocos.push({ ref: `cp:${c.id}@${original}`, titulo: c.titulo, inicio: String(o?.hora_inicio ?? c.hora_inicio).slice(0, 5), concluido: c.concluido });
+        const ini = String(o?.hora_inicio ?? c.hora_inicio).slice(0, 5);
+        const fim = String(o?.hora_fim ?? c.hora_fim ?? "").slice(0, 5);
+        blocos.push({ ref: `cp:${c.id}@${original}`, titulo: c.titulo, inicio: ini, concluido: c.concluido, duracaoMinutos: fim ? Math.max(0, minutosDe(fim) - minutosDe(ini)) : 30 });
       }
       if (recorrencia === "nenhuma") break;
       original = proximaData(original, recorrencia);
@@ -105,7 +113,11 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
   for (const o of oc.data ?? []) {
     if (o.cancelado || o.data !== hoje || o.data_original <= hoje) continue;
     const c = (cp.data ?? []).find((x) => x.id === o.compromisso_id);
-    if (c) blocos.push({ ref: `cp:${c.id}@${o.data_original}`, titulo: c.titulo, inicio: String(o.hora_inicio ?? c.hora_inicio).slice(0, 5), concluido: c.concluido });
+    if (c) {
+      const ini = String(o.hora_inicio ?? c.hora_inicio).slice(0, 5);
+      const fim = String(o.hora_fim ?? c.hora_fim ?? "").slice(0, 5);
+      blocos.push({ ref: `cp:${c.id}@${o.data_original}`, titulo: c.titulo, inicio: ini, concluido: c.concluido, duracaoMinutos: fim ? Math.max(0, minutosDe(fim) - minutosDe(ini)) : 30 });
+    }
   }
   return blocos.sort((a, b) => minutosDe(a.inicio) - minutosDe(b.inicio));
 }
@@ -121,7 +133,23 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
   const pendentes: { tipo: string; referencia: string; texto: string }[] = [];
   if (modo === "diario") {
     const primeiro = blocos.find((b) => !b.concluido) ?? null;
-    pendentes.push({ tipo: "resumo_diario", referencia: "dia", texto: mensagemDiaria(plano?.foco ?? "", prioridadeDoDia(blocos, topIds), primeiro) });
+    const prioridade = prioridadeDoDia(blocos, topIds);
+    const fixo = mensagemDiaria(plano?.foco ?? "", prioridade, primeiro);
+    // Coach desligado, sem chave ou qualquer falha: segue o texto fixo. A
+    // mensagem das 7:30 nao pode deixar de sair porque a IA falhou.
+    const { data: cfgCap } = await db.from("app_settings")
+      .select("capacidade_diaria_minutos").eq("id", 1).maybeSingle();
+    const capacidadeDiaria = Number(cfgCap?.capacidade_diaria_minutos ?? 480);
+    const doCoach = await textoDoCoach(db, uid, {
+      data: sp.data,
+      foco: plano?.foco ?? "",
+      blocos,
+      prioridade,
+      primeiro,
+      minutosPlanejados: minutosPlanejadosDe(blocos),
+      capacidadePlanejavel: Math.round(capacidadeDiaria * 0.7),
+    });
+    pendentes.push({ tipo: "resumo_diario", referencia: "dia", texto: doCoach ?? fixo });
   } else {
     for (const b of blocosParaLembrar(blocos, topIds, sp.minutos)) {
       pendentes.push({ tipo: "lembrete_bloco", referencia: `${b.ref}|${b.inicio}`, texto: mensagemLembrete(b) });

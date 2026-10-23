@@ -239,6 +239,36 @@ export type Database = {
         }
         Relationships: []
       }
+      coach_perfil: {
+        Row: {
+          ativo: boolean
+          contexto: string
+          id: number
+          limite_caracteres: number
+          regras: string
+          tom: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          contexto?: string
+          id: number
+          limite_caracteres?: number
+          regras?: string
+          tom?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          contexto?: string
+          id?: number
+          limite_caracteres?: number
+          regras?: string
+          tom?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bloco_motivos: {
         Row: {
           created_at: string

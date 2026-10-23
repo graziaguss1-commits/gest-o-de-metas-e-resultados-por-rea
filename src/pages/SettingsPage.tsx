@@ -8,6 +8,7 @@ import IntegracoesSettings from "@/components/settings/IntegracoesSettings";
 import TeamSettings from "@/components/settings/TeamSettings";
 import DemonstrationSettings from "@/components/settings/DemonstrationSettings";
 import NotificacoesSettings from "@/components/settings/NotificacoesSettings";
+import { CoachSettings } from "@/components/settings/CoachSettings";
 import OnboardingSettings from "@/components/settings/OnboardingSettings";
 import { GoogleCalendarConnect } from "@/components/settings/GoogleCalendarConnect";
 import { useAuth } from "@/hooks/useAuth";
@@ -107,7 +108,7 @@ export default function SettingsPage() {
           </div>
           <TabsContent value="general"><GeneralSettings /></TabsContent>
           <TabsContent value="google-calendar"><GoogleCalendarConnect /></TabsContent>
-          {isAdmin && <TabsContent value="notificacoes"><NotificacoesSettings /></TabsContent>}
+          {isAdmin && <TabsContent value="notificacoes" className="space-y-4"><CoachSettings /><NotificacoesSettings /></TabsContent>}
           {isAdmin && <TabsContent value="security"><SecuritySettings /></TabsContent>}
           {isAdmin && (
             <TabsContent value="integrations" className="space-y-8">

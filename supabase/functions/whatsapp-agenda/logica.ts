@@ -11,6 +11,8 @@ export type Bloco = {
   inicio: string; // HH:MM
   tarefaId?: string;
   concluido?: boolean;
+  /** Duracao planejada, usada na regra de sobrecarga do coach. */
+  duracaoMinutos?: number;
 };
 
 /** Data (YYYY-MM-DD), minutos do dia e segunda-feira no fuso de São Paulo. */
