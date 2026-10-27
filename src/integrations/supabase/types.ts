@@ -272,29 +272,32 @@ export type Database = {
         }
         Relationships: []
       }
-      prioridade_dia: {
+      coach_frases: {
         Row: {
           created_at: string
           data: string
+          frase: string
           id: string
           referencia: string
-          updated_at: string
+          tipo: string
           user_id: string
         }
         Insert: {
           created_at?: string
           data: string
+          frase: string
           id?: string
           referencia: string
-          updated_at?: string
-          user_id?: string
+          tipo: string
+          user_id: string
         }
         Update: {
           created_at?: string
           data?: string
+          frase?: string
           id?: string
           referencia?: string
-          updated_at?: string
+          tipo?: string
           user_id?: string
         }
         Relationships: []
@@ -304,8 +307,8 @@ export type Database = {
           ativo: boolean
           contexto: string
           id: number
-          mapa_crencas: string
           limite_caracteres: number
+          mapa_crencas: string
           perfil_vendas: string
           plano_evolucao: string
           plano_inicio: string | null
@@ -317,8 +320,8 @@ export type Database = {
           ativo?: boolean
           contexto?: string
           id: number
-          mapa_crencas?: string
           limite_caracteres?: number
+          mapa_crencas?: string
           perfil_vendas?: string
           plano_evolucao?: string
           plano_inicio?: string | null
@@ -1070,6 +1073,33 @@ export type Database = {
           },
         ]
       }
+      prioridade_dia: {
+        Row: {
+          created_at: string
+          data: string
+          id: string
+          referencia: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          id?: string
+          referencia: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          id?: string
+          referencia?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1142,6 +1172,7 @@ export type Database = {
           hora_inicio: string
           id: string
           observacao: string | null
+          remarcacoes: number
           tarefa_id: string
           updated_at: string
         }
@@ -1156,6 +1187,7 @@ export type Database = {
           hora_inicio: string
           id?: string
           observacao?: string | null
+          remarcacoes?: number
           tarefa_id: string
           updated_at?: string
         }
@@ -1170,6 +1202,7 @@ export type Database = {
           hora_inicio?: string
           id?: string
           observacao?: string | null
+          remarcacoes?: number
           tarefa_id?: string
           updated_at?: string
         }
