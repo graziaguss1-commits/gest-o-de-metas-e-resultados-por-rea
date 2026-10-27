@@ -88,7 +88,15 @@ async function sincronizarHabitoDaMeta(
 
   await supabase
     .from("metas")
-    .update({ valor_alvo: alvo, valor_atual: atual, status })
+    .update({
+      valor_alvo: alvo,
+      valor_atual: atual,
+      status,
+      // A unidade antiga ("vezes por semana") descrevia o alvo digitado. O
+      // numero agora conta cumprimentos no periodo inteiro, entao manter o
+      // rotulo velho faria a tela dizer "8 de 120 vezes por semana".
+      unidade: "cumprimentos",
+    })
     .eq("id", metaId);
 }
 
@@ -245,13 +253,21 @@ export function usePlanos() {
         tarefas: tarefasByPlano.get(p.id) ?? [],
       }));
 
-      const metasDeProjeto = (metas ?? [])
+      // Metas cujo numero e CALCULADO, nao digitado: projeto conta planos
+      // concluidos, habito conta cumprimentos das acoes. Precisam ser
+      // recalculadas ao carregar, nao so quando alguem edita o plano — senao
+      // a tela mostra um valor velho ate acontecer uma escrita qualquer, e
+      // foi assim que uma meta com 18 execucoes ficou marcando 0%.
+      const metasDerivadas = (metas ?? [])
         .filter(
-          (meta) => meta.metric_type === "projeto" || meta.unidade === "etapas",
+          (meta) =>
+            meta.metric_type === "projeto" ||
+            meta.metric_type === "habito" ||
+            meta.unidade === "etapas",
         )
         .map((meta) => meta.id);
       await Promise.all(
-        metasDeProjeto.map((metaId) => sincronizarEtapasDaMeta(metaId)),
+        metasDerivadas.map((metaId) => sincronizarEtapasDaMeta(metaId)),
       );
       return resultado;
     },
