@@ -304,6 +304,7 @@ export type Database = {
           ativo: boolean
           contexto: string
           id: number
+          mapa_crencas: string
           limite_caracteres: number
           perfil_vendas: string
           plano_evolucao: string
@@ -316,6 +317,7 @@ export type Database = {
           ativo?: boolean
           contexto?: string
           id: number
+          mapa_crencas?: string
           limite_caracteres?: number
           perfil_vendas?: string
           plano_evolucao?: string
@@ -329,6 +331,7 @@ export type Database = {
           contexto?: string
           id?: number
           limite_caracteres?: number
+          mapa_crencas?: string
           perfil_vendas?: string
           plano_evolucao?: string
           plano_inicio?: string | null

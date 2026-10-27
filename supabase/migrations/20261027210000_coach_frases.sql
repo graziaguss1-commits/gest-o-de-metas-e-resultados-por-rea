@@ -36,3 +36,10 @@ CREATE INDEX IF NOT EXISTS coach_frases_user_data_idx ON public.coach_frases (us
 -- O plano de evolucao de 4 semanas saiu da tela de configuracoes a pedido
 -- dela, e o prompt do coach parou de usar os dois campos. As colunas ficam:
 -- nao apago coluna com texto dela dentro so para limpar.
+
+-- Mapa de crencas por tipo de tarefa: a base da linha 💭 de cada horario.
+--
+-- Coluna vazia aqui de proposito. O conteudo e pessoal e fica SO no banco,
+-- porque este repositorio e publico.
+ALTER TABLE public.coach_perfil
+  ADD COLUMN IF NOT EXISTS mapa_crencas text NOT NULL DEFAULT '';

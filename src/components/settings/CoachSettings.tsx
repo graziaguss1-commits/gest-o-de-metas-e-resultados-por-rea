@@ -18,6 +18,7 @@ export function CoachSettings() {
   const [tom, setTom] = useState("");
   const [regras, setRegras] = useState("");
   const [vendas, setVendas] = useState("");
+  const [crencas, setCrencas] = useState("");
   const [sujo, setSujo] = useState(false);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export function CoachSettings() {
     setTom(perfil.tom);
     setRegras(perfil.regras);
     setVendas(perfil.perfil_vendas);
+    setCrencas(perfil.mapa_crencas);
   }, [perfil, sujo]);
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-2xl" />;
@@ -91,6 +93,24 @@ export function CoachSettings() {
       </div>
 
       <div className="space-y-1.5">
+        <Label htmlFor="coach-crencas">Mapa de crenças por tipo de tarefa</Label>
+        <Textarea
+          id="coach-crencas"
+          rows={10}
+          value={crencas}
+          onChange={(e) => {
+            setCrencas(e.target.value);
+            setSujo(true);
+          }}
+          placeholder="Um tipo de tarefa por linha: a crença que trava e a mensagem-base."
+        />
+        <p className="text-[11px] text-muted-foreground">
+          É daqui que sai a linha 💭 de cada horário. A mensagem-base é ponto
+          de partida: o coach adapta à tarefa do dia, nunca copia.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
         <Label htmlFor="coach-regras">O que fazer em cada situação</Label>
         <Textarea
           id="coach-regras"
@@ -117,6 +137,7 @@ export function CoachSettings() {
                 tom,
                 regras,
                 perfil_vendas: vendas,
+                mapa_crencas: crencas,
               },
               "Coach atualizado",
             )
@@ -132,6 +153,8 @@ export function CoachSettings() {
               setTom(perfil.tom);
               setRegras(perfil.regras);
               setVendas(perfil.perfil_vendas);
+              setCrencas(perfil.mapa_crencas);
+    setCrencas(perfil.mapa_crencas);
                                   setSujo(false);
             }}
           >

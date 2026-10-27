@@ -49,6 +49,7 @@ type PerfilCoach = {
   tom: string;
   regras: string;
   perfil_vendas: string;
+  mapa_crencas: string;
   limite_caracteres: number;
 };
 
@@ -81,7 +82,7 @@ async function lerPerfil(db: Db): Promise<PerfilCoach | null> {
     const { data } = await db
       .from("coach_perfil")
       .select(
-        "ativo, contexto, tom, regras, perfil_vendas, limite_caracteres",
+        "ativo, contexto, tom, regras, perfil_vendas, mapa_crencas, limite_caracteres",
       )
       .eq("id", 1)
       .maybeSingle();
@@ -133,6 +134,18 @@ function montarSistema(perfil: PerfilCoach, ctx: ContextoJanela): string {
     perfil.contexto,
     ...(perfil.perfil_vendas
       ? ["", "PERFIL DE VENDAS E PADRÃO DE TRAVA:", perfil.perfil_vendas]
+      : []),
+    ...(perfil.mapa_crencas
+      ? [
+        "",
+        "MAPA DE CRENÇAS — a base da frase de cada horário.",
+        "Identifique o tipo da tarefa pelo título e pela área, pegue a crença",
+        "daquele tipo e escreva a frase a partir da mensagem-base, adaptada",
+        "a ESTA tarefa. Tipo que não se encaixa em nenhum: use 'tarefa grande",
+        "ou nova'. Nunca envie a mensagem-base copiada: ela é ponto de",
+        "partida, não resposta pronta.",
+        perfil.mapa_crencas,
+      ]
       : []),
     "",
     "COMO FALAR:",
