@@ -253,3 +253,18 @@ describe("recorrência mensal por dia da semana", () => {
     );
   });
 });
+
+describe("rótulo não cai no dia do mês quando a regra é por dia da semana", () => {
+  it("ignora dias_semana preenchido pelo padrão antigo", () => {
+    // diasRecorrenciaPersistida devolve [1] para mensal sem dias. Se o rótulo
+    // olhasse só isso, a tela diria "Todo dia 1" para uma rotina de última
+    // terça — foi exatamente o que apareceu no card.
+    expect(
+      labelMomentoRecorrencia("mensal", [1], {
+        recorrencia_mensal: "dia_da_semana",
+        semana_do_mes: -1,
+        dia_semana_mensal: 2,
+      }),
+    ).toBe("Toda última terça-feira do mês");
+  });
+});

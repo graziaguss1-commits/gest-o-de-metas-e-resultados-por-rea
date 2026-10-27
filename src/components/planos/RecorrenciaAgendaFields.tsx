@@ -75,7 +75,7 @@ export function RecorrenciaAgendaFields({
       dias,
       mensal,
     ) && diasSemanaisCompletos(frequencia, execucoes, dias);
-  const momento = labelMomentoRecorrencia(frequencia, dias);
+  const momento = labelMomentoRecorrencia(frequencia, dias, mensal);
   const periodoExecucao =
     frequencia === "diaria"
       ? "por dia"

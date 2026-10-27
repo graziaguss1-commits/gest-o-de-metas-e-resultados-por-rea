@@ -404,8 +404,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                 <p className="text-[11px] text-muted-foreground">
                   Resumo: {t.quantidade || 0} {t.unidade || "unidades"} ·{" "}
                   {FREQUENCIA_LABEL[t.frequencia].toLowerCase()}
-                  {labelMomentoRecorrencia(t.frequencia, t.dias)
-                    ? ` · ${labelMomentoRecorrencia(t.frequencia, t.dias)}`
+                  {labelMomentoRecorrencia(t.frequencia, t.dias, t.mensal)
+                    ? ` · ${labelMomentoRecorrencia(t.frequencia, t.dias, t.mensal)}`
                     : ""}
                   {` · ${t.execucoes} ${t.execucoes === 1 ? "bloco" : "blocos"} no calendário`}
                   {t.duracao

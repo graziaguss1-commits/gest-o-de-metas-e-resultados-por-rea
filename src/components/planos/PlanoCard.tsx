@@ -456,7 +456,7 @@ function TarefaLinha({
   const freq = getFrequencia(tarefa);
   const exec = execucaoTarefa(tarefa, execucoes);
   const diasRecorrencia = diasRecorrenciaPersistida(freq, tarefa.dias_semana);
-  const momentoRecorrencia = labelMomentoRecorrencia(freq, diasRecorrencia);
+  const momentoRecorrencia = labelMomentoRecorrencia(freq, diasRecorrencia, tarefa);
   const execucoesAgenda = Math.max(1, Number(tarefa.execucoes_planejadas ?? 1));
   const mensuravel =
     freq !== "unica" ||
