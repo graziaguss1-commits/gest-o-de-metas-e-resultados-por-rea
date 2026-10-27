@@ -10,6 +10,7 @@ import {
   mesclarLinhas,
   montarMensagem,
   slotsDaJanela,
+  tipoDoSlot,
   prioridadeDoDia,
   semanaDoPlano,
   type Bloco,
@@ -180,6 +181,33 @@ describe("slotsDaJanela", () => {
     );
     expect(slots).toHaveLength(3);
     expect(restantes).toBe(2);
+  });
+});
+
+describe("tipoDoSlot", () => {
+  const slotDe = (...titulos: string[]) =>
+    slotsDaJanela(titulos.map((t) => b("09:00", t)), manha).slots[0];
+
+  it("a mesma rotina em dias diferentes é o mesmo tipo", () => {
+    // É o que faz a regra dos 7 dias valer numa rotina diária: o tipo vem do
+    // título, não do id do agendamento, que muda todo dia.
+    expect(tipoDoSlot(slotDe("Postar reels"))).toBe(tipoDoSlot(slotDe("Postar reels")));
+  });
+
+  it("ignora acento, caixa e espaço sobrando", () => {
+    expect(tipoDoSlot(slotDe("  Maquiagem + GRATIDÃO  "))).toBe(
+      tipoDoSlot(slotDe("maquiagem + gratidao")),
+    );
+  });
+
+  it("tarefas diferentes são tipos diferentes", () => {
+    expect(tipoDoSlot(slotDe("Postar reels"))).not.toBe(tipoDoSlot(slotDe("Treinar")));
+  });
+
+  it("horário com várias tarefas é um tipo só, estável na ordem", () => {
+    expect(tipoDoSlot(slotDe("Postar reels", "Seguir médicos"))).toBe(
+      "postar reels + seguir medicos",
+    );
   });
 });
 

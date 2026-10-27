@@ -7,10 +7,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCoachPerfil, useSalvarCoachPerfil } from "@/hooks/useCoachPerfil";
-import { semanaDoPlano } from "../../../supabase/functions/whatsapp-agenda/logica";
-import { isoLocal } from "@/lib/hoje";
-
-const isoHoje = () => isoLocal(new Date());
 
 /**
  * Ajuste do coach sem publicar função nenhuma: o texto que guia a mensagem
@@ -22,8 +18,6 @@ export function CoachSettings() {
   const [tom, setTom] = useState("");
   const [regras, setRegras] = useState("");
   const [vendas, setVendas] = useState("");
-  const [plano, setPlano] = useState("");
-  const [inicio, setInicio] = useState("");
   const [sujo, setSujo] = useState(false);
 
   useEffect(() => {
@@ -31,11 +25,7 @@ export function CoachSettings() {
     setTom(perfil.tom);
     setRegras(perfil.regras);
     setVendas(perfil.perfil_vendas);
-    setPlano(perfil.plano_evolucao);
-    setInicio(perfil.plano_inicio ?? "");
   }, [perfil, sujo]);
-
-  const semanaAtual = semanaDoPlano(inicio || null, isoHoje());
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-2xl" />;
   if (!perfil) return null;
@@ -101,55 +91,6 @@ export function CoachSettings() {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="coach-plano">Plano de evolução, uma semana por vez</Label>
-        <Textarea
-          id="coach-plano"
-          rows={4}
-          value={plano}
-          onChange={(e) => {
-            setPlano(e.target.value);
-            setSujo(true);
-          }}
-          placeholder="Semana 1 — tema. Semana 2 — tema."
-        />
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Label htmlFor="coach-inicio" className="text-xs font-normal text-muted-foreground">
-            Começou em
-          </Label>
-          <input
-            id="coach-inicio"
-            type="date"
-            value={inicio}
-            onChange={(e) => {
-              setInicio(e.target.value);
-              setSujo(true);
-            }}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
-          />
-          {inicio && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => {
-                setInicio("");
-                setSujo(true);
-              }}
-            >
-              Encerrar plano
-            </Button>
-          )}
-          <span className="text-[11px] text-muted-foreground">
-            {semanaAtual
-              ? `Hoje é a semana ${semanaAtual} de 4.`
-              : inicio
-                ? "As 4 semanas terminaram. O coach parou de cobrar o tema."
-                : "Sem data, o coach não cobra tema de semana."}
-          </span>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
         <Label htmlFor="coach-regras">O que fazer em cada situação</Label>
         <Textarea
           id="coach-regras"
@@ -176,8 +117,6 @@ export function CoachSettings() {
                 tom,
                 regras,
                 perfil_vendas: vendas,
-                plano_evolucao: plano,
-                plano_inicio: inicio || null,
               },
               "Coach atualizado",
             )
@@ -193,9 +132,7 @@ export function CoachSettings() {
               setTom(perfil.tom);
               setRegras(perfil.regras);
               setVendas(perfil.perfil_vendas);
-              setPlano(perfil.plano_evolucao);
-              setInicio(perfil.plano_inicio ?? "");
-              setSujo(false);
+                                  setSujo(false);
             }}
           >
             Descartar

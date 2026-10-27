@@ -172,6 +172,25 @@ export function slotsDaJanela(blocos: Bloco[], janela: Janela): { slots: Slot[];
   return { slots: todos.slice(0, SLOTS_POR_MENSAGEM), restantes: Math.max(0, todos.length - SLOTS_POR_MENSAGEM) };
 }
 
+/**
+ * Rotulo do "tipo de bloco", para a regra de nao repetir frase em 7 dias.
+ *
+ * O tipo e o TITULO normalizado, nao o id do bloco: "Postar reels" de hoje e
+ * "Postar reels" de amanha sao agendamentos diferentes e o mesmo tipo de
+ * tarefa. Comparar por id deixaria a frase se repetir todo dia numa rotina,
+ * que e justamente onde repetir incomoda mais.
+ */
+export function tipoDoSlot(slot: Slot): string {
+  return slot.blocos
+    .map((b) => b.titulo)
+    .join(" + ")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Texto que o coach preencheu para um horario. Campo vazio simplesmente nao sai. */
 export type LinhasDoSlot = {
   primeiroPasso?: string | null;

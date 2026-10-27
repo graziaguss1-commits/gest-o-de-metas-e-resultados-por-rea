@@ -1,4 +1,4 @@
-// PRIORIDADE_DIA_V1
+// PRIORIDADE_DIA_V2
 //
 // Marcador de versao para a publicacao. Cada mudanca que precisa ir ao ar
 // ganha um marcador novo, e o pedido de deploy manda conferir se ele existe
@@ -20,8 +20,10 @@ import {
   prioridadeDoDia,
   slotsDaJanela,
   type Bloco,
+  type LinhasDoSlot,
+  type Slot,
 } from "./logica.ts";
-import { linhasDoCoach } from "./coach.ts";
+import { linhasDoCoach, registrarFrases } from "./coach.ts";
 
 type Db = ReturnType<typeof createServiceClient>;
 type Modo = "diario" | "lembretes";
@@ -158,6 +160,9 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
   const blocos = await blocosDeHoje(db, uid, sp.data);
 
   const pendentes: { tipo: string; referencia: string; texto: string }[] = [];
+  // Frases do coach desta mensagem, guardadas so DEPOIS que ela sai: frase
+  // que nao chegou nao pode bloquear a mesma frase amanha.
+  let frasesParaGuardar: { slots: Slot[]; linhas: Map<string, LinhasDoSlot> } | null = null;
   if (modo === "diario") {
     // Qual das quatro janelas e esta execucao. Fora de qualquer uma delas,
     // nao manda nada: melhor silencio do que a mensagem da manha as 14h.
@@ -188,11 +193,13 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
 
     let texto: string;
     if (doCoach) {
+      const linhas = mesclarLinhas(slots, doCoach);
+      frasesParaGuardar = { slots, linhas };
       texto = montarMensagem({
         janela,
         slots,
         restantes,
-        linhas: mesclarLinhas(slots, doCoach),
+        linhas,
         foco: plano?.foco ?? "",
         minutosPlanejados: minutosPlanejadosDe(blocos),
         capacidadePlanejavel: Math.round(capacidadeDiaria * 0.7),
@@ -263,6 +270,9 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
     await log(db, { user_id: uid, tipo: p.tipo, referencia: p.referencia, destino: cfg.destino, status: erro ? "erro" : "enviado", erro: erro ?? undefined });
     if (erro) return { ...resultado, abortado: "erro_evolution" };
     resultado.enviados++;
+    if (p.tipo === "resumo_diario" && frasesParaGuardar) {
+      await registrarFrases(db, uid, sp.data, frasesParaGuardar.slots, frasesParaGuardar.linhas);
+    }
   }
   return resultado;
 }
