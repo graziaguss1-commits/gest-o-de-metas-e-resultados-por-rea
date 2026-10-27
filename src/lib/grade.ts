@@ -1,11 +1,29 @@
 import { horarioEmMinutos } from "@/lib/agenda";
 import type { BlocoExecucao } from "@/lib/hoje";
 
-/** Altura de uma hora na grade, em pixels. */
-export const PX_POR_HORA = 56;
+/**
+ * Altura de uma hora na grade, em pixels.
+ *
+ * 96px é o número que faz um bloco de 30 min (48px) caber as duas linhas que
+ * ele mostra — título e "horário · área" — sem cortar nenhuma. Com menos que
+ * isso, quase todo bloco batia na altura mínima e a grade parava de
+ * representar a duração real: 20 min e 40 min desenhavam do mesmo tamanho.
+ */
+export const PX_POR_HORA = 96;
 export const PX_POR_MINUTO = PX_POR_HORA / 60;
-/** Altura mínima de um bloco fechado, para o título caber mesmo em bloco de 15 min. */
-export const ALTURA_MINIMA = 30;
+/**
+ * Altura mínima de um bloco fechado. 44px = título (16) + horário (14) +
+ * o padding vertical de 12. Abaixo disso, a segunda linha fica cortada ao meio.
+ */
+export const ALTURA_MINIMA = 44;
+/**
+ * Quanto tempo um bloco curto ocupa NA TELA, em minutos.
+ *
+ * Um bloco de 10 min é desenhado com 44px, que é o espaço de ~27 min. Esses
+ * minutos a mais existem na tela e precisam entrar na conta de sobreposição,
+ * senão o bloco seguinte é desenhado por cima dele.
+ */
+const MINUTOS_MINIMOS = ALTURA_MINIMA / PX_POR_MINUTO;
 
 type ComHorario = Pick<BlocoExecucao, "id" | "inicio" | "fim">;
 
@@ -59,6 +77,11 @@ export function faixaHoras(
  * entra na primeira coluna livre, e todos do grupo dividem a largura por igual.
  * É a mesma regra do Google Agenda, e é o que faz 21:10 e 21:15 aparecerem
  * lado a lado em vez de um por cima do outro.
+ *
+ * A sobreposição é medida pelo espaço OCUPADO NA TELA, não pelo horário puro.
+ * Duas tarefas de 10 min às 08:30 e às 08:40 não se cruzam no relógio, mas
+ * cada uma é desenhada com a altura mínima e invade a faixa da outra. Medindo
+ * em pixels, elas vão para colunas vizinhas em vez de empilhar.
  */
 export function posicionarBlocos<T extends ComHorario>(
   blocos: T[],
@@ -89,15 +112,17 @@ export function posicionarBlocos<T extends ComHorario>(
   ordenados.forEach((bloco) => {
     const inicio = horarioEmMinutos(bloco.inicio);
     const fim = Math.max(horarioEmMinutos(bloco.fim), inicio + 1);
+    // Onde o bloco realmente termina na tela.
+    const fimVisual = Math.max(fim, inicio + MINUTOS_MINIMOS);
 
     if (inicio >= fimDoGrupo) fecharGrupo();
 
     let coluna = fimPorColuna.findIndex((fimDaColuna) => fimDaColuna <= inicio);
     if (coluna === -1) {
       coluna = fimPorColuna.length;
-      fimPorColuna.push(fim);
+      fimPorColuna.push(fimVisual);
     } else {
-      fimPorColuna[coluna] = fim;
+      fimPorColuna[coluna] = fimVisual;
     }
 
     grupo.push({
@@ -107,7 +132,7 @@ export function posicionarBlocos<T extends ComHorario>(
       coluna,
       colunas: 1,
     });
-    fimDoGrupo = Math.max(fimDoGrupo, fim);
+    fimDoGrupo = Math.max(fimDoGrupo, fimVisual);
   });
 
   fecharGrupo();

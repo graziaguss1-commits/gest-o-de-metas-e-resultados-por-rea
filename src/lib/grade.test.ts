@@ -59,6 +59,27 @@ describe("posicionarBlocos", () => {
     expect(posicionados.every((p) => p.colunas === 1)).toBe(true);
   });
 
+  it("separa blocos curtos seguidos, que na tela se encobrem", () => {
+    // 10 min cada: no relógio não se cruzam, mas cada um é desenhado com a
+    // altura mínima, que vale mais que 10 min. Empilhados, o segundo cobria
+    // o primeiro.
+    const posicionados = posicionarBlocos(
+      [bloco("a", "08:30", "08:40"), bloco("b", "08:40", "08:50")],
+      8,
+    );
+    expect(posicionados.map((p) => p.coluna)).toEqual([0, 1]);
+  });
+
+  it("não separa quando a duração real já cobre a altura mínima", () => {
+    const minimoEmMinutos = (ALTURA_MINIMA / PX_POR_HORA) * 60;
+    expect(minimoEmMinutos).toBeLessThanOrEqual(30);
+    const posicionados = posicionarBlocos(
+      [bloco("a", "08:00", "08:30"), bloco("b", "08:30", "09:00")],
+      8,
+    );
+    expect(posicionados.every((p) => p.colunas === 1)).toBe(true);
+  });
+
   it("reaproveita a coluna livre depois que o bloco anterior termina", () => {
     const posicionados = posicionarBlocos(
       [
