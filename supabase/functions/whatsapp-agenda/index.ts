@@ -2,15 +2,19 @@ import { createServiceClient, jsonResponse, optionsResponse } from "../_shared/c
 import {
   agoraEmSaoPaulo,
   blocosParaLembrar,
+  janelaDoMomento,
   LIMITE_DIARIO,
   mascararNumero,
   mensagemDiaria,
   mensagemLembrete,
+  mesclarLinhas,
   minutosDe,
+  montarMensagem,
   prioridadeDoDia,
+  slotsDaJanela,
   type Bloco,
 } from "./logica.ts";
-import { textoDoCoach } from "./coach.ts";
+import { linhasDoCoach } from "./coach.ts";
 
 type Db = ReturnType<typeof createServiceClient>;
 type Modo = "diario" | "lembretes";
@@ -59,7 +63,7 @@ function proximaData(iso: string, recorrencia: string) {
 async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]> {
   const [ag, av, cp, oc] = await Promise.all([
     db.from("tarefa_agendamentos")
-      .select("id, tarefa_id, hora_inicio, duracao_minutos, observacao, plano_tarefas!inner(descricao, responsavel_id)")
+      .select("id, tarefa_id, hora_inicio, duracao_minutos, observacao, plano_tarefas!inner(descricao, responsavel_id, primeiro_passo, versao_minima)")
       .eq("data", hoje)
       .eq("plano_tarefas.responsavel_id", uid),
     db.from("acoes_avulsas").select("id, descricao, hora_inicio, duracao_minutos, concluida")
@@ -85,8 +89,21 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
     const chave = `${a.tarefa_id}|${a.hora_inicio.slice(0, 5)}`;
     if (vistos.has(chave)) continue;
     vistos.add(chave);
-    const tarefa = a.plano_tarefas as unknown as { descricao: string };
-    blocos.push({ ref: `ag:${a.id}`, titulo: tarefa.descricao, inicio: a.hora_inicio.slice(0, 5), tarefaId: a.tarefa_id, concluido: feitos.has(a.id), duracaoMinutos: Number(a.duracao_minutos ?? 30) });
+    const tarefa = a.plano_tarefas as unknown as {
+      descricao: string;
+      primeiro_passo: string | null;
+      versao_minima: string | null;
+    };
+    blocos.push({
+      ref: `ag:${a.id}`,
+      titulo: tarefa.descricao,
+      inicio: a.hora_inicio.slice(0, 5),
+      tarefaId: a.tarefa_id,
+      concluido: feitos.has(a.id),
+      duracaoMinutos: Number(a.duracao_minutos ?? 30),
+      primeiroPasso: tarefa.primeiro_passo,
+      versaoMinima: tarefa.versao_minima,
+    });
   }
   for (const a of av.data ?? []) {
     blocos.push({ ref: `av:${a.id}`, titulo: a.descricao, inicio: String(a.hora_inicio).slice(0, 5), tarefaId: a.id, concluido: a.concluida, duracaoMinutos: Number(a.duracao_minutos ?? 30) });
@@ -132,24 +149,60 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
 
   const pendentes: { tipo: string; referencia: string; texto: string }[] = [];
   if (modo === "diario") {
-    const primeiro = blocos.find((b) => !b.concluido) ?? null;
-    const prioridade = prioridadeDoDia(blocos, topIds);
-    const fixo = mensagemDiaria(plano?.foco ?? "", prioridade, primeiro);
-    // Coach desligado, sem chave ou qualquer falha: segue o texto fixo. A
-    // mensagem das 7:30 nao pode deixar de sair porque a IA falhou.
+    // Qual das quatro janelas e esta execucao. Fora de qualquer uma delas,
+    // nao manda nada: melhor silencio do que a mensagem da manha as 14h.
+    const janela = janelaDoMomento(sp.minutos);
+    if (!janela) return { enviados: 0, ignorados: 0, abortado: "fora_de_janela" };
+
+    const { slots, restantes } = slotsDaJanela(blocos, janela);
+    // Janela do meio sem nada pela frente nao vira mensagem. Mensagem vazia
+    // de hora em hora vira papel de parede e ela para de ler.
+    if (!janela.abreODia && !slots.length) {
+      return { enviados: 0, ignorados: 0, abortado: "janela_vazia" };
+    }
+
     const { data: cfgCap } = await db.from("app_settings")
       .select("capacidade_diaria_minutos").eq("id", 1).maybeSingle();
     const capacidadeDiaria = Number(cfgCap?.capacidade_diaria_minutos ?? 480);
-    const doCoach = await textoDoCoach(db, uid, {
+
+    const doCoach = await linhasDoCoach(db, uid, {
       data: sp.data,
+      janela,
       foco: plano?.foco ?? "",
-      blocos,
-      prioridade,
-      primeiro,
+      slots,
+      restantes,
+      concluidos: blocos.filter((b) => b.concluido).map((b) => b.titulo),
       minutosPlanejados: minutosPlanejadosDe(blocos),
       capacidadePlanejavel: Math.round(capacidadeDiaria * 0.7),
     });
-    pendentes.push({ tipo: "resumo_diario", referencia: "dia", texto: doCoach ?? fixo });
+
+    let texto: string;
+    if (doCoach) {
+      texto = montarMensagem({
+        janela,
+        slots,
+        restantes,
+        linhas: mesclarLinhas(slots, doCoach),
+        foco: plano?.foco ?? "",
+        minutosPlanejados: minutosPlanejadosDe(blocos),
+        capacidadePlanejavel: Math.round(capacidadeDiaria * 0.7),
+      });
+    } else if (janela.abreODia) {
+      // Coach desligado, sem chave ou qualquer falha: segue o texto fixo. A
+      // mensagem das 7:30 nao pode deixar de sair porque a IA falhou.
+      const primeiro = blocos.find((b) => !b.concluido) ?? null;
+      texto = mensagemDiaria(plano?.foco ?? "", prioridadeDoDia(blocos, topIds), primeiro);
+    } else {
+      // Sem coach nao existe mensagem do meio do dia: desligar o coach
+      // devolve exatamente o comportamento antigo, uma mensagem por dia.
+      return { enviados: 0, ignorados: 0, abortado: "sem_coach" };
+    }
+
+    pendentes.push({
+      tipo: "resumo_diario",
+      referencia: janela.abreODia ? "dia" : janela.id,
+      texto,
+    });
   } else {
     for (const b of blocosParaLembrar(blocos, topIds, sp.minutos)) {
       pendentes.push({ tipo: "lembrete_bloco", referencia: `${b.ref}|${b.inicio}`, texto: mensagemLembrete(b) });
