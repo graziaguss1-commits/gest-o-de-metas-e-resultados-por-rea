@@ -199,9 +199,10 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
               : null,
           data_fim: t.frequencia !== "unica" ? t.prazo || null : null,
           frequencia: t.frequencia,
-          quantidade_planejada: Number(t.quantidade.replace(",", ".")) || 1,
+          quantidade_planejada:
+            t.frequencia === "unica" ? 1 : Number(t.quantidade.replace(",", ".")) || 1,
           execucoes_planejadas: t.execucoes,
-          unidade: t.unidade,
+          unidade: t.frequencia === "unica" ? "" : t.unidade.trim(),
           impacto: t.impacto,
           esforco: t.esforco,
           responsavel_id: t.responsavelId || null,
@@ -361,20 +362,24 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input
-                    type="number"
-                    min={1}
-                    className="w-[80px]"
-                    value={t.quantidade}
-                    onChange={(e) => patch(i, { quantidade: e.target.value })}
-                    aria-label="Quantidade planejada"
-                  />
-                  <Input
-                    className="flex-1 min-w-[150px]"
-                    value={t.unidade}
-                    onChange={(e) => patch(i, { unidade: e.target.value })}
-                    placeholder="pessoas prospectadas, Reels, reuniões…"
-                  />
+                  {t.frequencia !== "unica" && (
+                    <>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="w-[80px]"
+                        value={t.quantidade}
+                        onChange={(e) => patch(i, { quantidade: e.target.value })}
+                        aria-label="Quantidade planejada"
+                      />
+                      <Input
+                        className="flex-1 min-w-[150px]"
+                        value={t.unidade}
+                        onChange={(e) => patch(i, { unidade: e.target.value })}
+                        placeholder="pessoas prospectadas, Reels, reuniões…"
+                      />
+                    </>
+                  )}
                   <label className="min-w-[150px] flex-1 text-[10px] font-semibold text-muted-foreground">
                     {t.frequencia === "unica"
                       ? "Prazo"

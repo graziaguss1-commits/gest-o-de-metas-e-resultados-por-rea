@@ -150,9 +150,9 @@ export function EditarTarefaModal({
         id: tarefa.id,
         descricao: form.descricao.trim(),
         frequencia: form.frequencia,
-        quantidade_planejada: Number(form.quantidade.replace(",", ".")) || 1,
+        quantidade_planejada: recorrente ? Number(form.quantidade.replace(",", ".")) || 1 : 1,
         execucoes_planejadas: form.execucoes,
-        unidade: form.unidade.trim(),
+        unidade: recorrente ? form.unidade.trim() : "",
         prazo: form.frequencia === "unica" ? form.prazo || null : null,
         data_inicio:
           form.frequencia === "unica" ? null : form.dataInicio || todayISO(),
@@ -234,25 +234,32 @@ export function EditarTarefaModal({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Quantidade planejada</Label>
-              <Input
-                type="number"
-                min={1}
-                value={form.quantidade}
-                onChange={(event) => patch({ quantidade: event.target.value })}
-              />
-            </div>
+            {/* Única não tem quantidade: ou foi feita, ou não foi. O campo só
+                    abria espaço para digitar algo errado na unidade ao lado —
+                    foi assim que "0 de 1" virou "0 de 11". */}
+            {recorrente && (
+              <div className="space-y-1.5">
+                <Label>Quantidade planejada</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.quantidade}
+                  onChange={(event) => patch({ quantidade: event.target.value })}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Unidade de acompanhamento</Label>
-            <Input
-              value={form.unidade}
-              onChange={(event) => patch({ unidade: event.target.value })}
-              placeholder="Ex.: pessoas prospectadas, Reels, reuniões"
-            />
-          </div>
+          {recorrente && (
+            <div className="space-y-1.5">
+              <Label>Unidade de acompanhamento</Label>
+              <Input
+                value={form.unidade}
+                onChange={(event) => patch({ unidade: event.target.value })}
+                placeholder="Ex.: pessoas prospectadas, Reels, reuniões"
+              />
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             {recorrente && (

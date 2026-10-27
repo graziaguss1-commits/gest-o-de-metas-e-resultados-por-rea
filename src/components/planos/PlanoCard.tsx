@@ -145,9 +145,10 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         data_inicio: nova.frequencia !== "unica" ? todayISO() : null,
         data_fim: nova.frequencia !== "unica" ? nova.prazo || null : null,
         frequencia: nova.frequencia,
-        quantidade_planejada: Number(nova.quantidade.replace(",", ".")) || 1,
+        quantidade_planejada:
+          nova.frequencia === "unica" ? 1 : Number(nova.quantidade.replace(",", ".")) || 1,
         execucoes_planejadas: nova.execucoes,
-        unidade: nova.unidade,
+        unidade: nova.frequencia === "unica" ? "" : nova.unidade.trim(),
         impacto: nova.impacto,
         esforco: nova.esforco,
         responsavel_id: responsavelId,
@@ -349,20 +350,24 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              type="number"
-              min={1}
-              value={nova.quantidade}
-              onChange={(e) => setNova({ ...nova, quantidade: e.target.value })}
-              className="h-8 w-[80px]"
-              aria-label="Quantidade planejada"
-            />
-            <Input
-              value={nova.unidade}
-              onChange={(e) => setNova({ ...nova, unidade: e.target.value })}
-              placeholder="pessoas prospectadas"
-              className="h-8 flex-1 min-w-[140px]"
-            />
+            {nova.frequencia !== "unica" && (
+              <>
+                <Input
+                  type="number"
+                  min={1}
+                  value={nova.quantidade}
+                  onChange={(e) => setNova({ ...nova, quantidade: e.target.value })}
+                  className="h-8 w-[80px]"
+                  aria-label="Quantidade planejada"
+                />
+                <Input
+                  value={nova.unidade}
+                  onChange={(e) => setNova({ ...nova, unidade: e.target.value })}
+                  placeholder="pessoas prospectadas"
+                  className="h-8 flex-1 min-w-[140px]"
+                />
+              </>
+            )}
             <Input
               type="date"
               value={nova.prazo}
