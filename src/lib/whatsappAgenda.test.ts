@@ -299,7 +299,7 @@ describe("montarMensagem", () => {
   });
 
   it("o bloco que passou aparece como pendência, não como compromisso", () => {
-    const atrasado = slotsDaJanela([b("07:50", "Recurso 1", 5)], JANELAS[3], 18 * 60 + 30).atrasados;
+    const atrasado = slotsDaJanela([b("07:50", "Recurso 1", { duracaoMinutos: 5 })], JANELAS[3], 18 * 60 + 30).atrasados;
     const txt = montarMensagem({
       janela: JANELAS[3],
       slots: [],
