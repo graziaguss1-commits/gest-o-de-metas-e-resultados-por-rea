@@ -973,6 +973,9 @@ export type Database = {
           plano_id: string
           prazo: string | null
           primeiro_passo: string | null
+          dia_semana_mensal: number | null
+          recorrencia_mensal: string
+          semana_do_mes: number | null
           quantidade_planejada: number
           responsavel_id: string | null
           unidade: string
@@ -996,6 +999,9 @@ export type Database = {
           plano_id: string
           prazo?: string | null
           primeiro_passo?: string | null
+          dia_semana_mensal?: number | null
+          recorrencia_mensal?: string
+          semana_do_mes?: number | null
           quantidade_planejada?: number
           responsavel_id?: string | null
           unidade?: string
@@ -1019,6 +1025,9 @@ export type Database = {
           plano_id?: string
           prazo?: string | null
           primeiro_passo?: string | null
+          dia_semana_mensal?: number | null
+          recorrencia_mensal?: string
+          semana_do_mes?: number | null
           quantidade_planejada?: number
           responsavel_id?: string | null
           unidade?: string

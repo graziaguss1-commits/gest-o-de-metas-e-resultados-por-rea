@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2, ExternalLink, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
+import type { RecorrenciaMensal } from "@/lib/agenda";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -100,6 +101,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
     duracao: null as number | null,
     horario: "",
     dias: null as number[] | null,
+    mensal: { recorrencia_mensal: "dia_do_mes", semana_do_mes: null, dia_semana_mensal: null } as RecorrenciaMensal,
     responsavelId: user?.id ?? "",
   });
 
@@ -164,6 +166,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         duracao: null,
         horario: "",
         dias: null,
+        mensal: { recorrencia_mensal: "dia_do_mes", semana_do_mes: null, dia_semana_mensal: null },
         responsavelId: responsavelPadrao,
       });
       setAdding(false);
@@ -380,6 +383,8 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
             onExecucoesChange={(execucoes) => setNova({ ...nova, execucoes })}
             onHorarioChange={(horario) => setNova({ ...nova, horario })}
             onDiasChange={(dias) => setNova({ ...nova, dias })}
+            mensal={nova.mensal}
+            onMensalChange={(mensal) => setNova({ ...nova, mensal })}
             compact
           />
           <div className="flex gap-2">

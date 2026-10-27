@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import type { RecorrenciaMensal } from "@/lib/agenda";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,7 @@ type LinhaTarefa = {
   duracao: number | null;
   horario: string;
   dias: number[] | null;
+  mensal: RecorrenciaMensal;
   responsavelId: string;
   primeiroPasso: string;
   versaoMinima: string;
@@ -67,6 +69,7 @@ const linhaVazia = (responsavelId = ""): LinhaTarefa => ({
   duracao: null,
   horario: "",
   dias: null,
+  mensal: { recorrencia_mensal: "dia_do_mes", semana_do_mes: null, dia_semana_mensal: null },
   responsavelId,
   primeiroPasso: "",
   versaoMinima: "",
@@ -204,6 +207,9 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           duracao_minutos: t.duracao,
           horario_preferencial: t.horario || null,
           dias_semana: t.frequencia !== "unica" ? t.dias : null,
+          recorrencia_mensal: t.mensal.recorrencia_mensal ?? "dia_do_mes",
+          semana_do_mes: t.mensal.semana_do_mes ?? null,
+          dia_semana_mensal: t.mensal.dia_semana_mensal ?? null,
           primeiro_passo: t.primeiroPasso.trim() || null,
           versao_minima: t.versaoMinima.trim() || null,
         })),
@@ -390,6 +396,8 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
                   onExecucoesChange={(execucoes) => patch(i, { execucoes })}
                   onHorarioChange={(horario) => patch(i, { horario })}
                   onDiasChange={(dias) => patch(i, { dias })}
+                  mensal={t.mensal}
+                  onMensalChange={(mensal) => patch(i, { mensal })}
                   compact
                 />
                 <p className="text-[11px] text-muted-foreground">

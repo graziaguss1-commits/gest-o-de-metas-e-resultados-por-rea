@@ -28,6 +28,7 @@ import {
   getFrequencia,
   type Frequencia,
 } from "@/lib/execucao";
+import type { RecorrenciaMensal } from "@/lib/agenda";
 import {
   configuracaoRecorrenciaCompleta,
   diasSemanaisCompletos,
@@ -53,6 +54,7 @@ type FormState = {
   duracao: number | null;
   horario: string;
   dias: number[] | null;
+  mensal: RecorrenciaMensal;
   impacto: number;
   esforco: number;
   responsavelId: string;
@@ -74,6 +76,11 @@ const estadoDaTarefa = (tarefa: Tarefa): FormState => {
     duracao: tarefa.duracao_minutos ?? null,
     horario: tarefa.horario_preferencial?.slice(0, 5) ?? "",
     dias: diasRecorrenciaPersistida(frequencia, tarefa.dias_semana),
+    mensal: {
+      recorrencia_mensal: tarefa.recorrencia_mensal ?? "dia_do_mes",
+      semana_do_mes: tarefa.semana_do_mes ?? null,
+      dia_semana_mensal: tarefa.dia_semana_mensal ?? null,
+    },
     impacto: tarefa.impacto ?? 5,
     esforco: tarefa.esforco ?? 5,
     responsavelId: tarefa.responsavel_id ?? "",
@@ -117,6 +124,7 @@ export function EditarTarefaModal({
         form.duracao,
         form.horario,
         form.dias,
+        form.mensal,
       )
     ) {
       return toast.error("Defina o dia, o horário e a duração da rotina.");
@@ -152,6 +160,9 @@ export function EditarTarefaModal({
         duracao_minutos: form.duracao,
         horario_preferencial: form.horario || null,
         dias_semana: form.frequencia !== "unica" ? form.dias : null,
+        recorrencia_mensal: form.mensal.recorrencia_mensal ?? "dia_do_mes",
+        semana_do_mes: form.mensal.semana_do_mes ?? null,
+        dia_semana_mensal: form.mensal.dia_semana_mensal ?? null,
         impacto: form.impacto,
         esforco: form.esforco,
         responsavel_id: form.responsavelId,
@@ -281,6 +292,8 @@ export function EditarTarefaModal({
             onExecucoesChange={(execucoes) => patch({ execucoes })}
             onHorarioChange={(horario) => patch({ horario })}
             onDiasChange={(dias) => patch({ dias })}
+            mensal={form.mensal}
+            onMensalChange={(mensal) => patch({ mensal })}
           />
 
           <div className="space-y-1.5">

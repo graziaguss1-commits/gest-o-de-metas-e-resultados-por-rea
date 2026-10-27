@@ -566,13 +566,16 @@ export function useUpdateTarefa() {
       duracao_minutos?: number | null;
       horario_preferencial?: string | null;
       dias_semana?: number[] | null;
+      recorrencia_mensal?: string | null;
+      semana_do_mes?: number | null;
+      dia_semana_mensal?: number | null;
       primeiro_passo?: string | null;
       versao_minima?: string | null;
     }) => {
       const { data: anterior, error: readError } = await supabase
         .from("plano_tarefas")
         .select(
-          "frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana,responsavel_id",
+          "frequencia,data_inicio,data_fim,duracao_minutos,horario_preferencial,dias_semana,responsavel_id,recorrencia_mensal,semana_do_mes,dia_semana_mensal",
         )
         .eq("id", id)
         .single();
@@ -593,7 +596,16 @@ export function useUpdateTarefa() {
           patch.duracao_minutos !== anterior.duracao_minutos) ||
         (patch.horario_preferencial !== undefined &&
           horaNova !== horaAnterior) ||
-        (patch.dias_semana !== undefined && diasNovos !== diasAnteriores);
+        (patch.dias_semana !== undefined && diasNovos !== diasAnteriores) ||
+        // Trocar "todo dia 10" por "toda primeira sexta" muda as datas sem
+        // mexer em nenhum dos campos acima. Sem estas três comparações a
+        // regra nova ficaria salva e a agenda continuaria com as datas velhas.
+        (patch.recorrencia_mensal !== undefined &&
+          patch.recorrencia_mensal !== anterior.recorrencia_mensal) ||
+        (patch.semana_do_mes !== undefined &&
+          patch.semana_do_mes !== anterior.semana_do_mes) ||
+        (patch.dia_semana_mensal !== undefined &&
+          patch.dia_semana_mensal !== anterior.dia_semana_mensal);
       const responsavelMudou =
         patch.responsavel_id !== undefined &&
         patch.responsavel_id !== anterior.responsavel_id;

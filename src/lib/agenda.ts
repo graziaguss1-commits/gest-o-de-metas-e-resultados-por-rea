@@ -268,12 +268,15 @@ export function configuracaoRecorrenciaCompleta(
   duracaoMinutos?: number | null,
   horarioPreferencial?: string | null,
   dias?: number[] | null,
+  mensal?: RecorrenciaMensal | null,
 ): boolean {
   if (!["diaria", "semanal", "mensal"].includes(frequencia ?? "")) return true;
   if (!duracaoMinutos || duracaoMinutos <= 0 || !horarioPreferencial)
     return false;
 
-  if (frequencia === "mensal") return diaMesRecorrencia(dias) != null;
+  if (frequencia === "mensal") {
+    return mensalPorDiaDaSemana(mensal) || diaMesRecorrencia(dias) != null;
+  }
 
   const diasValidos = (dias ?? []).filter(
     (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 7,
@@ -301,13 +304,47 @@ export function diasSemanaisCompletos(
   return quantidade <= 7 ? diasValidos === quantidade : diasValidos > 0;
 }
 
+/**
+ * Como a rotina mensal se repete.
+ *
+ * `dia_do_mes` fixa o número do dia (DRE todo dia 10). `dia_da_semana` fixa a
+ * posição no mês (primeira sexta), que é a regra de tudo que acontece por
+ * agenda de gente — aula, reunião, fechamento. Dia 10 cai num dia da semana
+ * diferente a cada mês, então uma não substitui a outra.
+ */
+export type RecorrenciaMensal = {
+  recorrencia_mensal?: string | null;
+  /** 1 a 5, ou -1 para "última". */
+  semana_do_mes?: number | null;
+  /** 1 (segunda) a 7 (domingo), na mesma convenção de diaISO. */
+  dia_semana_mensal?: number | null;
+};
+
+export const mensalPorDiaDaSemana = (t?: RecorrenciaMensal | null) =>
+  t?.recorrencia_mensal === "dia_da_semana" &&
+  Number.isInteger(t?.semana_do_mes) &&
+  Number.isInteger(t?.dia_semana_mensal);
+
 /** Verifica se uma data pertence ao padrão diário, semanal ou mensal configurado. */
 export function dataCorrespondeRecorrencia(
   frequencia: string,
   date: Date,
   dias?: number[] | null,
+  mensal?: RecorrenciaMensal | null,
 ): boolean {
   if (frequencia === "mensal") {
+    if (mensalPorDiaDaSemana(mensal)) {
+      if (diaISO(date) !== mensal!.dia_semana_mensal) return false;
+      const ultimoDia = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const ordinal = Math.ceil(date.getDate() / 7);
+      const ehUltima = date.getDate() + 7 > ultimoDia;
+      // "Última" nunca é o número 5: um mês com 4 sextas pularia o mês todo.
+      return mensal!.semana_do_mes === -1
+        ? ehUltima
+        : ordinal === mensal!.semana_do_mes ||
+          // 5ª pedida em mês que só tem 4 cai na última, em vez de sumir.
+          (mensal!.semana_do_mes === 5 && ehUltima && ordinal === 4);
+    }
     const diaDesejado = diaMesRecorrencia(dias);
     if (!diaDesejado) return false;
     const ultimoDia = new Date(
@@ -375,11 +412,25 @@ export function execucoesEsperadasNaSemana(
 }
 
 /** Rótulo gerencial do momento escolhido: "Toda terça" ou "Todo dia 10". */
+const ORDINAIS_MES: Record<number, string> = {
+  1: "primeira", 2: "segunda", 3: "terceira", 4: "quarta", 5: "quinta", [-1]: "última",
+};
+const NOMES_DIA = [
+  "", "segunda-feira", "terça-feira", "quarta-feira",
+  "quinta-feira", "sexta-feira", "sábado", "domingo",
+];
+
 export function labelMomentoRecorrencia(
   frequencia?: string | null,
   dias?: number[] | null,
+  mensal?: RecorrenciaMensal | null,
 ): string | null {
   if (frequencia === "mensal") {
+    if (mensalPorDiaDaSemana(mensal)) {
+      const ordinal = ORDINAIS_MES[mensal!.semana_do_mes!];
+      const nome = NOMES_DIA[mensal!.dia_semana_mensal!];
+      return ordinal && nome ? `Toda ${ordinal} ${nome} do mês` : null;
+    }
     const dia = diaMesRecorrencia(dias);
     if (!dia) return null;
     return `Todo dia ${dia}${dia > 28 ? " (ou no último dia)" : ""}`;

@@ -207,3 +207,49 @@ describe("recorrências da agenda", () => {
     ).toBe(7);
   });
 });
+
+describe("recorrência mensal por dia da semana", () => {
+  const regra = (semana: number, dia: number) => ({
+    recorrencia_mensal: "dia_da_semana",
+    semana_do_mes: semana,
+    dia_semana_mensal: dia,
+  });
+  // Outubro/2026: sextas em 2, 9, 16, 23 e 30. Novembro: 6, 13, 20 e 27.
+  const bate = (iso: string, m: Parameters<typeof dataCorrespondeRecorrencia>[3]) =>
+    dataCorrespondeRecorrencia("mensal", new Date(`${iso}T12:00:00`), null, m);
+
+  it("pega a primeira sexta de cada mês", () => {
+    expect(bate("2026-10-02", regra(1, 5))).toBe(true);
+    expect(bate("2026-11-06", regra(1, 5))).toBe(true);
+    expect(bate("2026-10-09", regra(1, 5))).toBe(false);
+  });
+
+  it("'última' acompanha o mês ter 4 ou 5 sextas", () => {
+    expect(bate("2026-10-30", regra(-1, 5))).toBe(true);
+    expect(bate("2026-11-27", regra(-1, 5))).toBe(true);
+    expect(bate("2026-11-20", regra(-1, 5))).toBe(false);
+  });
+
+  it("a quinta ocorrência cai na quarta quando o mês não tem cinco", () => {
+    // Sem isso, pedir "quinta sexta" sumiria com o mês inteiro de novembro.
+    expect(bate("2026-11-27", regra(5, 5))).toBe(true);
+  });
+
+  it("não confunde com outro dia da semana", () => {
+    expect(bate("2026-10-01", regra(1, 5))).toBe(false);
+  });
+
+  it("sem a regra nova, continua valendo o dia do mês", () => {
+    expect(dataCorrespondeRecorrencia("mensal", new Date(2026, 9, 10), [10])).toBe(true);
+    expect(dataCorrespondeRecorrencia("mensal", new Date(2026, 9, 11), [10])).toBe(false);
+  });
+
+  it("o rótulo diz a regra em português", () => {
+    expect(labelMomentoRecorrencia("mensal", null, regra(1, 5))).toBe(
+      "Toda primeira sexta-feira do mês",
+    );
+    expect(labelMomentoRecorrencia("mensal", null, regra(-1, 5))).toBe(
+      "Toda última sexta-feira do mês",
+    );
+  });
+});

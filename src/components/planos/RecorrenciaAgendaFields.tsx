@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DiasSemanaPicker } from "@/components/planos/DiasSemanaPicker";
@@ -11,6 +12,7 @@ import {
   horaFim,
   labelMomentoRecorrencia,
 } from "@/lib/agenda";
+import type { RecorrenciaMensal } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -23,8 +25,29 @@ type Props = {
   onExecucoesChange: (execucoes: number) => void;
   onHorarioChange: (horario: string) => void;
   onDiasChange: (dias: number[] | null) => void;
+  /** Regra da mensal: por dia do mês ou por posição no mês. */
+  mensal?: RecorrenciaMensal | null;
+  onMensalChange?: (mensal: RecorrenciaMensal) => void;
   compact?: boolean;
 };
+
+const SEMANAS = [
+  { valor: 1, label: "primeira" },
+  { valor: 2, label: "segunda" },
+  { valor: 3, label: "terceira" },
+  { valor: 4, label: "quarta" },
+  { valor: -1, label: "última" },
+];
+
+const DIAS_SEMANA = [
+  { valor: 1, label: "segunda-feira" },
+  { valor: 2, label: "terça-feira" },
+  { valor: 3, label: "quarta-feira" },
+  { valor: 4, label: "quinta-feira" },
+  { valor: 5, label: "sexta-feira" },
+  { valor: 6, label: "sábado" },
+  { valor: 7, label: "domingo" },
+];
 
 export function RecorrenciaAgendaFields({
   frequencia,
@@ -36,8 +59,11 @@ export function RecorrenciaAgendaFields({
   onExecucoesChange,
   onHorarioChange,
   onDiasChange,
+  mensal,
+  onMensalChange,
   compact = false,
 }: Props) {
+  const porDiaDaSemana = mensal?.recorrencia_mensal === "dia_da_semana";
   const fieldId = useId();
   const [execucoesDraft, setExecucoesDraft] = useState(String(execucoes));
   const recorrente = frequencia !== "unica";
@@ -47,6 +73,7 @@ export function RecorrenciaAgendaFields({
       duracao,
       horario,
       dias,
+      mensal,
     ) && diasSemanaisCompletos(frequencia, execucoes, dias);
   const momento = labelMomentoRecorrencia(frequencia, dias);
   const periodoExecucao =
@@ -173,30 +200,112 @@ export function RecorrenciaAgendaFields({
           )}
 
           {frequencia === "mensal" && (
-            <div className="space-y-1.5">
-              <Label htmlFor={`dia-mes-recorrencia-${fieldId}`}>
-                Dia do mês *
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={`dia-mes-recorrencia-${fieldId}`}
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={dias?.[0] ?? ""}
-                  onChange={(event) => alterarDiaMes(event.target.value)}
-                  placeholder="Ex.: 10"
-                  className="w-[120px]"
-                />
-                <span className="text-xs text-muted-foreground">
-                  Ex.: avaliar DRE todo dia 10
-                </span>
+            <div className="space-y-2">
+              {/* Dia 10 cai num dia da semana diferente a cada mês. Para
+                  "toda primeira sexta" não existe número de dia que sirva,
+                  então a escolha precisa ser explícita. */}
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={porDiaDaSemana ? "outline" : "default"}
+                  className="h-8 px-3 text-xs"
+                  onClick={() =>
+                    onMensalChange?.({ ...mensal, recorrencia_mensal: "dia_do_mes" })
+                  }
+                >
+                  Em um dia do mês
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={porDiaDaSemana ? "default" : "outline"}
+                  className="h-8 px-3 text-xs"
+                  onClick={() =>
+                    onMensalChange?.({
+                      recorrencia_mensal: "dia_da_semana",
+                      semana_do_mes: mensal?.semana_do_mes ?? 1,
+                      dia_semana_mensal: mensal?.dia_semana_mensal ?? 5,
+                    })
+                  }
+                >
+                  Em um dia da semana
+                </Button>
               </div>
-              {(dias?.[0] ?? 0) > 28 && (
-                <p className="text-[11px] text-muted-foreground">
-                  Em meses mais curtos, a rotina será agendada no último dia do
-                  mês.
-                </p>
+
+              {porDiaDaSemana ? (
+                <div className="space-y-1.5">
+                  <Label>Qual dia da semana *</Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      aria-label="Semana do mês"
+                      value={String(mensal?.semana_do_mes ?? 1)}
+                      onChange={(e) =>
+                        onMensalChange?.({
+                          ...mensal,
+                          recorrencia_mensal: "dia_da_semana",
+                          semana_do_mes: Number(e.target.value),
+                        })
+                      }
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                    >
+                      {SEMANAS.map((s) => (
+                        <option key={s.valor} value={s.valor}>{s.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Dia da semana"
+                      value={String(mensal?.dia_semana_mensal ?? 5)}
+                      onChange={(e) =>
+                        onMensalChange?.({
+                          ...mensal,
+                          recorrencia_mensal: "dia_da_semana",
+                          dia_semana_mensal: Number(e.target.value),
+                        })
+                      }
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                    >
+                      {DIAS_SEMANA.map((d) => (
+                        <option key={d.valor} value={d.valor}>{d.label}</option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-muted-foreground">
+                      Ex.: toda primeira sexta do mês
+                    </span>
+                  </div>
+                  {mensal?.semana_do_mes === 5 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Em meses sem a quinta ocorrência, a rotina cai na última.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor={`dia-mes-recorrencia-${fieldId}`}>
+                    Dia do mês *
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id={`dia-mes-recorrencia-${fieldId}`}
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={dias?.[0] ?? ""}
+                      onChange={(event) => alterarDiaMes(event.target.value)}
+                      placeholder="Ex.: 10"
+                      className="w-[120px]"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      Ex.: avaliar DRE todo dia 10
+                    </span>
+                  </div>
+                  {(dias?.[0] ?? 0) > 28 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Em meses mais curtos, a rotina será agendada no último dia
+                      do mês.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

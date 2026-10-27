@@ -289,6 +289,7 @@ export function useMaterializarRecorrencias() {
             t.duracao_minutos,
             t.horario_preferencial,
             dias,
+            t,
           )
         ) {
           return [];
@@ -306,7 +307,7 @@ export function useMaterializarRecorrencias() {
 
             const date = new Date(`${data}T12:00:00`);
             return (
-              dataCorrespondeRecorrencia(t.frequencia, date, dias) &&
+              dataCorrespondeRecorrencia(t.frequencia, date, dias, t) &&
               !chaves.has(`${t.id}|${data}`)
             );
           })
