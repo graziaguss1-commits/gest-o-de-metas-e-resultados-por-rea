@@ -174,6 +174,32 @@ describe("slotsDaJanela", () => {
     expect(slots.map((s) => s.inicio)).toEqual(["08:00"]);
   });
 
+  it("separa o que já passou do que ainda vem", () => {
+    // Às 18:30, "07:50" não pode ser anunciado como compromisso por vir.
+    const { slots, atrasados } = slotsDaJanela(
+      [b("07:50", "Recurso 1"), b("19:15", "Abraço")],
+      JANELAS[3],
+      18 * 60 + 30,
+    );
+    expect(slots.map((s) => s.inicio)).toEqual(["19:15"]);
+    expect(atrasados.map((s) => s.inicio)).toEqual(["07:50"]);
+  });
+
+  it("lembra no máximo dois atrasados, e os mais recentes", () => {
+    const { atrasados } = slotsDaJanela(
+      [b("06:00", "a"), b("08:00", "b"), b("10:00", "c")],
+      JANELAS[3],
+      18 * 60 + 30,
+    );
+    expect(atrasados.map((s) => s.inicio)).toEqual(["08:00", "10:00"]);
+  });
+
+  it("sem hora de referência nada é considerado atrasado", () => {
+    const { slots, atrasados } = slotsDaJanela([b("08:00", "Mural")], meioDia);
+    expect(slots).toHaveLength(1);
+    expect(atrasados).toHaveLength(0);
+  });
+
   it("corta em três horários e conta o resto", () => {
     const { slots, restantes } = slotsDaJanela(
       [b("07:00", "a"), b("08:00", "b"), b("09:00", "c"), b("10:00", "d"), b("11:00", "e")],
@@ -270,6 +296,21 @@ describe("montarMensagem", () => {
     const txt = montarMensagem({ ...base, janela: manha, linhas: new Map([["07:50", { frase: "só isso" }]]), foco: "x" });
     expect(txt).not.toContain("Primeiro passo");
     expect(txt).toContain("💭 só isso");
+  });
+
+  it("o bloco que passou aparece como pendência, não como compromisso", () => {
+    const atrasado = slotsDaJanela([b("07:50", "Recurso 1", 5)], JANELAS[3], 18 * 60 + 30).atrasados;
+    const txt = montarMensagem({
+      janela: JANELAS[3],
+      slots: [],
+      atrasados: atrasado,
+      restantes: 0,
+      linhas: new Map(),
+    });
+    expect(txt).toContain("Ficou para trás");
+    expect(txt).toContain("⏳ 07:50");
+    expect(txt).toContain("passou");
+    expect(txt).not.toContain("⏰ 07:50");
   });
 
   it("a janela do meio não repete foco nem carga", () => {

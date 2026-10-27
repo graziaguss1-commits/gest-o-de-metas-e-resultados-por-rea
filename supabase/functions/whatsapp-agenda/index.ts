@@ -1,4 +1,4 @@
-// PRIORIDADE_DIA_V3
+// PRIORIDADE_DIA_V4
 //
 // Marcador de versao para a publicacao. Cada mudanca que precisa ir ao ar
 // ganha um marcador novo, e o pedido de deploy manda conferir se ele existe
@@ -177,7 +177,14 @@ async function motivosRegistrados(db: Db, uid: string, hoje: string, blocos: Blo
     referencia: string; data: string; motivo: string; observacao: string | null;
   }[];
 
+  // Titulo de cada referencia, inclusive de blocos que nao estao no dia de
+  // hoje. Sem isso so restava a contagem global, e um total de "adiei"
+  // somado de todos os blocos vira, na mao do modelo, "voce adiou ISSO 9
+  // vezes" — numero certo, tarefa errada.
   const porRef = new Map(blocos.map((b) => [b.ref, b.titulo]));
+  const faltando = linhas.map((l) => l.referencia).filter((r) => !porRef.has(r));
+  await resolverTitulos(db, faltando, porRef);
+
   const motivosDeHoje = linhas
     .filter((l) => l.data === hoje && porRef.has(l.referencia))
     .map((l) => ({
@@ -186,15 +193,59 @@ async function motivosRegistrados(db: Db, uid: string, hoje: string, blocos: Blo
       observacao: l.observacao,
     }));
 
-  // Historico vira contagem: o titulo do bloco de 20 dias atras nao esta
-  // carregado, e a frequencia ja e o sinal util.
+  // Por TAREFA: e isso que autoriza falar "voce adiou isso X vezes".
+  const porTarefa = new Map<string, Map<string, number>>();
+  for (const l of linhas) {
+    const titulo = porRef.get(l.referencia);
+    if (!titulo) continue;
+    const dessa = porTarefa.get(titulo) ?? new Map<string, number>();
+    dessa.set(l.motivo, (dessa.get(l.motivo) ?? 0) + 1);
+    porTarefa.set(titulo, dessa);
+  }
+  const motivosPorTarefa = [...porTarefa.entries()].map(([titulo, mapa]) => ({
+    titulo,
+    motivos: [...mapa.entries()].map(([motivo, vezes]) => ({ motivo, vezes })),
+  }));
+
   const contagem = new Map<string, number>();
   for (const l of linhas) contagem.set(l.motivo, (contagem.get(l.motivo) ?? 0) + 1);
   const motivosDoMes = [...contagem.entries()]
     .map(([motivo, vezes]) => ({ motivo, vezes }))
     .sort((a, b) => b.vezes - a.vezes);
 
-  return { motivosDeHoje, motivosDoMes };
+  return { motivosDeHoje, motivosPorTarefa, motivosDoMes };
+}
+
+/** Descobre o titulo de referencias de blocos que nao estao no dia de hoje. */
+async function resolverTitulos(db: Db, refs: string[], destino: Map<string, string>) {
+  const unicas = [...new Set(refs)];
+  const ids = (prefixo: string) =>
+    unicas.filter((r) => r.startsWith(prefixo)).map((r) => r.slice(prefixo.length).split("@")[0]);
+
+  const [ag, av, cp] = await Promise.all([
+    ids("ag:").length
+      ? db.from("tarefa_agendamentos").select("id, plano_tarefas!inner(descricao)").in("id", ids("ag:"))
+      : Promise.resolve({ data: [] }),
+    ids("av:").length
+      ? db.from("acoes_avulsas").select("id, descricao").in("id", ids("av:"))
+      : Promise.resolve({ data: [] }),
+    ids("cp:").length
+      ? db.from("compromissos").select("id, titulo").in("id", ids("cp:"))
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  for (const a of (ag.data ?? []) as { id: string; plano_tarefas: { descricao: string } }[]) {
+    destino.set(`ag:${a.id}`, a.plano_tarefas.descricao);
+  }
+  for (const a of (av.data ?? []) as { id: string; descricao: string }[]) {
+    destino.set(`av:${a.id}`, a.descricao);
+  }
+  const compromissos = (cp.data ?? []) as { id: string; titulo: string }[];
+  for (const r of unicas.filter((x) => x.startsWith("cp:"))) {
+    const id = r.slice(3).split("@")[0];
+    const achado = compromissos.find((c) => c.id === id);
+    if (achado) destino.set(r, achado.titulo);
+  }
 }
 
 async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: string; instancia: string; apiKey: string; destino: string }, agora: Date) {
@@ -218,10 +269,10 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
     const janela = janelaDoMomento(sp.minutos);
     if (!janela) return { enviados: 0, ignorados: 0, abortado: "fora_de_janela" };
 
-    const { slots, restantes } = slotsDaJanela(blocos, janela);
+    const { slots, atrasados, restantes } = slotsDaJanela(blocos, janela, sp.minutos);
     // Janela do meio sem nada pela frente nao vira mensagem. Mensagem vazia
     // de hora em hora vira papel de parede e ela para de ler.
-    if (!janela.abreODia && !slots.length) {
+    if (!janela.abreODia && !slots.length && !atrasados.length) {
       return { enviados: 0, ignorados: 0, abortado: "janela_vazia" };
     }
 
@@ -237,7 +288,7 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
       ...motivos,
       janela,
       foco: plano?.foco ?? "",
-      slots,
+      slots: [...slots, ...atrasados],
       restantes,
       concluidos: blocos.filter((b) => b.concluido).map((b) => b.titulo),
       minutosPlanejados: minutosPlanejadosDe(blocos),
@@ -246,11 +297,13 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
 
     let texto: string;
     if (doCoach) {
-      const linhas = mesclarLinhas(slots, doCoach);
-      frasesParaGuardar = { slots, linhas };
+      const todos = [...slots, ...atrasados];
+      const linhas = mesclarLinhas(todos, doCoach);
+      frasesParaGuardar = { slots: todos, linhas };
       texto = montarMensagem({
         janela,
         slots,
+        atrasados,
         restantes,
         linhas,
         foco: plano?.foco ?? "",

@@ -134,6 +134,13 @@ export const JANELAS: Janela[] = [
 
 /** Quantos horarios cabem numa mensagem. Acima disso vira lista. */
 export const SLOTS_POR_MENSAGEM = 3;
+/**
+ * Quantos horarios ja vencidos a mensagem relembra.
+ *
+ * Poucos de proposito: a mensagem serve para ela agir agora, e lista longa de
+ * atraso e o oposito disso. Os mais recentes sao os que ainda da para salvar.
+ */
+export const ATRASADOS_POR_MENSAGEM = 2;
 
 /**
  * Janela que corresponde ao momento da execucao.
@@ -153,7 +160,11 @@ export type Slot = { inicio: string; blocos: Bloco[]; duracaoMinutos: number };
  * Horarios pendentes que a janela deve mostrar, agrupados por hora de inicio.
  * Tres tarefas as 10:00 sao um horario so, nao tres avisos.
  */
-export function slotsDaJanela(blocos: Bloco[], janela: Janela): { slots: Slot[]; restantes: number } {
+export function slotsDaJanela(
+  blocos: Bloco[],
+  janela: Janela,
+  minutosAgora = -1,
+): { slots: Slot[]; atrasados: Slot[]; restantes: number } {
   const pendentes = blocos
     .filter((b) => !b.concluido && minutosDe(b.inicio) < janela.ate)
     .sort((a, b) => minutosDe(a.inicio) - minutosDe(b.inicio));
@@ -171,7 +182,18 @@ export function slotsDaJanela(blocos: Bloco[], janela: Janela): { slots: Slot[];
     duracaoMinutos: lista.reduce((t, b) => Math.max(t, b.duracaoMinutos ?? 30), 0),
   }));
 
-  return { slots: todos.slice(0, SLOTS_POR_MENSAGEM), restantes: Math.max(0, todos.length - SLOTS_POR_MENSAGEM) };
+  // Horario que ja passou nao pode ser anunciado como se fosse chegar. As
+  // 18:30, "⏰ 07:50" se le como compromisso por vir; e pendencia, e a
+  // mensagem tem de dizer isso.
+  const jaPassou = (s: Slot) => minutosAgora >= 0 && minutosDe(s.inicio) < minutosAgora;
+  const frente = todos.filter((s) => !jaPassou(s));
+  const atras = todos.filter(jaPassou);
+
+  return {
+    slots: frente.slice(0, SLOTS_POR_MENSAGEM),
+    atrasados: atras.slice(-ATRASADOS_POR_MENSAGEM),
+    restantes: Math.max(0, frente.length - SLOTS_POR_MENSAGEM),
+  };
 }
 
 /**
@@ -284,6 +306,8 @@ const limpar = (t: string | null | undefined) => (t ?? "").trim();
 export function montarMensagem(args: {
   janela: Janela;
   slots: Slot[];
+  /** Horarios que ja venceram e seguem pendentes. */
+  atrasados?: Slot[];
   restantes: number;
   linhas: Map<string, LinhasDoSlot>;
   /** So na janela que abre o dia. */
@@ -294,7 +318,17 @@ export function montarMensagem(args: {
   limiarSobrecarga?: number;
 }): string {
   const { janela, slots, restantes, linhas } = args;
+  const atrasados = args.atrasados ?? [];
   const partes: string[] = [janela.cabecalho];
+
+  const escrever = (slot: Slot, icone: string, sufixo = "") => {
+    const titulo = slot.blocos.map((b) => b.titulo).join(", ");
+    const l = linhas.get(slot.inicio) ?? {};
+    partes.push("", `${icone} ${slot.inicio} · ${titulo} (${horas(slot.duracaoMinutos)})${sufixo}`);
+    if (limpar(l.primeiroPasso)) partes.push(`1️⃣ Primeiro passo: ${limpar(l.primeiroPasso)}`);
+    if (limpar(l.versaoMinima)) partes.push(`📉 Versão mínima: ${limpar(l.versaoMinima)}`);
+    if (limpar(l.frase)) partes.push(`💭 ${limpar(l.frase)}`);
+  };
 
   if (janela.abreODia) {
     partes.push(`🎯 Foco da semana: ${limpar(args.foco) || "não definido"}`);
@@ -318,16 +352,16 @@ export function montarMensagem(args: {
     }
   }
 
-  for (const slot of slots) {
-    const titulo = slot.blocos.map((b) => b.titulo).join(", ");
-    const l = linhas.get(slot.inicio) ?? {};
-    partes.push("", `⏰ ${slot.inicio} · ${titulo} (${horas(slot.duracaoMinutos)})`);
-    if (limpar(l.primeiroPasso)) partes.push(`1️⃣ Primeiro passo: ${limpar(l.primeiroPasso)}`);
-    if (limpar(l.versaoMinima)) partes.push(`📉 Versão mínima: ${limpar(l.versaoMinima)}`);
-    if (limpar(l.frase)) partes.push(`💭 ${limpar(l.frase)}`);
+  for (const slot of slots) escrever(slot, "⏰");
+
+  if (atrasados.length) {
+    partes.push("", slots.length ? "— Ficou para trás —" : "— Ficou para trás hoje —");
+    for (const slot of atrasados) escrever(slot, "⏳", " · passou");
   }
 
-  if (!slots.length) partes.push("", "Nada pendente pela frente. Dia limpo.");
+  if (!slots.length && !atrasados.length) {
+    partes.push("", "Nada pendente pela frente. Dia limpo.");
+  }
   if (restantes > 0) partes.push("", `Mais ${restantes} ${restantes === 1 ? "horário" : "horários"} depois disso.`);
 
   const proxima = JANELAS.find((j) => j.envio > janela.envio);
