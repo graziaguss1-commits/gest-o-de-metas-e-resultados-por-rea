@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cumprimentoAgenda, escolherPrioridadeDoDia, type BlocoExecucao } from "./hoje";
+import {
+  cumprimentoAgenda,
+  escolherPrioridadeDoDia,
+  referenciaBloco,
+  type BlocoComOrigem,
+} from "./hoje";
 
-const b = (p: Partial<BlocoExecucao> & { id: string }): BlocoExecucao => ({
-  data: "2026-10-12", inicio: "09:00", fim: "10:00", tipo: "plano", ...p,
+const b = (p: Partial<BlocoComOrigem> & { id: string }): BlocoComOrigem => ({
+  data: "2026-10-12", inicio: "09:00", fim: "10:00", tipo: "plano",
+  origemId: p.id, ...p,
 });
 
 describe("cumprimentoAgenda", () => {
@@ -28,13 +34,55 @@ describe("cumprimentoAgenda", () => {
   });
 });
 
+describe("referenciaBloco", () => {
+  it("usa um prefixo por origem", () => {
+    expect(referenciaBloco(b({ id: "1", tipo: "plano" }))).toBe("ag:1");
+    expect(referenciaBloco(b({ id: "2", tipo: "avulsa" }))).toBe("av:2");
+    expect(referenciaBloco(b({ id: "3", tipo: "compromisso" }))).toBe("cp:3@2026-10-12");
+  });
+
+  it("bloco do Google não tem referência: não é dela", () => {
+    expect(referenciaBloco(b({ id: "g", tipo: "google" }))).toBeNull();
+  });
+});
+
 describe("escolherPrioridadeDoDia", () => {
-  it("prefere o bloco pendente de uma prioridade top", () => {
+  const manha = new Date(2026, 9, 12, 7, 0);
+
+  it("devolve o bloco que ela marcou, mesmo sendo mais tarde", () => {
     const r = escolherPrioridadeDoDia([
-      b({ id: "a", tarefaId: "x", inicio: "08:00" }),
-      b({ id: "b", tarefaId: "top", inicio: "14:00", fim: "15:00" }),
-    ], ["top"], new Date(2026, 9, 12, 7, 0));
+      b({ id: "a", inicio: "08:00" }),
+      b({ id: "b", inicio: "14:00", fim: "15:00" }),
+    ], "ag:b", manha);
     expect(r?.bloco.id).toBe("b");
     expect(r?.ehTop).toBe(true);
+  });
+
+  it("sem marcação, sugere o próximo e avisa que não é escolha dela", () => {
+    const r = escolherPrioridadeDoDia([
+      b({ id: "a", inicio: "08:00" }),
+      b({ id: "b", inicio: "14:00", fim: "15:00" }),
+    ], null, manha);
+    expect(r?.bloco.id).toBe("a");
+    expect(r?.ehTop).toBe(false);
+  });
+
+  it("prioridade já concluída deixa de ser cobrada", () => {
+    const r = escolherPrioridadeDoDia([
+      b({ id: "a", inicio: "08:00" }),
+      b({ id: "b", inicio: "14:00", fim: "15:00", concluido: true }),
+    ], "ag:b", manha);
+    expect(r?.bloco.id).toBe("a");
+    expect(r?.ehTop).toBe(false);
+  });
+
+  it("marcação apontando para bloco que saiu do dia não quebra", () => {
+    const r = escolherPrioridadeDoDia([b({ id: "a", inicio: "08:00" })], "ag:sumiu", manha);
+    expect(r?.bloco.id).toBe("a");
+    expect(r?.ehTop).toBe(false);
+  });
+
+  it("dia sem bloco pendente não tem prioridade", () => {
+    expect(escolherPrioridadeDoDia([], "ag:b", manha)).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { fimDoBloco, type BlocoExecucao } from "@/lib/hoje";
+import { fimDoBloco, referenciaBloco, type BlocoComOrigem, type BlocoExecucao } from "@/lib/hoje";
 
 export const MOTIVOS = [
   { id: "demanda_equipe", label: "Demanda da equipe" },
@@ -21,18 +21,11 @@ export const MOTIVO_LABEL: Record<MotivoId, string> = Object.fromEntries(
   MOTIVOS.map((m) => [m.id, m.label]),
 ) as Record<MotivoId, string>;
 
-type BlocoRef = BlocoExecucao & { origemId: string };
-
-/**
- * Referência estável do bloco, no mesmo formato da função whatsapp-agenda:
- * `ag:<agendamento>`, `av:<ação avulsa>`, `cp:<compromisso>@<data original>`.
- */
-export function referenciaBloco(b: BlocoRef): string | null {
-  if (b.tipo === "plano") return `ag:${b.origemId}`;
-  if (b.tipo === "avulsa") return `av:${b.origemId}`;
-  if (b.tipo === "compromisso") return `cp:${b.origemId.includes("@") ? b.origemId : `${b.origemId}@${b.data}`}`;
-  return null; // Google: nunca conta como não executado.
-}
+// A referência do bloco mudou de casa para lib/hoje, junto do tipo do bloco:
+// ela identifica o bloco, e motivo de falta e prioridade do dia são dois usos
+// dela, não dois formatos. Continua exportada daqui porque é por aqui que o
+// app a importa.
+export { referenciaBloco } from "@/lib/hoje";
 
 export const chaveMotivo = (referencia: string, data: string) => `${referencia}|${data}`;
 
@@ -43,7 +36,7 @@ export function naoExecutado(b: BlocoExecucao, agora: Date) {
 
 /** Resumo da semana: total não executado e contagem por motivo (mais frequente primeiro). */
 export function resumoNaoExecutados(
-  blocos: BlocoRef[],
+  blocos: BlocoComOrigem[],
   motivos: Map<string, MotivoId>,
   agora: Date,
 ) {

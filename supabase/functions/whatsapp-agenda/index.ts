@@ -1,3 +1,10 @@
+// PRIORIDADE_DIA_V1
+//
+// Marcador de versao para a publicacao. Cada mudanca que precisa ir ao ar
+// ganha um marcador novo, e o pedido de deploy manda conferir se ele existe
+// no repositorio antes de publicar — assim uma versao velha nunca sobe no
+// lugar desta sem ninguem perceber.
+
 import { createServiceClient, jsonResponse, optionsResponse } from "../_shared/common.ts";
 import {
   agoraEmSaoPaulo,
@@ -142,9 +149,12 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
 async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: string; instancia: string; apiKey: string; destino: string }, agora: Date) {
   const sp = agoraEmSaoPaulo(agora);
   const { data: plano, error } = await db.from("planejamento_semanal")
-    .select("foco, priority_ids").eq("user_id", uid).eq("semana_inicio", sp.segunda).maybeSingle();
+    .select("foco").eq("user_id", uid).eq("semana_inicio", sp.segunda).maybeSingle();
   if (error) throw error;
-  const topIds: string[] = plano?.priority_ids ?? [];
+  // Uma prioridade por dia, escolhida por ela. Dia sem linha e normal.
+  const { data: prio } = await db.from("prioridade_dia")
+    .select("referencia").eq("user_id", uid).eq("data", sp.data).maybeSingle();
+  const refPrioridade: string | null = prio?.referencia ?? null;
   const blocos = await blocosDeHoje(db, uid, sp.data);
 
   const pendentes: { tipo: string; referencia: string; texto: string }[] = [];
@@ -191,7 +201,7 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
       // Coach desligado, sem chave ou qualquer falha: segue o texto fixo. A
       // mensagem das 7:30 nao pode deixar de sair porque a IA falhou.
       const primeiro = blocos.find((b) => !b.concluido) ?? null;
-      texto = mensagemDiaria(plano?.foco ?? "", prioridadeDoDia(blocos, topIds), primeiro);
+      texto = mensagemDiaria(plano?.foco ?? "", prioridadeDoDia(blocos, refPrioridade), primeiro);
     } else {
       // Sem coach nao existe mensagem do meio do dia: desligar o coach
       // devolve exatamente o comportamento antigo, uma mensagem por dia.
@@ -204,8 +214,12 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
       texto,
     });
   } else {
-    for (const b of blocosParaLembrar(blocos, topIds, sp.minutos)) {
-      pendentes.push({ tipo: "lembrete_bloco", referencia: `${b.ref}|${b.inicio}`, texto: mensagemLembrete(b) });
+    for (const b of blocosParaLembrar(blocos, sp.minutos)) {
+      pendentes.push({
+        tipo: "lembrete_bloco",
+        referencia: `${b.ref}|${b.inicio}`,
+        texto: mensagemLembrete(b, b.ref === refPrioridade),
+      });
     }
   }
 

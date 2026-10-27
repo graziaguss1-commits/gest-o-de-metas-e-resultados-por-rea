@@ -272,6 +272,33 @@ export type Database = {
         }
         Relationships: []
       }
+      prioridade_dia: {
+        Row: {
+          created_at: string
+          data: string
+          id: string
+          referencia: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          id?: string
+          referencia: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          id?: string
+          referencia?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       coach_perfil: {
         Row: {
           ativo: boolean

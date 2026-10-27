@@ -43,6 +43,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { AgendarAcaoAvulsaModal } from "@/components/actions/AgendarAcaoAvulsaModal";
 import { AgendarAcaoModal } from "@/components/planos/AgendarAcaoModal";
 import { CapacidadeSemana } from "@/components/planos/CapacidadeSemana";
+import { PrioridadesDaSemana } from "@/components/planos/PrioridadesDaSemana";
 import {
   PlanejamentoClaudeModal,
   type PlanejamentoClaudeDraft,
@@ -1008,6 +1009,14 @@ export default function WeeklyPlanningPage() {
               subtitle={`Tempo planejado entre ${weekLabel(weekDays[0], weekDays[6])}.`}
             >
               <CapacidadeSemana inicioSemana={weekStartISO} />
+            </Panel>
+
+            <Panel
+              icon={<Star className="h-5 w-5" />}
+              title="A prioridade de cada dia"
+              subtitle="Uma por dia, e só depois que o dia tem horários reservados. Pode definir apenas a de hoje e voltar amanhã."
+            >
+              <PrioridadesDaSemana inicioSemana={weekStartISO} />
             </Panel>
 
             <Panel

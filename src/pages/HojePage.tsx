@@ -24,6 +24,7 @@ import {
 } from "@/hooks/useAgendamentos";
 import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
 import { useMotivosBloco, useRegistrarMotivo } from "@/hooks/useMotivosBloco";
+import { useDefinirPrioridadeDia, usePrioridadesDia } from "@/hooks/usePrioridadeDia";
 import { corDaArea } from "@/lib/coresArea";
 import { chaveMotivo, exigeTexto, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
 import { useScheduleAction, useToggleAction } from "@/hooks/useActions";
@@ -69,7 +70,9 @@ export default function HojePage() {
   const { data: planos = [] } = usePlanos();
   useMigrarPlanejamentoLocal();
   const { data: planejamento } = usePlanejamentoSemanal(segundaISO);
-  const prioridadesTop = useMemo(() => planejamento?.priorityIds ?? [], [planejamento]);
+  const { data: prioridadesDaSemana } = usePrioridadesDia(segundaISO, domingoISO);
+  const definirPrioridade = useDefinirPrioridadeDia();
+  const prioridadeHoje = prioridadesDaSemana?.get(hojeISO) ?? null;
 
   // Tudo que ocupa o dia, inclusive os horários vindos do Google: a grade
   // precisa mostrá-los, senão um compromisso de fora some da tela.
@@ -124,7 +127,26 @@ export default function HojePage() {
       },
     );
   };
-  const prioridade = escolherPrioridadeDoDia(blocosHoje, prioridadesTop, agora);
+  const prioridade = escolherPrioridadeDoDia(blocosHoje, prioridadeHoje, agora);
+
+  /**
+   * Marca ou desmarca a prioridade do dia. Clicar na que já é prioridade
+   * tira a marcação: escolher errado não pode ser definitivo.
+   */
+  const alternarPrioridade = (bloco: BlocoAgendaDia) => {
+    const ref = referenciaBloco(bloco);
+    if (!ref) return;
+    const virandoPrioridade = prioridadeHoje !== ref;
+    definirPrioridade.mutate(
+      { data: hojeISO, referencia: virandoPrioridade ? ref : null },
+      {
+        onSuccess: () =>
+          toast.success(virandoPrioridade ? "Prioridade do dia definida" : "Prioridade do dia removida"),
+        onError: (e) =>
+          toast.error(e instanceof Error ? e.message : "Não foi possível salvar a prioridade."),
+      },
+    );
+  };
 
   const taskById = useMemo(() => {
     const mapa = new Map<string, (typeof planos)[number]["tarefas"][number]>();
@@ -358,7 +380,7 @@ export default function HojePage() {
                   const ref = referenciaBloco(bloco);
                   const motivo = ref ? motivos?.get(chaveMotivo(ref, bloco.data)) : undefined;
                   const perdido = naoExecutado(bloco, agora);
-                  const ehTop = prioridadesTop.includes(bloco.tarefaId ?? "");
+                  const ehTop = Boolean(ref) && ref === prioridadeHoje;
                   const bloqueado = bloco.tipo === "plano" && bloco.concluido;
                   // Cronômetro: tarefa de plano guarda no banco e atravessa
                   // dispositivos; avulsa e compromisso contam só neste navegador.
@@ -385,7 +407,7 @@ export default function HojePage() {
                           <div className={`text-[10px] opacity-90 ${aberto ? "" : "truncate"}`}>
                             {bloco.inicio}–{bloco.fim}
                             {bloco.area ? ` · ${bloco.area}` : ""}
-                            {ehTop && " · prioridade top"}
+                            {ehTop && " · prioridade do dia"}
                             {bloco.tipo === "google" && " · Google Agenda"}
                           </div>
                         </div>
@@ -488,6 +510,18 @@ export default function HojePage() {
                             {concluindoId === bloco.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Circle className="h-3.5 w-3.5" />}
                             {perdido ? "Fiz depois" : "Concluir"}
                           </Button>
+                          {ref && (
+                            <Button
+                              size="sm"
+                              variant={ehTop ? "default" : "outline"}
+                              className="h-7 gap-1.5 px-2.5 text-[11px]"
+                              disabled={definirPrioridade.isPending}
+                              onClick={() => alternarPrioridade(bloco)}
+                            >
+                              <Star className={`h-3.5 w-3.5 ${ehTop ? "fill-current" : ""}`} />
+                              {ehTop ? "É a prioridade" : "Prioridade do dia"}
+                            </Button>
+                          )}
                         </div>
                       )}
 
@@ -589,7 +623,9 @@ function PrioridadeCard({
     <section className="rounded-2xl border-2 border-[var(--brand-primary)]/30 bg-card p-5 shadow-sm">
       <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--brand-primary)]">
         {ehTop ? <Star className="h-3.5 w-3.5" /> : <Target className="h-3.5 w-3.5" />}
-        {ehTop ? "Prioridade top do dia" : "Próximo bloco"}
+        {/* Sem escolha dela, isto é sugestão, não prioridade. A tela não
+            pode dar a entender que ela decidiu o que não decidiu. */}
+        {ehTop ? "Prioridade do dia" : "Próximo bloco"}
       </div>
       <h2 className="mt-1 font-display text-xl font-semibold">{bloco.titulo}</h2>
       <p className="text-xs text-muted-foreground">{bloco.inicio}–{bloco.fim} · {bloco.detalhe}</p>

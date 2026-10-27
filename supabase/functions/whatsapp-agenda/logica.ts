@@ -1,9 +1,10 @@
 // Regras puras do aviso diário/lembretes (sem dependências do Deno, testáveis).
 
 export const FUSO = "America/Sao_Paulo";
-// 4 mensagens do coach + lembretes de bloco cabem aqui com folga. O teto
-// existe contra laço descontrolado, nao para racionar mensagem legitima.
-export const LIMITE_DIARIO = 14;
+// Lembrete de TODO bloco mais as 4 mensagens do coach. Um dia cheio dela tem
+// uns 12 blocos, entao 25 cobre com folga. O teto existe contra laço
+// descontrolado, nao para racionar mensagem legitima.
+export const LIMITE_DIARIO = 25;
 /** Lembrete sai quando faltam entre 1 e 7 minutos (cron a cada 5 min cobre todo início). */
 export const JANELA_LEMBRETE_MIN = 7;
 
@@ -41,21 +42,27 @@ export const minutosDe = (hhmm: string) => {
   return h * 60 + m;
 };
 
-/** Primeiro bloco pendente de uma prioridade top, na ordem das prioridades. */
-export function prioridadeDoDia(blocos: Bloco[], topIds: string[]): Bloco | null {
-  const pendentes = blocos.filter((b) => !b.concluido).sort((a, b) => a.inicio.localeCompare(b.inicio));
-  for (const id of topIds) {
-    const b = pendentes.find((x) => x.tarefaId === id);
-    if (b) return b;
-  }
-  return null;
+/**
+ * O bloco que ela marcou como prioridade do dia, se ainda estiver pendente.
+ *
+ * Null quando ela nao escolheu nada ou quando ja cumpriu: nenhum dos dois e
+ * erro, e o chamador nao deve inventar uma prioridade no lugar dela.
+ */
+export function prioridadeDoDia(blocos: Bloco[], referencia: string | null): Bloco | null {
+  if (!referencia) return null;
+  return blocos.find((b) => b.ref === referencia && !b.concluido) ?? null;
 }
 
-/** Blocos de prioridade top que começam dentro da janela do lembrete. */
-export function blocosParaLembrar(blocos: Bloco[], topIds: string[], minutosAgora: number): Bloco[] {
-  const top = new Set(topIds);
+/**
+ * Blocos que começam dentro da janela do lembrete.
+ *
+ * Vale para TODO bloco agendado, nao so para a prioridade: foi escolha dela
+ * receber aviso antes de cada um. Em um dia cheio isso e bastante mensagem,
+ * e o teto diario de LIMITE_DIARIO existe para o dia nao virar enxurrada.
+ */
+export function blocosParaLembrar(blocos: Bloco[], minutosAgora: number): Bloco[] {
   return blocos.filter((b) => {
-    if (!b.tarefaId || !top.has(b.tarefaId) || b.concluido) return false;
+    if (b.concluido) return false;
     const falta = minutosDe(b.inicio) - minutosAgora;
     return falta > 0 && falta <= JANELA_LEMBRETE_MIN;
   });
@@ -76,8 +83,11 @@ export function mensagemDiaria(foco: string, prioridade: Bloco | null, primeiro:
   ].join("\n");
 }
 
-export function mensagemLembrete(bloco: Bloco): string {
-  return `⏰ Em 5 minutos (${bloco.inicio}): ${bloco.titulo}\nÉ uma prioridade top da semana. Bora começar!`;
+export function mensagemLembrete(bloco: Bloco, ehPrioridade = false): string {
+  const fecho = ehPrioridade
+    ? "É a prioridade de hoje. Se só uma coisa sair hoje, que seja esta."
+    : "Bora começar.";
+  return `⏰ Em 5 minutos (${bloco.inicio}): ${bloco.titulo}\n${fecho}`;
 }
 
 // ---------------------------------------------------------------------------

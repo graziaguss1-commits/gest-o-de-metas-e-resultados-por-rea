@@ -6,6 +6,7 @@ import {
   janelaDoMomento,
   JANELAS,
   mascararNumero,
+  mensagemLembrete,
   mesclarLinhas,
   montarMensagem,
   slotsDaJanela,
@@ -28,14 +29,42 @@ describe("whatsapp-agenda", () => {
     expect(sp.segunda).toBe("2026-10-12");
   });
 
-  it("lembra só blocos de prioridade top que começam em até 7 minutos", () => {
-    expect(blocosParaLembrar(blocos, ["top1", "top2"], 8 * 60 + 55).map((b) => b.ref)).toEqual(["b"]);
-    expect(blocosParaLembrar(blocos, ["top1"], 8 * 60 + 50)).toEqual([]);
-    expect(blocosParaLembrar(blocos, ["top1"], 9 * 60)).toEqual([]);
+  it("lembra de todo bloco que começa em até 7 minutos, não só da prioridade", () => {
+    // 08:55: faltam 5 min para os dois blocos das 09:00, e ambos avisam.
+    expect(blocosParaLembrar(blocos, 8 * 60 + 55).map((b) => b.ref).sort()).toEqual(["a", "b"]);
   });
 
-  it("prioridade do dia segue a ordem das prioridades top", () => {
-    expect(prioridadeDoDia(blocos, ["top2", "top1"])?.ref).toBe("c");
+  it("não lembra cedo demais nem depois da hora", () => {
+    expect(blocosParaLembrar(blocos, 8 * 60 + 50)).toEqual([]);
+    expect(blocosParaLembrar(blocos, 9 * 60)).toEqual([]);
+  });
+
+  it("não lembra do que já foi marcado", () => {
+    const feito = blocos.map((b) => ({ ...b, concluido: true }));
+    expect(blocosParaLembrar(feito, 8 * 60 + 55)).toEqual([]);
+  });
+
+  it("prioridade do dia é a que ela marcou", () => {
+    expect(prioridadeDoDia(blocos, "c")?.ref).toBe("c");
+  });
+
+  it("sem marcação não existe prioridade, e o código não inventa uma", () => {
+    expect(prioridadeDoDia(blocos, null)).toBeNull();
+  });
+
+  it("prioridade já cumprida deixa de ser prioridade", () => {
+    const feita = blocos.map((b) => (b.ref === "c" ? { ...b, concluido: true } : b));
+    expect(prioridadeDoDia(feita, "c")).toBeNull();
+  });
+
+  it("marcação apontando para bloco que não está no dia devolve null", () => {
+    expect(prioridadeDoDia(blocos, "ag:sumiu")).toBeNull();
+  });
+
+  it("o lembrete diz quando o bloco é a prioridade do dia", () => {
+    const bloco = blocos[0];
+    expect(mensagemLembrete(bloco, true)).toContain("prioridade de hoje");
+    expect(mensagemLembrete(bloco, false)).not.toContain("prioridade de hoje");
   });
 
   it("mascara o número de destino", () => {

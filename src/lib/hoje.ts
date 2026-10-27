@@ -10,6 +10,22 @@ export type BlocoExecucao = {
   tarefaId?: string;
 };
 
+export type BlocoComOrigem = BlocoExecucao & { origemId: string };
+
+/**
+ * Referência estável do bloco, no mesmo formato da função whatsapp-agenda:
+ * `ag:<agendamento>`, `av:<ação avulsa>`, `cp:<compromisso>@<data original>`.
+ *
+ * Mora aqui, junto do tipo do bloco, porque é a identidade dele: motivo de
+ * não execução e prioridade do dia são dois usos, não dois formatos.
+ */
+export function referenciaBloco(b: BlocoComOrigem): string | null {
+  if (b.tipo === "plano") return `ag:${b.origemId}`;
+  if (b.tipo === "avulsa") return `av:${b.origemId}`;
+  if (b.tipo === "compromisso") return `cp:${b.origemId.includes("@") ? b.origemId : `${b.origemId}@${b.data}`}`;
+  return null; // Google: não é bloco dela, nunca é prioridade nem falta.
+}
+
 export const isoLocal = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -49,21 +65,29 @@ export function cumprimentoAgenda(blocos: BlocoExecucao[], agora: Date) {
 }
 
 /**
- * Prioridade do dia: primeiro bloco pendente de hoje de uma prioridade top
- * (na ordem das prioridades); sem isso, o próximo bloco pendente do dia.
+ * Prioridade do dia: o bloco que ela marcou como a prioridade de hoje.
+ *
+ * Sem marcação, devolve o próximo bloco pendente com `ehTop: false` — é uma
+ * sugestão de por onde seguir, não uma prioridade. A diferença importa: dia
+ * sem escolha é estado normal, e a tela não pode fingir que ela escolheu.
+ *
+ * Marcado e já concluído também devolve null: a prioridade do dia foi
+ * cumprida, e insistir nela depois de feita é ruído.
  */
-export function escolherPrioridadeDoDia<T extends BlocoExecucao>(
+export function escolherPrioridadeDoDia<T extends BlocoComOrigem>(
   blocosHoje: T[],
-  prioridadesTop: string[],
+  referenciaPrioridade: string | null | undefined,
   agora: Date,
 ): { bloco: T; ehTop: boolean } | null {
   const pendentes = blocosHoje
     .filter((b) => b.tipo !== "google" && !b.concluido)
     .sort((a, b) => a.inicio.localeCompare(b.inicio));
-  for (const id of prioridadesTop) {
-    const bloco = pendentes.find((b) => b.tarefaId === id);
-    if (bloco) return { bloco, ehTop: true };
+
+  if (referenciaPrioridade) {
+    const escolhido = pendentes.find((b) => referenciaBloco(b) === referenciaPrioridade);
+    if (escolhido) return { bloco: escolhido, ehTop: true };
   }
+
   const proximo =
     pendentes.find((b) => fimDoBloco(b).getTime() > agora.getTime()) ??
     pendentes[0];
