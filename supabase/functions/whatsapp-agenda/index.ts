@@ -148,6 +148,46 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
   return blocos.sort((a, b) => minutosDe(a.inicio) - minutosDe(b.inicio));
 }
 
+/**
+ * O que ela registrou quando um bloco passou sem ser feito.
+ *
+ * E a unica informacao no sistema que vem dela, nao da agenda. O coach
+ * usava so o que foi marcado, entao chutava o motivo de uma falta que ela
+ * ja tinha explicado.
+ */
+async function motivosRegistrados(db: Db, uid: string, hoje: string, blocos: Bloco[]) {
+  const trintaDias = new Date(`${hoje}T12:00:00Z`);
+  trintaDias.setUTCDate(trintaDias.getUTCDate() - 30);
+
+  const { data } = await db.from("bloco_motivos")
+    .select("referencia, data, motivo, observacao")
+    .eq("user_id", uid)
+    .gte("data", trintaDias.toISOString().slice(0, 10));
+
+  const linhas = (data ?? []) as {
+    referencia: string; data: string; motivo: string; observacao: string | null;
+  }[];
+
+  const porRef = new Map(blocos.map((b) => [b.ref, b.titulo]));
+  const motivosDeHoje = linhas
+    .filter((l) => l.data === hoje && porRef.has(l.referencia))
+    .map((l) => ({
+      titulo: porRef.get(l.referencia)!,
+      motivo: l.motivo,
+      observacao: l.observacao,
+    }));
+
+  // Historico vira contagem: o titulo do bloco de 20 dias atras nao esta
+  // carregado, e a frequencia ja e o sinal util.
+  const contagem = new Map<string, number>();
+  for (const l of linhas) contagem.set(l.motivo, (contagem.get(l.motivo) ?? 0) + 1);
+  const motivosDoMes = [...contagem.entries()]
+    .map(([motivo, vezes]) => ({ motivo, vezes }))
+    .sort((a, b) => b.vezes - a.vezes);
+
+  return { motivosDeHoje, motivosDoMes };
+}
+
 async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: string; instancia: string; apiKey: string; destino: string }, agora: Date) {
   const sp = agoraEmSaoPaulo(agora);
   const { data: plano, error } = await db.from("planejamento_semanal")
@@ -180,8 +220,12 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
       .select("capacidade_diaria_minutos").eq("id", 1).maybeSingle();
     const capacidadeDiaria = Number(cfgCap?.capacidade_diaria_minutos ?? 480);
 
+    const motivos = await motivosRegistrados(db, uid, sp.data, blocos).catch(
+      () => ({ motivosDeHoje: [], motivosDoMes: [] }),
+    );
     const doCoach = await linhasDoCoach(db, uid, {
       data: sp.data,
+      ...motivos,
       janela,
       foco: plano?.foco ?? "",
       slots,
