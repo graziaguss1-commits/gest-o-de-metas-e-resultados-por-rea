@@ -238,6 +238,7 @@ function montarPayload(ctx: ContextoJanela, recentes: Map<string, string[]>) {
       frases_recentes: recentes.get(tipoDoSlot(s)) ?? [],
       duracao_minutos: s.duracaoMinutos,
       tarefas: s.blocos.map((b) => b.titulo),
+      vezes_que_foi_adiada: Math.max(...s.blocos.map((b) => b.remarcacoes ?? 0)),
       primeiro_passo_dela: s.blocos.length === 1 ? (s.blocos[0].primeiroPasso ?? null) : null,
       versao_minima_dela: s.blocos.length === 1 ? (s.blocos[0].versaoMinima ?? null) : null,
     })),

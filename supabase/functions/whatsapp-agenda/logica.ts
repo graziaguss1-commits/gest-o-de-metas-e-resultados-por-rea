@@ -19,6 +19,8 @@ export type Bloco = {
   /** Texto que a usuaria escreveu na tarefa. Tem prioridade sobre o do coach. */
   primeiroPasso?: string | null;
   versaoMinima?: string | null;
+  /** Quantas vezes este bloco ja foi empurrado para outro dia. */
+  remarcacoes?: number;
 };
 
 /** Data (YYYY-MM-DD), minutos do dia e segunda-feira no fuso de São Paulo. */

@@ -72,7 +72,7 @@ function proximaData(iso: string, recorrencia: string) {
 async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]> {
   const [ag, av, cp, oc] = await Promise.all([
     db.from("tarefa_agendamentos")
-      .select("id, tarefa_id, hora_inicio, duracao_minutos, observacao, plano_tarefas!inner(descricao, responsavel_id, primeiro_passo, versao_minima)")
+      .select("id, tarefa_id, hora_inicio, duracao_minutos, observacao, remarcacoes, plano_tarefas!inner(descricao, responsavel_id, primeiro_passo, versao_minima)")
       .eq("data", hoje)
       .eq("plano_tarefas.responsavel_id", uid),
     db.from("acoes_avulsas").select("id, descricao, hora_inicio, duracao_minutos, concluida")
@@ -112,6 +112,7 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
       duracaoMinutos: Number(a.duracao_minutos ?? 30),
       primeiroPasso: tarefa.primeiro_passo,
       versaoMinima: tarefa.versao_minima,
+      remarcacoes: Number(a.remarcacoes ?? 0),
     });
   }
   for (const a of av.data ?? []) {

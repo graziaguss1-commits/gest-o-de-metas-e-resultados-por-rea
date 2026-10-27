@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { GradeHoras } from "@/components/hoje/GradeHoras";
+import { PendenciasDeOntem } from "@/components/hoje/PendenciasDeOntem";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgendaPeriodo, type BlocoAgendaDia } from "@/hooks/useAgendaDoDia";
@@ -49,6 +50,15 @@ import {
 } from "@/lib/hoje";
 
 const TIMER_LOCAL = (id: string) => `hoje-timer-${id}`;
+/**
+ * Dia em que ela ja viu a janela de pendencias.
+ *
+ * Fica no navegador de proposito: e uma conveniencia de leitura, nao um dado
+ * do negocio. Se abrir no celular depois de ter fechado no computador, a
+ * janela aparece de novo — e isso e melhor do que gravar no banco um estado
+ * que nao muda nada do que o sistema sabe sobre o dia dela.
+ */
+const PENDENCIAS_VISTAS = "hoje-pendencias-vistas";
 
 function useAgora(intervaloMs = 1000) {
   const [agora, setAgora] = useState(() => new Date());
@@ -97,6 +107,33 @@ export default function HojePage() {
   const metrica = cumprimentoAgenda(blocos, agora);
   const blocosPerdidos = blocosHoje.filter((b) => naoExecutado(b, agora));
   const { data: motivos } = useMotivosBloco(hojeISO, hojeISO);
+
+  // Ontem tem consulta propria porque na segunda-feira ele cai fora da
+  // semana carregada acima.
+  const ontemISO = useMemo(
+    () => isoLocal(new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - 1)),
+    [agora],
+  );
+  const { blocos: blocosOntem } = useAgendaPeriodo(ontemISO, ontemISO);
+  const { data: motivosOntem } = useMotivosBloco(ontemISO, ontemISO);
+  const [pendenciasFechadas, setPendenciasFechadas] = useState(
+    () => localStorage.getItem(PENDENCIAS_VISTAS) === isoLocal(new Date()),
+  );
+
+  /** Bloco de ontem que passou sem ela dizer se fez ou por que nao fez. */
+  const pendenciasDeOntem = useMemo(() => {
+    if (!motivosOntem) return [];
+    return blocosOntem.filter((b) => {
+      const ref = referenciaBloco(b);
+      if (!ref || b.concluido) return false;
+      return !motivosOntem.get(chaveMotivo(ref, b.data));
+    });
+  }, [blocosOntem, motivosOntem]);
+
+  const fecharPendencias = () => {
+    localStorage.setItem(PENDENCIAS_VISTAS, isoLocal(new Date()));
+    setPendenciasFechadas(true);
+  };
   const semMotivo = blocosPerdidos.filter((b) => {
     const ref = referenciaBloco(b);
     return !ref || !motivos?.get(chaveMotivo(ref, b.data));
@@ -127,6 +164,27 @@ export default function HojePage() {
       },
     );
   };
+  /**
+   * Registra o motivo com a observacao vinda de fora.
+   *
+   * A versao da aba Hoje le o texto do campo daquele bloco; a janela de
+   * pendencias tem o campo dela. Mesma gravacao, origem do texto diferente.
+   */
+  const registrarMotivoDireto = async (
+    bloco: BlocoAgendaDia,
+    motivo: MotivoId,
+    observacao?: string,
+  ) => {
+    const referencia = referenciaBloco(bloco);
+    if (!referencia) return;
+    try {
+      await registrarMotivo.mutateAsync({ referencia, data: bloco.data, motivo, observacao });
+      toast.success(`Motivo registrado: ${MOTIVO_LABEL[motivo]}.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível registrar o motivo.");
+    }
+  };
+
   const prioridade = escolherPrioridadeDoDia(blocosHoje, prioridadeHoje, agora);
 
   /**
@@ -302,6 +360,16 @@ export default function HojePage() {
 
   return (
     <AppShell>
+      <PendenciasDeOntem
+        aberta={!pendenciasFechadas && pendenciasDeOntem.length > 0}
+        blocos={pendenciasDeOntem}
+        dataLabel="ontem"
+        onFeito={marcarFeito}
+        onMotivo={async (bloco, motivo, observacao) => {
+          await registrarMotivoDireto(bloco, motivo, observacao);
+        }}
+        onFechar={fecharPendencias}
+      />
       <div className="mx-auto max-w-3xl space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
