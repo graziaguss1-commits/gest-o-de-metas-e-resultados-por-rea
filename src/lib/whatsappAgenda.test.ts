@@ -86,8 +86,8 @@ describe("janelaDoMomento", () => {
   it("reconhece cada horário de envio", () => {
     expect(janelaDoMomento(7 * 60 + 30)?.id).toBe("manha");
     expect(janelaDoMomento(11 * 60 + 30)?.id).toBe("meio_dia");
-    expect(janelaDoMomento(15 * 60 + 30)?.id).toBe("tarde");
-    expect(janelaDoMomento(19 * 60 + 30)?.id).toBe("noite");
+    expect(janelaDoMomento(13 * 60 + 30)?.id).toBe("tarde");
+    expect(janelaDoMomento(18 * 60 + 30)?.id).toBe("noite");
   });
 
   it("tolera o atraso do cron", () => {
@@ -95,7 +95,7 @@ describe("janelaDoMomento", () => {
   });
 
   it("fora de qualquer janela não manda nada", () => {
-    expect(janelaDoMomento(14 * 60)).toBeNull();
+    expect(janelaDoMomento(16 * 60)).toBeNull();
     expect(janelaDoMomento(7 * 60 + 29)).toBeNull();
     // Passada a tolerância, a mensagem da manhã não sai mais.
     expect(janelaDoMomento(8 * 60 + 30)).toBeNull();
@@ -123,6 +123,19 @@ describe("slotsDaJanela", () => {
   it("não mostra o que é de uma janela mais adiante", () => {
     const { slots } = slotsDaJanela([b("14:00", "Pendências da clínica")], manha);
     expect(slots).toHaveLength(0);
+  });
+
+  it("a tarefa das 14h chega na mensagem das 13:30, antes de começar", () => {
+    const tarde = JANELAS[2];
+    expect(tarde.envio).toBeLessThan(14 * 60);
+    const { slots } = slotsDaJanela([b("14:00", "Pendências da clínica")], tarde);
+    expect(slots.map((s) => s.inicio)).toEqual(["14:00"]);
+  });
+
+  it("toda janela avisa antes, nunca depois do próprio bloco", () => {
+    // O envio de cada janela tem de ser anterior ao fim dela, senão a
+    // mensagem vira relatório do que já passou.
+    for (const j of JANELAS) expect(j.envio).toBeLessThan(j.ate);
   });
 
   it("carrega o atrasado para a janela seguinte", () => {
@@ -206,7 +219,7 @@ describe("montarMensagem", () => {
     const txt = montarMensagem({ ...base, janela: meioDia, minutosPlanejados: 285, capacidadePlanejavel: 504 });
     expect(txt).not.toContain("Foco da semana");
     expect(txt).not.toContain("planejáveis");
-    expect(txt).toContain("Próxima às 15:30.");
+    expect(txt).toContain("Próxima às 13:30.");
   });
 
   it("a última janela não promete próxima mensagem", () => {

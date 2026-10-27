@@ -105,15 +105,19 @@ export type Janela = {
   abreODia: boolean;
 };
 
+// Os horarios nao sao de 4 em 4 horas: cada mensagem precisa CHEGAR ANTES do
+// bloco que ela cobra. 15:30 falava de uma tarefa das 14h que ja tinha
+// passado, o que transforma o coach em relatorio de atraso. Por isso 13:30 e
+// 18:30, que caem antes dos blocos de 14h e de 19h15.
 export const JANELAS: Janela[] = [
   { id: "manha", envio: 7 * 60 + 30, ate: 11 * 60 + 30, abreODia: true,
     cabecalho: "☀️ Bom dia! Seu dia no Metas e Resultados:" },
-  { id: "meio_dia", envio: 11 * 60 + 30, ate: 15 * 60 + 30, abreODia: false,
+  { id: "meio_dia", envio: 11 * 60 + 30, ate: 13 * 60 + 30, abreODia: false,
     cabecalho: "🕚 Metas e Resultados · 11:30" },
-  { id: "tarde", envio: 15 * 60 + 30, ate: 19 * 60 + 30, abreODia: false,
-    cabecalho: "🕞 Metas e Resultados · 15:30" },
-  { id: "noite", envio: 19 * 60 + 30, ate: 24 * 60, abreODia: false,
-    cabecalho: "🌙 Metas e Resultados · 19:30" },
+  { id: "tarde", envio: 13 * 60 + 30, ate: 18 * 60 + 30, abreODia: false,
+    cabecalho: "🕜 Metas e Resultados · 13:30" },
+  { id: "noite", envio: 18 * 60 + 30, ate: 24 * 60, abreODia: false,
+    cabecalho: "🌙 Metas e Resultados · 18:30" },
 ];
 
 /** Quantos horarios cabem numa mensagem. Acima disso vira lista. */

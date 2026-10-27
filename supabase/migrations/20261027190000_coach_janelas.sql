@@ -1,8 +1,13 @@
 -- Quatro janelas do coach por dia, em vez de uma mensagem de manha.
 --
--- 7:30 abre o dia; 11:30, 15:30 e 19:30 carregam so o que vem pela frente ate
+-- 7:30 abre o dia; 11:30, 13:30 e 18:30 carregam so o que vem pela frente ate
 -- a janela seguinte. As tres do meio nao saem quando nao ha nada pendente a
 -- frente: mensagem vazia de hora em hora vira papel de parede.
+--
+-- Os intervalos nao sao iguais de proposito. Cada mensagem tem de chegar
+-- ANTES do bloco que ela cobra: 13:30 cai antes do bloco das 14h e 18:30
+-- antes do das 19h15. Uma mensagem que fala de tarefa que ja passou e
+-- relatorio de atraso, nao coach.
 --
 -- Os horarios aqui estao em UTC. Sao Paulo e UTC-3 o ano inteiro, porque o
 -- horario de verao brasileiro foi extinto em 2019 — por isso nao ha ajuste
@@ -26,8 +31,8 @@ begin
   for j in
     select * from (values
       ('whatsapp-coach-meio-dia', '30 14 * * *'),  -- 11:30 America/Sao_Paulo
-      ('whatsapp-coach-tarde',    '30 18 * * *'),  -- 15:30
-      ('whatsapp-coach-noite',    '30 22 * * *')   -- 19:30
+      ('whatsapp-coach-tarde',    '30 16 * * *'),  -- 13:30
+      ('whatsapp-coach-noite',    '30 21 * * *')   -- 18:30
     ) as t(nome, agenda)
   loop
     perform cron.unschedule(j.nome) where exists (select 1 from cron.job where jobname = j.nome);
