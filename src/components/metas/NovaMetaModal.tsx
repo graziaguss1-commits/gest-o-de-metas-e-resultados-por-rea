@@ -118,7 +118,9 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const projetoAutomatico = metricType === "projeto";
+    // Projeto e hábito não pedem alvo: os dois saem dos planos de ação.
+    // Projeto conta planos concluídos; hábito conta cumprimentos das ações.
+    const projetoAutomatico = metricType === "projeto" || metricType === "habito";
     const valor = projetoAutomatico
       ? isEdit
         ? Number(meta?.valor_alvo ?? 0)
@@ -244,7 +246,31 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
             <p className="text-xs text-muted-foreground">{cfg.ajuda}</p>
           </div>
 
-          {metricType === "projeto" ? (
+          {metricType === "habito" ? (
+            <div className="rounded-xl border border-[var(--brand-accent)]/30 bg-[var(--brand-accent-soft)]/50 p-4">
+              <div className="text-sm font-semibold text-[var(--brand-primary)]">
+                Frequência calculada automaticamente
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                A frequência vem das ações do plano desta meta e do que você
+                cumpre. Você não precisa digitar nada aqui.
+              </p>
+              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                <div className="rounded-lg bg-background/70 px-3 py-2">
+                  <strong>Alvo</strong>
+                  <span className="block text-muted-foreground">
+                    quantos cumprimentos as ações pedem até o fim da meta
+                  </span>
+                </div>
+                <div className="rounded-lg bg-background/70 px-3 py-2">
+                  <strong>Atual</strong>
+                  <span className="block text-muted-foreground">
+                    quantos você já cumpriu, contados pelos blocos marcados
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : metricType === "projeto" ? (
             <div className="rounded-xl border border-[var(--brand-accent)]/30 bg-[var(--brand-accent-soft)]/50 p-4">
               <div className="text-sm font-semibold text-[var(--brand-primary)]">
                 Etapas calculadas automaticamente

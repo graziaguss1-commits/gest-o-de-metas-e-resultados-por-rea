@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { MembroResumo, Plano, Tarefa } from "@/lib/metas";
-import { execucaoPlano, type Execucao } from "@/lib/execucao";
+import { execucaoPlano, type Execucao, type TarefaMensuravel } from "@/lib/execucao";
+import { isoLocal } from "@/lib/hoje";
+import {
+  aderencia,
+  janelaAcumulada,
+  janelaDaTarefa,
+  periodosExigidos,
+} from "@/lib/resumoSemanal";
 
 const PLANOS_KEY = ["planos"] as const;
 const EXEC_KEY = ["execucoes"] as const;
@@ -27,6 +34,65 @@ async function metaIdDoPlano(planoId: string): Promise<string | null> {
 }
 
 /**
+ * Meta de hábito: alvo e atual saem da execução das ações, não da digitação.
+ *
+ * Antes, o tipo "hábito" pedia que ela digitasse o alvo e depois lançasse o
+ * valor atual numa tela separada. O dado já existia — toda vez que ela marca
+ * um bloco como feito nasce uma execução — e as metas ficavam em zero com
+ * dezenas de execuções registradas.
+ *
+ * Alvo é quantos cumprimentos a meta pede do começo ao fim; atual é quantos
+ * saíram até hoje. Mesma unidade dos dois lados, e a mesma contagem que o
+ * resumo semanal usa, para a tela da semana e a da meta nunca discordarem.
+ */
+async function sincronizarHabitoDaMeta(
+  metaId: string,
+  meta: { data_inicio?: string | null; data_fim?: string | null; is_inverse?: boolean; status?: string },
+) {
+  const { data: planos } = await supabase.from("planos_acao").select("id").eq("meta_id", metaId);
+  const ids = (planos ?? []).map((p) => p.id);
+  if (!ids.length) return;
+
+  const { data: tarefasBrutas } = await supabase
+    .from("plano_tarefas")
+    .select("id, descricao, concluida, frequencia, quantidade_planejada, dias_semana, data_inicio, prazo")
+    .in("plano_id", ids);
+  const tarefas = (tarefasBrutas ?? []) as unknown as TarefaMensuravel[];
+  if (!tarefas.length) return;
+
+  const { data: execucoesBrutas } = await supabase
+    .from("tarefa_execucoes")
+    .select("id, tarefa_id, data_referencia, quantidade")
+    .in("tarefa_id", tarefas.map((t) => t.id));
+  const execucoes = (execucoesBrutas ?? []) as unknown as Execucao[];
+
+  const hoje = isoLocal(new Date());
+  let alvo = 0;
+  let atual = 0;
+  for (const tarefa of tarefas) {
+    const cheia = janelaDaTarefa(tarefa, meta);
+    if (!cheia) continue;
+    alvo += periodosExigidos(tarefa, cheia).length;
+    atual += aderencia(tarefa, execucoes, janelaAcumulada(tarefa, meta, hoje)).cumpridos;
+  }
+  if (alvo <= 0) return;
+
+  const { data: statusCalc } = await supabase.rpc("calcular_status_meta", {
+    p_valor_atual: atual,
+    p_valor_alvo: alvo,
+    p_data_inicio: meta.data_inicio,
+    p_data_fim: meta.data_fim,
+    p_is_inverse: false,
+  });
+  const status = (statusCalc as "verde" | "amarelo" | "vermelho" | null) ?? meta.status;
+
+  await supabase
+    .from("metas")
+    .update({ valor_alvo: alvo, valor_atual: atual, status })
+    .eq("id", metaId);
+}
+
+/**
  * Em metas do tipo projeto, cada plano vinculado é uma etapa.
  * A etapa é concluída quando o plano possui ações e todas estão concluídas.
  */
@@ -41,6 +107,11 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
     .eq("id", metaId)
     .maybeSingle();
   if (metaError || !meta) return;
+
+  if (meta.metric_type === "habito") {
+    await sincronizarHabitoDaMeta(metaId, meta);
+    return;
+  }
 
   const projeto = meta.metric_type === "projeto" || meta.unidade === "etapas";
   if (!projeto) return;
@@ -593,10 +664,16 @@ export function useRegistrarExecucao() {
         registrado_por: uid,
       });
       if (error) throw error;
+      // Meta de hábito anda com a execução: sem isto ela só atualizaria
+      // quando uma ação fosse criada ou apagada.
+      const { data: tarefa } = await supabase
+        .from("plano_tarefas").select("plano_id").eq("id", tarefaId).maybeSingle();
+      if (tarefa?.plano_id) await sincronizarEtapasDaMeta(await metaIdDoPlano(tarefa.plano_id));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: EXEC_KEY });
       qc.invalidateQueries({ queryKey: PLANOS_KEY });
+      qc.invalidateQueries({ queryKey: ["metas"] });
     },
   });
 }

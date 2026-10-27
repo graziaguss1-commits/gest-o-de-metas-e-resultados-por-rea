@@ -13,7 +13,7 @@ import { getFrequencia, FREQUENCIA_LABEL } from "@/lib/execucao";
 import { cumprimentoAgenda, isoLocal, segundaDaSemana } from "@/lib/hoje";
 import { chaveMotivo, MOTIVO_LABEL, naoExecutado, referenciaBloco } from "@/lib/motivos";
 import { rotuloSemana } from "@/lib/prazos";
-import { aderencia, janelaAcumulada, movimentoMeta } from "@/lib/resumoSemanal";
+import { aderencia, aderenciaConjunta, janelaAcumulada, movimentoMeta } from "@/lib/resumoSemanal";
 
 const somaDias = (iso: string, dias: number) => {
   const d = new Date(`${iso}T12:00:00`);
@@ -108,6 +108,24 @@ export default function ResumoSemanalPage() {
       .filter((r) => r.naSemana.exigidos > 0 || r.acumulada.exigidos > 0)
       .sort((a, b) => (a.naSemana.pct ?? 1) - (b.naSemana.pct ?? 1));
   }, [planos, metas, execucoes, semana, ehSemanaAtual, hojeISO, domingoISO]);
+
+  /**
+   * Metas de hábito na semana: quantos cumprimentos a semana pediu e quantos
+   * saíram. É a leitura que a meta não dá — lá o número é o total até o fim.
+   */
+  const habitosDaSemana = useMemo(() => {
+    return metas
+      .filter((m) => m.metric_type === "habito")
+      .map((meta) => {
+        const tarefas = planos
+          .filter((p) => p.meta?.id === meta.id)
+          .flatMap((p) => p.tarefas)
+          .filter((t) => getFrequencia(t) !== "unica");
+        return { meta, aderencia: aderenciaConjunta(tarefas, execucoes, semana) };
+      })
+      .filter((h) => h.aderencia.exigidos > 0)
+      .sort((a, b) => (a.aderencia.pct ?? 1) - (b.aderencia.pct ?? 1));
+  }, [metas, planos, execucoes, semana]);
 
   /** Metas que se moveram na semana, maior movimento primeiro. */
   const movimentos = useMemo(() => {
@@ -225,6 +243,40 @@ export default function ResumoSemanalPage() {
             </div>
           </div>
         </section>
+
+        {habitosDaSemana.length > 0 && (
+          <section className="rounded-2xl border bg-card p-4">
+            <h2 className="mb-1 text-sm font-semibold">Hábitos nesta semana</h2>
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              Quantos cumprimentos a semana pediu e quantos saíram. Na tela da
+              meta o número é o total até o fim; aqui é só esta semana.
+            </p>
+            <div className="space-y-2">
+              {habitosDaSemana.map(({ meta, aderencia: a }) => (
+                <div
+                  key={meta.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{meta.nome}</div>
+                    {meta.area && (
+                      <div className="text-[11px] text-muted-foreground">{meta.area}</div>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2 tabular-nums">
+                    <span className="text-lg font-semibold">{a.cumpridos}</span>
+                    <span className="text-sm text-muted-foreground">de {a.exigidos}</span>
+                    {a.pct != null && (
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        {Math.round(a.pct * 100)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-2xl border bg-card p-4">
           <h2 className="mb-1 text-sm font-semibold">Rotinas</h2>

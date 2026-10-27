@@ -158,3 +158,43 @@ export function movimentoMeta(
     delta: depois == null ? null : depois - (antes ?? 0),
   };
 }
+
+/**
+ * Janela cheia da ação dentro da meta, incluindo o que ainda está por vir.
+ *
+ * `janelaAcumulada` corta em hoje porque serve para cobrar o que passou.
+ * Esta não corta: serve para dizer quantos cumprimentos a meta pede do
+ * começo ao fim, que é o alvo.
+ */
+export function janelaDaTarefa(
+  tarefa: Pick<TarefaMensuravel, "data_inicio" | "prazo">,
+  meta: { data_inicio?: string | null; data_fim?: string | null } | null,
+): Janela | null {
+  const inicio = maior(tarefa.data_inicio ?? meta?.data_inicio ?? "", meta?.data_inicio ?? "");
+  const fim = menor(tarefa.prazo ?? meta?.data_fim ?? "", meta?.data_fim ?? "");
+  if (!inicio || !fim || fim < inicio) return null;
+  return { inicio, fim };
+}
+
+/**
+ * Aderência somada de várias ações — a leitura de uma meta de hábito.
+ *
+ * Soma exigidos e cumpridos em vez de tirar a média das taxas: uma ação
+ * diária e uma mensal não valem o mesmo, e a média das porcentagens
+ * esconderia isso. O que conta é quantos cumprimentos a semana pediu e
+ * quantos saíram.
+ */
+export function aderenciaConjunta(
+  tarefas: TarefaMensuravel[],
+  execucoes: Execucao[],
+  janela: Janela,
+): Aderencia {
+  let exigidos = 0;
+  let cumpridos = 0;
+  for (const tarefa of tarefas) {
+    const a = aderencia(tarefa, execucoes, janela);
+    exigidos += a.exigidos;
+    cumpridos += a.cumpridos;
+  }
+  return { exigidos, cumpridos, pct: exigidos ? cumpridos / exigidos : null };
+}

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   aderencia,
+  aderenciaConjunta,
   janelaAcumulada,
+  janelaDaTarefa,
   movimentoMeta,
   periodosExigidos,
 } from "@/lib/resumoSemanal";
@@ -138,5 +140,53 @@ describe("movimentoMeta", () => {
   it("sem lançamento na semana, o movimento é zero e não o valor cheio", () => {
     const antigo = [{ data_lancamento: "2026-10-01", valor: 90 }];
     expect(movimentoMeta(antigo, SEMANA)).toEqual({ antes: 90, depois: 90, delta: 0 });
+  });
+});
+
+describe("aderenciaConjunta", () => {
+  const diaria = tarefa({ id: "d", frequencia: "diaria" });
+  const semanal = tarefa({ id: "s", frequencia: "semanal", dias_semana: [1] });
+  const execs: Execucao[] = [
+    { id: "a", tarefa_id: "d", data_referencia: "2026-10-19", quantidade: 1 },
+    { id: "b", tarefa_id: "d", data_referencia: "2026-10-20", quantidade: 1 },
+    { id: "c", tarefa_id: "s", data_referencia: "2026-10-21", quantidade: 1 },
+  ];
+
+  it("soma exigidos e cumpridos das duas ações", () => {
+    // Diária pede 7 na semana e saiu 2; semanal pede 1 e saiu 1.
+    const r = aderenciaConjunta([diaria, semanal], execs, SEMANA);
+    expect(r.exigidos).toBe(8);
+    expect(r.cumpridos).toBe(3);
+  });
+
+  it("soma os cumprimentos em vez de tirar média das taxas", () => {
+    // A média das taxas daria (2/7 + 1/1) / 2 = 64%, que esconde o buraco
+    // da ação diária. O que a semana pediu foi 8 e saíram 3.
+    const r = aderenciaConjunta([diaria, semanal], execs, SEMANA);
+    expect(r.pct).toBeCloseTo(3 / 8);
+  });
+
+  it("semana que não pedia nada devolve null, não 0%", () => {
+    const unica = tarefa({ id: "u", frequencia: "unica" });
+    expect(aderenciaConjunta([unica], [], SEMANA).pct).toBeNull();
+  });
+});
+
+describe("janelaDaTarefa", () => {
+  const meta = { data_inicio: "2026-10-01", data_fim: "2026-12-31" };
+
+  it("usa a interseção entre a ação e a meta", () => {
+    expect(janelaDaTarefa({ data_inicio: "2026-11-01", prazo: "2027-03-01" }, meta))
+      .toEqual({ inicio: "2026-11-01", fim: "2026-12-31" });
+  });
+
+  it("vai até o fim da meta, não até hoje", () => {
+    // É a diferença para janelaAcumulada: aqui se mede o alvo, que inclui
+    // o que ainda vai acontecer.
+    expect(janelaDaTarefa({ data_inicio: null, prazo: null }, meta)?.fim).toBe("2026-12-31");
+  });
+
+  it("ação que termina antes de começar não tem janela", () => {
+    expect(janelaDaTarefa({ data_inicio: "2027-01-01", prazo: "2027-02-01" }, meta)).toBeNull();
   });
 });

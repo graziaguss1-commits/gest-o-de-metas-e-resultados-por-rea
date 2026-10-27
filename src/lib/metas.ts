@@ -105,12 +105,12 @@ export const METRIC_CONFIG: Record<MetricType, MetricConfig> = {
   },
   habito: {
     label: "Hábito/frequência",
-    alvoLabel: "Frequência-alvo",
-    ajuda: "Repetições dentro de um período (treinos, leituras, ligações).",
-    alvoPlaceholder: "3",
-    unidadeLabel: "Frequência (contexto)",
-    unidadePlaceholder: "vezes por semana",
-    unidadeAjuda: "Exemplos: vezes por semana, vezes por mês.",
+    alvoLabel: "Cumprimentos automáticos",
+    ajuda:
+      "Repetições de uma rotina. A frequência vem das ações do plano; o total é calculado automaticamente.",
+    alvoPlaceholder: "automático",
+    unidadeFixa: "cumprimentos",
+    sufixo: "cumprimentos",
   },
   tempo: {
     label: "Tempo",
