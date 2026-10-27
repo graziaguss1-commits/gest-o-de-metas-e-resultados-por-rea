@@ -277,6 +277,8 @@ export type Database = {
           created_at: string
           data: string
           frase: string
+          versao_minima: string | null
+          primeiro_passo: string | null
           id: string
           referencia: string
           tipo: string
@@ -286,6 +288,8 @@ export type Database = {
           created_at?: string
           data: string
           frase: string
+          primeiro_passo?: string | null
+          versao_minima?: string | null
           id?: string
           referencia: string
           tipo: string
@@ -295,6 +299,8 @@ export type Database = {
           created_at?: string
           data?: string
           frase?: string
+          versao_minima?: string | null
+          primeiro_passo?: string | null
           id?: string
           referencia?: string
           tipo?: string

@@ -43,3 +43,10 @@ CREATE INDEX IF NOT EXISTS coach_frases_user_data_idx ON public.coach_frases (us
 -- porque este repositorio e publico.
 ALTER TABLE public.coach_perfil
   ADD COLUMN IF NOT EXISTS mapa_crencas text NOT NULL DEFAULT '';
+
+-- O primeiro passo e a versao minima gerados tambem ficam guardados, para a
+-- aba Hoje mostrar na tela o mesmo que foi para o WhatsApp. Sem isso o texto
+-- existia so dentro da mensagem e sumia depois de lida.
+ALTER TABLE public.coach_frases
+  ADD COLUMN IF NOT EXISTS primeiro_passo text,
+  ADD COLUMN IF NOT EXISTS versao_minima text;

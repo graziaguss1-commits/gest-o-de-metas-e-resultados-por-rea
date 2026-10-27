@@ -24,6 +24,7 @@ import {
   useReagendarTarefa,
 } from "@/hooks/useAgendamentos";
 import { useMigrarPlanejamentoLocal, usePlanejamentoSemanal } from "@/hooks/usePlanejamentoSemanal";
+import { useLinhasCoach } from "@/hooks/useLinhasCoach";
 import { useMotivosBloco, useRegistrarMotivo } from "@/hooks/useMotivosBloco";
 import { useDefinirPrioridadeDia, usePrioridadesDia } from "@/hooks/usePrioridadeDia";
 import { corDaArea } from "@/lib/coresArea";
@@ -107,6 +108,7 @@ export default function HojePage() {
   const metrica = cumprimentoAgenda(blocos, agora);
   const blocosPerdidos = blocosHoje.filter((b) => naoExecutado(b, agora));
   const { data: motivos } = useMotivosBloco(hojeISO, hojeISO);
+  const { data: linhasCoach } = useLinhasCoach(hojeISO);
 
   // Ontem tem consulta propria porque na segunda-feira ele cai fora da
   // semana carregada acima.
@@ -447,6 +449,14 @@ export default function HojePage() {
                 renderBloco={(bloco, { aberto }) => {
                   const ref = referenciaBloco(bloco);
                   const motivo = ref ? motivos?.get(chaveMotivo(ref, bloco.data)) : undefined;
+                  // O que ela escreveu na tarefa ganha do que o coach gerou,
+                  // igual à mensagem do WhatsApp: uma regra só, nos dois lugares.
+                  const doCoach = ref ? linhasCoach?.get(ref) : undefined;
+                  const tarefaDoBloco = bloco.tarefaId ? taskById.get(bloco.tarefaId) : undefined;
+                  const primeiroPasso =
+                    tarefaDoBloco?.primeiro_passo?.trim() || doCoach?.primeiroPasso?.trim() || "";
+                  const versaoMinima =
+                    tarefaDoBloco?.versao_minima?.trim() || doCoach?.versaoMinima?.trim() || "";
                   const perdido = naoExecutado(bloco, agora);
                   const ehTop = Boolean(ref) && ref === prioridadeHoje;
                   const bloqueado = bloco.tipo === "plano" && bloco.concluido;
@@ -499,6 +509,23 @@ export default function HojePage() {
                           </button>
                         )}
                       </div>
+
+                      {aberto && (primeiroPasso || versaoMinima || doCoach?.frase) && (
+                        <div className="mt-2 space-y-1 border-t pt-2 text-[11px] leading-snug">
+                          {primeiroPasso && (
+                            <div>
+                              <span className="font-semibold">1️⃣ Primeiro passo:</span>{" "}
+                              {primeiroPasso}
+                            </div>
+                          )}
+                          {versaoMinima && (
+                            <div>
+                              <span className="font-semibold">📉 Mínimo:</span> {versaoMinima}
+                            </div>
+                          )}
+                          {doCoach?.frase && <div>💭 {doCoach.frase}</div>}
+                        </div>
+                      )}
 
                       {aberto && motivo && (
                         <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">

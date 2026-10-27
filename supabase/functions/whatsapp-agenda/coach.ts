@@ -206,16 +206,24 @@ export async function registrarFrases(
   slots: Slot[],
   linhas: Map<string, LinhasDoSlot>,
 ): Promise<void> {
-  const novas = slots
-    .map((slot) => ({ slot, frase: (linhas.get(slot.inicio)?.frase ?? "").trim() }))
-    .filter((x) => x.frase)
-    .map(({ slot, frase }) => ({
+  // Uma linha por BLOCO, nao por horario: a aba Hoje procura pelo bloco, e
+  // um horario com tres tarefas precisa aparecer nas tres.
+  const novas = slots.flatMap((slot) => {
+    const l = linhas.get(slot.inicio) ?? {};
+    const frase = (l.frase ?? "").trim();
+    const passo = (l.primeiroPasso ?? "").trim();
+    const minima = (l.versaoMinima ?? "").trim();
+    if (!frase && !passo && !minima) return [];
+    return slot.blocos.map((bloco) => ({
       user_id: uid,
       data,
-      referencia: slot.blocos[0]?.ref ?? slot.inicio,
+      referencia: bloco.ref,
       tipo: tipoDoSlot(slot),
       frase,
+      primeiro_passo: passo || null,
+      versao_minima: minima || null,
     }));
+  });
   if (!novas.length) return;
   try {
     await db.from("coach_frases").insert(novas);
