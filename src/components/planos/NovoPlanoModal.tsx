@@ -166,6 +166,7 @@ export function NovoPlanoModal({ open, onOpenChange }: Props) {
           t.duracao,
           t.horario,
           t.dias,
+          t.mensal,
         ),
     );
     if (recorrenciaIncompleta) {

@@ -126,6 +126,7 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         nova.duracao,
         nova.horario,
         nova.dias,
+        nova.mensal,
       )
     ) {
       return toast.error("Defina o dia, o horário e a duração da rotina.");
@@ -153,6 +154,9 @@ export function PlanoCard({ plano }: { plano: PlanoWithMeta }) {
         duracao_minutos: nova.duracao,
         horario_preferencial: nova.horario || null,
         dias_semana: nova.frequencia !== "unica" ? nova.dias : null,
+        recorrencia_mensal: nova.mensal.recorrencia_mensal ?? "dia_do_mes",
+        semana_do_mes: nova.mensal.semana_do_mes ?? null,
+        dia_semana_mensal: nova.mensal.dia_semana_mensal ?? null,
       });
       setNova({
         descricao: "",

@@ -308,6 +308,12 @@ export type NovoTarefaInput = {
   duracao_minutos?: number | null;
   horario_preferencial?: string | null;
   dias_semana?: number[] | null;
+  /** Rotina mensal: por dia do mês ou por posição no mês ("primeira sexta"). */
+  recorrencia_mensal?: string | null;
+  /** 1 a 5, ou -1 para "última". */
+  semana_do_mes?: number | null;
+  /** 1 (segunda) a 7 (domingo). */
+  dia_semana_mensal?: number | null;
   /** Menor ação concreta que destrava a tarefa (máx. 140 caracteres). */
   primeiro_passo?: string | null;
   /** Critério mínimo de entrega, contra o perfeccionismo (máx. 140 caracteres). */
@@ -359,6 +365,9 @@ export function useCreatePlano() {
           duracao_minutos: t.duracao_minutos ?? null,
           horario_preferencial: t.horario_preferencial || null,
           dias_semana: t.dias_semana ?? null,
+          recorrencia_mensal: t.recorrencia_mensal ?? "dia_do_mes",
+          semana_do_mes: t.semana_do_mes ?? null,
+          dia_semana_mensal: t.dia_semana_mensal ?? null,
           primeiro_passo: t.primeiro_passo?.trim() || null,
           versao_minima: t.versao_minima?.trim() || null,
         }));
@@ -497,6 +506,13 @@ export function useAddTarefa() {
         duracao_minutos: t.duracao_minutos ?? null,
         horario_preferencial: t.horario_preferencial || null,
         dias_semana: t.dias_semana ?? null,
+        recorrencia_mensal: t.recorrencia_mensal ?? "dia_do_mes",
+        semana_do_mes: t.semana_do_mes ?? null,
+        dia_semana_mensal: t.dia_semana_mensal ?? null,
+        // Os dois estavam faltando aqui: acao criada pelo card do plano
+        // perdia o primeiro passo e a versao minima sem avisar ninguem.
+        primeiro_passo: t.primeiro_passo?.trim() || null,
+        versao_minima: t.versao_minima?.trim() || null,
       });
       if (error) throw error;
       await sincronizarEtapasDaMeta(await metaIdDoPlano(planoId));
