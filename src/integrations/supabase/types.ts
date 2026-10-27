@@ -239,6 +239,39 @@ export type Database = {
         }
         Relationships: []
       }
+      bloco_motivos: {
+        Row: {
+          created_at: string
+          data: string
+          id: string
+          motivo: string
+          observacao: string | null
+          referencia: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          id?: string
+          motivo: string
+          observacao?: string | null
+          referencia: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          id?: string
+          motivo?: string
+          observacao?: string | null
+          referencia?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       coach_perfil: {
         Row: {
           ativo: boolean
@@ -275,39 +308,6 @@ export type Database = {
           regras?: string
           tom?: string
           updated_at?: string
-        }
-        Relationships: []
-      }
-      bloco_motivos: {
-        Row: {
-          created_at: string
-          data: string
-          id: string
-          motivo: string
-          observacao: string | null
-          referencia: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          data: string
-          id?: string
-          motivo: string
-          observacao?: string | null
-          referencia: string
-          updated_at?: string
-          user_id?: string
-        }
-        Update: {
-          created_at?: string
-          data?: string
-          id?: string
-          motivo?: string
-          observacao?: string | null
-          referencia?: string
-          updated_at?: string
-          user_id?: string
         }
         Relationships: []
       }
