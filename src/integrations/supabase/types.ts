@@ -277,34 +277,34 @@ export type Database = {
           created_at: string
           data: string
           frase: string
-          versao_minima: string | null
-          primeiro_passo: string | null
           id: string
+          primeiro_passo: string | null
           referencia: string
           tipo: string
           user_id: string
+          versao_minima: string | null
         }
         Insert: {
           created_at?: string
           data: string
           frase: string
-          primeiro_passo?: string | null
-          versao_minima?: string | null
           id?: string
+          primeiro_passo?: string | null
           referencia: string
           tipo: string
           user_id: string
+          versao_minima?: string | null
         }
         Update: {
           created_at?: string
           data?: string
           frase?: string
-          versao_minima?: string | null
-          primeiro_passo?: string | null
           id?: string
+          primeiro_passo?: string | null
           referencia?: string
           tipo?: string
           user_id?: string
+          versao_minima?: string | null
         }
         Relationships: []
       }
