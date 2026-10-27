@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AREAS } from "@/lib/metas";
 import { useCriarCompromisso, type RecorrenciaCompromisso } from "@/hooks/useCompromissos";
+import { rotuloMensalPorSemana } from "../../../supabase/functions/_shared/recorrencia";
 
 const adicionarMeses = (data: string, meses: number) => {
   const valor = new Date(`${data}T12:00:00`);
@@ -29,6 +30,16 @@ export function NovoCompromissoModal({ open, onOpenChange, dataInicial }: { open
   useEffect(() => {
     if (open && dataInicial) setData(dataInicial);
   }, [open, dataInicial]);
+
+  /**
+   * "Todo mês" é ambíguo e o app só sabia uma das respostas.
+   * Dia 30 cai numa sexta em outubro e numa segunda em novembro, então uma
+   * aula que acontece na última sexta vinha para o dia errado todo mês. A
+   * escolha fica explícita, e o rótulo mostra o que cada uma significa para
+   * ESTA data em vez de deixar a usuária deduzir.
+   */
+  const rotuloPorSemana = data ? rotuloMensalPorSemana(new Date(`${data}T12:00:00`)) : "";
+  const diaDoMes = data ? Number(data.slice(8, 10)) : 0;
 
   const alterarRecorrencia = (valor: RecorrenciaCompromisso) => {
     setRecorrencia(valor);
@@ -69,7 +80,7 @@ export function NovoCompromissoModal({ open, onOpenChange, dataInicial }: { open
     <div><Label>Título *</Label><Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex.: Mentoria da Josi" required /></div>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3"><div><Label>Data *</Label><Input type="date" value={data} onChange={e => setData(e.target.value)} required /></div><div><Label>Início *</Label><Input type="time" value={inicio} onChange={e => setInicio(e.target.value)} required /></div><div><Label>Fim *</Label><Input type="time" value={fim} onChange={e => setFim(e.target.value)} required /></div></div>
     <div className={recorrencia === "nenhuma" ? "" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
-      <div><Label>Recorrência</Label><Select value={recorrencia} onValueChange={v => alterarRecorrencia(v as RecorrenciaCompromisso)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="nenhuma">Não se repete</SelectItem><SelectItem value="semanal">Toda semana</SelectItem><SelectItem value="quinzenal">A cada 15 dias</SelectItem><SelectItem value="mensal">Todo mês</SelectItem></SelectContent></Select></div>
+      <div><Label>Recorrência</Label><Select value={recorrencia} onValueChange={v => alterarRecorrencia(v as RecorrenciaCompromisso)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="nenhuma">Não se repete</SelectItem><SelectItem value="semanal">Toda semana</SelectItem><SelectItem value="quinzenal">A cada 15 dias</SelectItem><SelectItem value="mensal">{diaDoMes ? `Todo mês, no dia ${diaDoMes}` : "Todo mês, no mesmo dia"}</SelectItem><SelectItem value="mensal_dia_semana">{rotuloPorSemana ? `Todo mês, ${rotuloPorSemana}` : "Todo mês, no mesmo dia da semana"}</SelectItem></SelectContent></Select></div>
       {recorrencia !== "nenhuma" && <div><Label>Repetir até *</Label><Input type="date" value={recorrenciaFim} min={data} onChange={e => setRecorrenciaFim(e.target.value)} required /></div>}
     </div>
     {recorrencia !== "nenhuma" && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">O compromisso aparecerá automaticamente no mesmo horário, conforme a recorrência escolhida.</p>}

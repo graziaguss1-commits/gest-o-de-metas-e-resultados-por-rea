@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { agendarSyncGoogle } from "@/lib/googleSync";
 
-export type RecorrenciaCompromisso = "nenhuma" | "semanal" | "quinzenal" | "mensal";
+import { proximaOcorrencia } from "../../supabase/functions/_shared/recorrencia";
+
+export type RecorrenciaCompromisso =
+  | "nenhuma"
+  | "semanal"
+  | "quinzenal"
+  | "mensal"
+  | "mensal_dia_semana";
 
 export type Compromisso = {
   id: string;
@@ -82,20 +89,6 @@ function normalizarRegistro(registro: CompromissoBanco): CompromissoBanco {
   };
 }
 
-function proximaOcorrencia(data: Date, recorrencia: RecorrenciaCompromisso) {
-  const proxima = new Date(data);
-  if (recorrencia === "semanal") proxima.setDate(proxima.getDate() + 7);
-  if (recorrencia === "quinzenal") proxima.setDate(proxima.getDate() + 14);
-  if (recorrencia === "mensal") {
-    const dia = proxima.getDate();
-    proxima.setDate(1);
-    proxima.setMonth(proxima.getMonth() + 1);
-    const ultimoDia = new Date(proxima.getFullYear(), proxima.getMonth() + 1, 0).getDate();
-    proxima.setDate(Math.min(dia, ultimoDia));
-  }
-  return proxima;
-}
-
 function expandirNaJanela(
   registrosBrutos: CompromissoBanco[],
   inicio: string,
@@ -146,7 +139,7 @@ function expandirNaJanela(
           recorrencia,
         });
       }
-      atual = proximaOcorrencia(atual, recorrencia);
+      atual = proximaOcorrencia(atual, recorrencia, parseData(registro.data));
     }
     return ocorrencias;
   }).sort((a, b) => `${a.data}${a.hora_inicio}`.localeCompare(`${b.data}${b.hora_inicio}`));

@@ -1,4 +1,4 @@
-// PRIORIDADE_DIA_V2
+// PRIORIDADE_DIA_V3
 //
 // Marcador de versao para a publicacao. Cada mudanca que precisa ir ao ar
 // ganha um marcador novo, e o pedido de deploy manda conferir se ele existe
@@ -6,6 +6,7 @@
 // lugar desta sem ninguem perceber.
 
 import { createServiceClient, jsonResponse, optionsResponse } from "../_shared/common.ts";
+import { proximaOcorrencia, type Recorrencia } from "../_shared/recorrencia.ts";
 import {
   agoraEmSaoPaulo,
   blocosParaLembrar,
@@ -54,18 +55,25 @@ async function reservar(db: Db, user_id: string, tipo: string, referencia: strin
   throw error;
 }
 
-function proximaData(iso: string, recorrencia: string) {
-  const d = new Date(`${iso}T12:00:00Z`);
-  if (recorrencia === "semanal") d.setUTCDate(d.getUTCDate() + 7);
-  else if (recorrencia === "quinzenal") d.setUTCDate(d.getUTCDate() + 14);
-  else {
-    const dia = d.getUTCDate();
-    d.setUTCDate(1);
-    d.setUTCMonth(d.getUTCMonth() + 1);
-    const ultimo = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-    d.setUTCDate(Math.min(dia, ultimo));
-  }
-  return d.toISOString().slice(0, 10);
+/**
+ * Proxima ocorrencia de uma serie, na mesma regra que a agenda do app usa.
+ *
+ * `primeira` e a data inicial da serie, nao a ocorrencia corrente: e dela que
+ * saem o dia do mes e a posicao no mes ("ultima sexta"). Usar a corrente faria
+ * "ultima sexta" virar "quarta sexta" no primeiro mes de 4 sextas, e nunca
+ * mais voltar.
+ */
+function proximaData(iso: string, recorrencia: string, primeira: string) {
+  const local = (x: string) => {
+    const [a, m, d] = x.split("-").map(Number);
+    return new Date(a, m - 1, d);
+  };
+  const proxima = proximaOcorrencia(
+    local(iso),
+    recorrencia as Recorrencia,
+    local(primeira),
+  );
+  return `${proxima.getFullYear()}-${String(proxima.getMonth() + 1).padStart(2, "0")}-${String(proxima.getDate()).padStart(2, "0")}`;
 }
 
 /** Blocos de hoje do usuário: planos, ações avulsas e compromissos (com ocorrências). */
@@ -133,7 +141,7 @@ async function blocosDeHoje(db: Db, uid: string, hoje: string): Promise<Bloco[]>
         blocos.push({ ref: `cp:${c.id}@${original}`, titulo: c.titulo, inicio: ini, concluido: c.concluido, duracaoMinutos: fim ? Math.max(0, minutosDe(fim) - minutosDe(ini)) : 30 });
       }
       if (recorrencia === "nenhuma") break;
-      original = proximaData(original, recorrencia);
+      original = proximaData(original, recorrencia, c.data);
     }
   }
   // Ocorrências de compromisso movidas para hoje a partir de uma data futura.
