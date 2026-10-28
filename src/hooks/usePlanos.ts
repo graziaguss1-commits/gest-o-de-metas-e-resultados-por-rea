@@ -55,7 +55,9 @@ async function sincronizarHabitoDaMeta(
 
   const { data: tarefasBrutas } = await supabase
     .from("plano_tarefas")
-    .select("id, descricao, concluida, frequencia, quantidade_planejada, dias_semana, data_inicio, prazo")
+    // data_fim entra aqui porque é onde a ROTINA guarda seu fim (prazo é da
+    // ação única). Sem ele, a rotina era cobrada até o fim da meta.
+    .select("id, descricao, concluida, frequencia, quantidade_planejada, dias_semana, data_inicio, prazo, data_fim")
     .in("plano_id", ids);
   const tarefas = (tarefasBrutas ?? []) as unknown as TarefaMensuravel[];
   if (!tarefas.length) return;

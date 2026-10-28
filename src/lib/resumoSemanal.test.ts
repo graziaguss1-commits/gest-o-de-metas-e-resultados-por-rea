@@ -190,3 +190,40 @@ describe("janelaDaTarefa", () => {
     expect(janelaDaTarefa({ data_inicio: "2027-01-01", prazo: "2027-02-01" }, meta)).toBeNull();
   });
 });
+
+describe("fim da rotina (data_fim) vs fim da ação única (prazo)", () => {
+  const meta = { data_inicio: "2026-10-27", data_fim: "2027-12-31" };
+
+  it("para de cobrar a rotina no data_fim dela, não no fim da meta", () => {
+    const janela = janelaDaTarefa(
+      { data_inicio: "2026-10-27", prazo: null, data_fim: "2026-12-31" },
+      meta,
+    );
+    expect(janela).toEqual({ inicio: "2026-10-27", fim: "2026-12-31" });
+  });
+
+  it("continua respeitando o prazo da ação única", () => {
+    const janela = janelaDaTarefa(
+      { data_inicio: "2026-10-27", prazo: "2026-11-30", data_fim: null },
+      meta,
+    );
+    expect(janela?.fim).toBe("2026-11-30");
+  });
+
+  it("sem data própria, o fim da meta segue valendo", () => {
+    const janela = janelaDaTarefa(
+      { data_inicio: "2026-10-27", prazo: null, data_fim: null },
+      meta,
+    );
+    expect(janela?.fim).toBe("2027-12-31");
+  });
+
+  it("a janela acumulada também para no fim da rotina", () => {
+    const janela = janelaAcumulada(
+      { data_inicio: "2026-10-27", prazo: null, data_fim: "2026-11-10" },
+      meta,
+      "2026-12-20",
+    );
+    expect(janela.fim).toBe("2026-11-10");
+  });
+});

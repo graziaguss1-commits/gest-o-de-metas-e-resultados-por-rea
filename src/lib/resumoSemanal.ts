@@ -12,6 +12,18 @@ const maior = (a: string, b: string) => (a > b ? a : b);
 const menor = (a: string, b: string) => (a < b ? a : b);
 
 /**
+ * Quando a ação deixa de ser cobrada.
+ *
+ * Ação única guarda a data em `prazo`; rotina guarda em `data_fim` — é assim
+ * que os formulários salvam. Olhar só `prazo` fazia a rotina parecer eterna:
+ * a cobrança seguia até o fim da META, inflando o alvo do hábito com
+ * períodos que a rotina nunca ia alcançar.
+ */
+const fimDaTarefa = (
+  tarefa: Pick<TarefaMensuravel, "prazo" | "data_fim">,
+): string | null => tarefa.prazo ?? tarefa.data_fim ?? null;
+
+/**
  * Períodos em que a ação deveria ter sido cumprida dentro da janela.
  *
  * Um período é a unidade de cobrança da rotina: para "por dia" é cada dia que
@@ -111,7 +123,7 @@ export function aderencia(
  * ser cobrado como perdido.
  */
 export function janelaAcumulada(
-  tarefa: Pick<TarefaMensuravel, "data_inicio" | "prazo">,
+  tarefa: Pick<TarefaMensuravel, "data_inicio" | "prazo" | "data_fim">,
   meta: { data_inicio?: string | null; data_fim?: string | null } | null,
   hojeISO: string,
 ): Janela {
@@ -119,7 +131,7 @@ export function janelaAcumulada(
     tarefa.data_inicio ?? meta?.data_inicio ?? hojeISO,
     meta?.data_inicio ?? tarefa.data_inicio ?? hojeISO,
   );
-  const limite = menor(meta?.data_fim ?? hojeISO, tarefa.prazo ?? hojeISO);
+  const limite = menor(meta?.data_fim ?? hojeISO, fimDaTarefa(tarefa) ?? hojeISO);
   return { inicio, fim: menor(hojeISO, maior(limite, inicio)) };
 }
 
@@ -167,11 +179,11 @@ export function movimentoMeta(
  * começo ao fim, que é o alvo.
  */
 export function janelaDaTarefa(
-  tarefa: Pick<TarefaMensuravel, "data_inicio" | "prazo">,
+  tarefa: Pick<TarefaMensuravel, "data_inicio" | "prazo" | "data_fim">,
   meta: { data_inicio?: string | null; data_fim?: string | null } | null,
 ): Janela | null {
   const inicio = maior(tarefa.data_inicio ?? meta?.data_inicio ?? "", meta?.data_inicio ?? "");
-  const fim = menor(tarefa.prazo ?? meta?.data_fim ?? "", meta?.data_fim ?? "");
+  const fim = menor(fimDaTarefa(tarefa) ?? meta?.data_fim ?? "", meta?.data_fim ?? "");
   if (!inicio || !fim || fim < inicio) return null;
   return { inicio, fim };
 }
