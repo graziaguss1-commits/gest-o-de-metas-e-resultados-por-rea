@@ -79,16 +79,28 @@ describe("aderencia", () => {
     expect(a.cumpridos).toBe(0);
   });
 
-  it("não cumpre o dia com quantidade abaixo da planejada", () => {
-    const meta3 = tarefa({ quantidade_planejada: 3 });
-    expect(aderencia(meta3, [exec("2026-10-19", 2)], SEMANA).cumpridos).toBe(0);
-    expect(aderencia(meta3, [exec("2026-10-19", 3)], SEMANA).cumpridos).toBe(1);
+  it("conta o que foi feito mesmo abaixo da quantidade planejada", () => {
+    // 3 treinos por semana: fazer 2 vale 2, não zero.
+    const treino = tarefa({ frequencia: "semanal", quantidade_planejada: 3 });
+    const a = aderencia(treino, [exec("2026-10-19", 2)], SEMANA);
+    expect(a).toEqual({ exigidos: 3, cumpridos: 2, pct: 2 / 3 });
+  });
+
+  it("não deixa um período forte pagar os outros: tem teto", () => {
+    const treino = tarefa({ frequencia: "semanal", quantidade_planejada: 3 });
+    const a = aderencia(treino, [exec("2026-10-19", 5)], SEMANA);
+    expect(a.cumpridos).toBe(3);
   });
 
   it("soma registros do mesmo período", () => {
-    const meta3 = tarefa({ quantidade_planejada: 3 });
-    const a = aderencia(meta3, [exec("2026-10-19", 1), exec("2026-10-19", 2)], SEMANA);
-    expect(a.cumpridos).toBe(1);
+    const treino = tarefa({ frequencia: "semanal", quantidade_planejada: 3 });
+    const a = aderencia(treino, [exec("2026-10-19", 1), exec("2026-10-20", 1)], SEMANA);
+    expect(a.cumpridos).toBe(2);
+  });
+
+  it("ação de quantidade 1 continua valendo 1 por período, como antes", () => {
+    const a = aderencia(tarefa(), [exec("2026-10-19"), exec("2026-10-19")], SEMANA);
+    expect(a).toEqual({ exigidos: 7, cumpridos: 1, pct: 1 / 7 });
   });
 
   it("pct é null quando nada era exigido, não 0%", () => {

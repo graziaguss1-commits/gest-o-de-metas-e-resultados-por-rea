@@ -7,7 +7,6 @@ import {
   aderencia,
   janelaAcumulada,
   janelaDaTarefa,
-  periodosExigidos,
 } from "@/lib/resumoSemanal";
 
 const PLANOS_KEY = ["planos"] as const;
@@ -74,7 +73,10 @@ async function sincronizarHabitoDaMeta(
   for (const tarefa of tarefas) {
     const cheia = janelaDaTarefa(tarefa, meta);
     if (!cheia) continue;
-    alvo += periodosExigidos(tarefa, cheia).length;
+    // Alvo e atual na MESMA unidade: cumprimentos, não períodos. Uma rotina
+    // de 3 por semana pede 3 por semana — contar períodos aqui e
+    // cumprimentos ali fazia "0 de 12" para quem tinha feito 7 treinos.
+    alvo += aderencia(tarefa, [], cheia).exigidos;
     atual += aderencia(tarefa, execucoes, janelaAcumulada(tarefa, meta, hoje)).cumpridos;
   }
   if (alvo <= 0) return;

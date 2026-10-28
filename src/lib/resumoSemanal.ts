@@ -91,7 +91,22 @@ export type Aderencia = {
   pct: number | null;
 };
 
-/** Quantos períodos exigidos foram cumpridos, e a taxa. */
+/**
+ * Quantos cumprimentos a janela pediu e quantos saíram.
+ *
+ * A unidade é o CUMPRIMENTO, não o período: uma rotina de 3 treinos por
+ * semana pede 3 por semana, e cada treino conta. Antes a conta era
+ * tudo-ou-nada por período — a semana só valia com os 3 — e isso zerava
+ * quem treinou 2. Sete treinos reais apareciam como zero, que é o oposto
+ * do que um medidor de hábito deve fazer.
+ *
+ * O teto por período impede o contrário: cinco treinos numa semana que
+ * pede 3 contam 3, não 5, senão uma semana forte pagaria a semana vazia e
+ * a rotina deixaria de ser rotina.
+ *
+ * Para as ações de quantidade 1 — a maioria — nada muda: min(n, 1) por
+ * período é exatamente o "cumpriu ou não" de antes.
+ */
 export function aderencia(
   tarefa: TarefaMensuravel,
   execucoes: Execucao[],
@@ -101,17 +116,18 @@ export function aderencia(
   const planejado = Number(tarefa.quantidade_planejada ?? 1) || 1;
   const doTarefa = execucoes.filter((e) => e.tarefa_id === tarefa.id);
 
-  const cumpridos = periodos.filter((p) => {
+  const cumpridos = periodos.reduce((total, p) => {
     const soma = doTarefa
       .filter((e) => e.data_referencia >= p.inicio && e.data_referencia <= p.fim)
       .reduce((acc, e) => acc + Number(e.quantidade || 0), 0);
-    return soma >= planejado;
-  }).length;
+    return total + Math.min(soma, planejado);
+  }, 0);
 
+  const exigidos = periodos.length * planejado;
   return {
-    exigidos: periodos.length,
+    exigidos,
     cumpridos,
-    pct: periodos.length ? cumpridos / periodos.length : null,
+    pct: exigidos ? cumpridos / exigidos : null,
   };
 }
 
