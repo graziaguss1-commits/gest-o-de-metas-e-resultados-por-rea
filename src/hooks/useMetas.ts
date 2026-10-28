@@ -48,6 +48,9 @@ export function useMetas() {
       const { data, error } = await supabase
         .from("metas_with_responsavel")
         .select("*")
+        // Arquivada some do painel, mas nada e apagado: o historico continua
+        // no banco e a meta volta inteira ao desarquivar.
+        .is("arquivada_em", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return enriquecerMetas(
@@ -337,6 +340,52 @@ export function useCreateComentario() {
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["metas", vars.metaId, "comentarios"] });
+    },
+  });
+}
+
+const METAS_ARQUIVADAS_KEY = ["metas", "arquivadas"] as const;
+
+/** Metas fora do painel. Existe para dar caminho de volta ao que foi arquivado. */
+export function useMetasArquivadas() {
+  return useQuery({
+    queryKey: METAS_ARQUIVADAS_KEY,
+    queryFn: async (): Promise<MetaWithResponsavel[]> => {
+      const { data, error } = await supabase
+        .from("metas_with_responsavel")
+        .select("*")
+        .not("arquivada_em", "is", null)
+        .order("arquivada_em", { ascending: false });
+      if (error) throw error;
+      return enriquecerMetas(
+        (data ?? []) as Omit<MetaWithResponsavel, "responsaveis">[],
+      );
+    },
+  });
+}
+
+/**
+ * Arquiva ou desarquiva uma meta.
+ *
+ * Arquivar e reversivel de proposito: o app nao tinha como tirar uma meta da
+ * frente, e a saida obvia — apagar — levaria junto lancamentos, comentarios e
+ * funil. Some do painel, continua no banco.
+ */
+export function useArquivarMeta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, arquivar }: { id: string; arquivar: boolean }) => {
+      const { error } = await supabase
+        .from("metas")
+        .update({ arquivada_em: arquivar ? new Date().toISOString() : null })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: METAS_KEY });
+      qc.invalidateQueries({ queryKey: METAS_ARQUIVADAS_KEY });
+      // Os planos da meta somem junto, e eles vem de outra consulta.
+      qc.invalidateQueries({ queryKey: ["planos"] });
     },
   });
 }

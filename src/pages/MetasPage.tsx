@@ -14,7 +14,8 @@ import { MetaCard } from "@/components/metas/MetaCard";
 import { NovaMetaModal } from "@/components/metas/NovaMetaModal";
 import { LancarResultadoModal } from "@/components/metas/LancarResultadoModal";
 import { HistoricoModal } from "@/components/metas/HistoricoModal";
-import { useMetas } from "@/hooks/useMetas";
+import { toast } from "sonner";
+import { useArquivarMeta, useMetas, useMetasArquivadas } from "@/hooks/useMetas";
 import { AREAS, PERIODICIDADES, type MetaWithResponsavel, type Status } from "@/lib/metas";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,9 @@ const STATUS_FILTERS: { value: "todas" | Status; label: string }[] = [
 
 export default function MetasPage() {
   const { data: metas, isLoading, isError, refetch } = useMetas();
+  const { data: arquivadas } = useMetasArquivadas();
+  const arquivar = useArquivarMeta();
+  const [verArquivadas, setVerArquivadas] = useState(false);
   const [novaOpen, setNovaOpen] = useState(false);
   const [lancarMetaId, setLancarMetaId] = useState<string | undefined>(undefined);
   const [lancarOpen, setLancarOpen] = useState(false);
@@ -181,6 +185,61 @@ export default function MetasPage() {
               />
             ))}
           </div>
+        )}
+
+        {/* Sem caminho de volta, arquivar seria apagar com outro nome. */}
+        {(arquivadas?.length ?? 0) > 0 && (
+          <section className="mt-6 rounded-2xl border bg-card p-4">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setVerArquivadas((v) => !v)}
+            >
+              <span className="text-sm font-semibold">
+                Arquivadas ({arquivadas!.length})
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {verArquivadas ? "ocultar" : "mostrar"}
+              </span>
+            </button>
+            {verArquivadas && (
+              <div className="mt-3 space-y-2">
+                {arquivadas!.map((meta) => (
+                  <div
+                    key={meta.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{meta.nome}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {meta.area} · arquivada em{" "}
+                        {new Date(meta.arquivada_em!).toLocaleDateString("pt-BR")}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={arquivar.isPending}
+                      onClick={() =>
+                        arquivar.mutate(
+                          { id: meta.id, arquivar: false },
+                          {
+                            onSuccess: () => toast.success("Meta de volta ao painel."),
+                            onError: (e) =>
+                              toast.error(
+                                e instanceof Error ? e.message : "Não foi possível desarquivar.",
+                              ),
+                          },
+                        )
+                      }
+                    >
+                      Desarquivar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         )}
       </div>
 

@@ -804,6 +804,7 @@ export type Database = {
       metas: {
         Row: {
           area: string
+          arquivada_em: string | null
           created_at: string
           criado_por: string | null
           data_fim: string
@@ -846,6 +847,7 @@ export type Database = {
         }
         Update: {
           area?: string
+          arquivada_em?: string | null
           created_at?: string
           criado_por?: string | null
           data_fim?: string
@@ -1377,6 +1379,7 @@ export type Database = {
       metas_with_responsavel: {
         Row: {
           area: string | null
+          arquivada_em: string | null
           created_at: string | null
           criado_por: string | null
           data_fim: string | null

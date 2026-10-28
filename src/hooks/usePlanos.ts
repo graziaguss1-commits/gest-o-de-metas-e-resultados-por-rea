@@ -110,7 +110,7 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
   const { data: meta, error: metaError } = await supabase
     .from("metas")
     .select(
-      "metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status",
+      "metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status,arquivada_em",
     )
     .eq("id", metaId)
     .maybeSingle();
@@ -209,7 +209,7 @@ export function usePlanos() {
           .order("ordem", { ascending: true }),
         supabase
           .from("metas")
-          .select("id, nome, status, area, metric_type, unidade"),
+          .select("id, nome, status, area, metric_type, unidade, data_inicio, data_fim, arquivada_em"),
         supabase.from("meta_responsaveis").select("meta_id, user_id"),
         supabase.rpc("get_team_directory"),
       ]);
@@ -251,7 +251,14 @@ export function usePlanos() {
           ? ((metaById.get(p.meta_id) as PlanoWithMeta["meta"]) ?? null)
           : null,
         tarefas: tarefasByPlano.get(p.id) ?? [],
-      }));
+      }))
+      // Plano de meta arquivada some junto. Derivado da meta, nao marcado no
+      // plano: um segundo lugar para guardar "arquivado" sairia do ar na
+      // primeira vez que alguem desarquivasse a meta e esquecesse o plano.
+      .filter((p) => {
+        const meta = p.meta_id ? metaById.get(p.meta_id) : null;
+        return !meta?.arquivada_em;
+      });
 
       // Metas cujo numero e CALCULADO, nao digitado: projeto conta planos
       // concluidos, habito conta cumprimentos das acoes. Precisam ser

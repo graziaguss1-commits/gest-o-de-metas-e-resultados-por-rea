@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, History, Plus, Sparkles, Calendar, Pencil } from "lucide-react";
+import { toast } from "sonner";
+import { useArquivarMeta } from "@/hooks/useMetas";
+import { Archive, ChevronDown, History, Plus, Sparkles, Calendar, Pencil } from "lucide-react";
 import {
   formatDateISOToBR,
   formatProgresso,
@@ -35,6 +37,7 @@ function initials(name?: string | null) {
 }
 
 export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico, onEditar }: Props) {
+  const arquivar = useArquivarMeta();
   const [open, setOpen] = useState(!!defaultOpen);
   const status = meta.status as Status;
   const projetoPorEtapas = getMetricType(meta) === "projeto";
@@ -174,6 +177,25 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
                 Editar meta
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={arquivar.isPending}
+              onClick={() =>
+                arquivar.mutate(
+                  { id: meta.id, arquivar: true },
+                  {
+                    onSuccess: () =>
+                      toast.success("Meta arquivada. Os planos dela saíram do painel junto."),
+                    onError: (e) =>
+                      toast.error(e instanceof Error ? e.message : "Não foi possível arquivar."),
+                  },
+                )
+              }
+            >
+              <Archive className="h-4 w-4 mr-1.5" />
+              Arquivar
+            </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to={`/metas/${meta.id}/analise`}>
                 <Sparkles className="h-4 w-4 mr-1.5" />
