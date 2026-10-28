@@ -827,6 +827,7 @@ export type Database = {
         }
         Insert: {
           area: string
+          arquivada_em?: string | null
           created_at?: string
           criado_por?: string | null
           data_fim: string
@@ -966,6 +967,7 @@ export type Database = {
           data_fim: string | null
           data_inicio: string | null
           descricao: string
+          dia_semana_mensal: number | null
           dias_semana: number[] | null
           duracao_minutos: number | null
           esforco: number
@@ -978,11 +980,10 @@ export type Database = {
           plano_id: string
           prazo: string | null
           primeiro_passo: string | null
-          dia_semana_mensal: number | null
-          recorrencia_mensal: string
-          semana_do_mes: number | null
           quantidade_planejada: number
+          recorrencia_mensal: string
           responsavel_id: string | null
+          semana_do_mes: number | null
           unidade: string
           versao_minima: string | null
         }
@@ -992,6 +993,7 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string | null
           descricao: string
+          dia_semana_mensal?: number | null
           dias_semana?: number[] | null
           duracao_minutos?: number | null
           esforco?: number
@@ -1004,11 +1006,10 @@ export type Database = {
           plano_id: string
           prazo?: string | null
           primeiro_passo?: string | null
-          dia_semana_mensal?: number | null
-          recorrencia_mensal?: string
-          semana_do_mes?: number | null
           quantidade_planejada?: number
+          recorrencia_mensal?: string
           responsavel_id?: string | null
+          semana_do_mes?: number | null
           unidade?: string
           versao_minima?: string | null
         }
@@ -1018,6 +1019,7 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string | null
           descricao?: string
+          dia_semana_mensal?: number | null
           dias_semana?: number[] | null
           duracao_minutos?: number | null
           esforco?: number
@@ -1030,11 +1032,10 @@ export type Database = {
           plano_id?: string
           prazo?: string | null
           primeiro_passo?: string | null
-          dia_semana_mensal?: number | null
-          recorrencia_mensal?: string
-          semana_do_mes?: number | null
           quantidade_planejada?: number
+          recorrencia_mensal?: string
           responsavel_id?: string | null
+          semana_do_mes?: number | null
           unidade?: string
           versao_minima?: string | null
         }
@@ -1391,8 +1392,8 @@ export type Database = {
           funil_ativo: boolean | null
           id: string | null
           is_demo: boolean | null
-          meta_aderencia: number | null
           is_inverse: boolean | null
+          meta_aderencia: number | null
           metric_type: string | null
           nome: string | null
           periodicidade: string | null
@@ -1432,7 +1433,6 @@ export type Database = {
         }
         Returns: string
       }
-      recalcular_status_metas: { Args: Record<string, never>; Returns: number }
       can_access_meta: { Args: { p_meta_id: string }; Returns: boolean }
       can_access_plan: { Args: { p_plano_id: string }; Returns: boolean }
       can_access_task: { Args: { p_tarefa_id: string }; Returns: boolean }
@@ -1469,6 +1469,7 @@ export type Database = {
         Returns: string
       }
       read_vault_secret: { Args: { p_key: string }; Returns: string }
+      recalcular_status_metas: { Args: never; Returns: number }
       release_google_calendar_sync_lock: {
         Args: { _user_id: string }
         Returns: undefined
