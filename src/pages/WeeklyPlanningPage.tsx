@@ -329,13 +329,9 @@ export default function WeeklyPlanningPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStartISO, recurrenceSignature]);
 
-  const topPriorityTasks = state.priorityIds
+  const selectedTasks = state.acoesIds
     .map((id) => tasks.find((task) => task.id === id))
     .filter((task): task is PlanningTask => Boolean(task));
-  const complementaryTasks = state.complementaryIds
-    .map((id) => tasks.find((task) => task.id === id))
-    .filter((task): task is PlanningTask => Boolean(task));
-  const selectedTasks = [...topPriorityTasks, ...complementaryTasks];
 
   const blocksByTask = useMemo(() => {
     const map = new Map<string, Agendamento[]>();
@@ -402,11 +398,10 @@ export default function WeeklyPlanningPage() {
         task.origem === "plano" ? hhmm(task.horario_preferencial) || null : null,
       dias_semana:
         task.origem === "plano" ? (task.dias_semana ?? []) : [],
-      selecionada_como: state.priorityIds.includes(task.id)
-        ? "top"
-        : state.complementaryIds.includes(task.id)
-          ? "complementar"
-          : null,
+      // A função do Claude ainda distingue top/complementar no contrato dela;
+      // o app não distingue mais, então toda escolhida vai como "complementar"
+      // e a resposta é juntada de volta numa lista só.
+      selecionada_como: state.acoesIds.includes(task.id) ? "complementar" : null,
     }));
 
   const taskLabelById = new Map(tasks.map((task) => [task.id, task.descricao]));
@@ -465,47 +460,15 @@ export default function WeeklyPlanningPage() {
   const all = ownPlanTasks.length + (actions ?? []).length;
   const execution = all ? Math.round((completed / all) * 100) : 0;
 
-  const selectTopPriority = (id: string) => {
-    if (!state.priorityIds.includes(id) && state.priorityIds.length >= 3) {
-      toast.error(
-        "Você já definiu as 3 prioridades top. Retire uma delas ou adicione esta ação como complementar.",
-      );
-      return;
-    }
+  /** Põe ou tira a ação da semana. Sem teto: quem limita é a capacidade da
+   *  agenda, cobrada na etapa seguinte, não um número fixo aqui. */
+  const toggleAcao = (id: string) =>
     setState((current) => ({
       ...current,
-      priorityIds: current.priorityIds.includes(id)
-        ? current.priorityIds.filter((item) => item !== id)
-        : [...current.priorityIds, id],
-      complementaryIds: current.complementaryIds.filter((item) => item !== id),
+      acoesIds: current.acoesIds.includes(id)
+        ? current.acoesIds.filter((item) => item !== id)
+        : [...current.acoesIds, id],
     }));
-  };
-
-  const selectComplementary = (id: string) => {
-    setState((current) => ({
-      ...current,
-      priorityIds: current.priorityIds.filter((item) => item !== id),
-      complementaryIds: current.complementaryIds.includes(id)
-        ? current.complementaryIds.filter((item) => item !== id)
-        : [...current.complementaryIds, id],
-    }));
-  };
-
-  const toggleFromMatrix = (id: string) => {
-    if (state.priorityIds.includes(id)) {
-      selectTopPriority(id);
-      return;
-    }
-    if (state.complementaryIds.includes(id)) {
-      selectComplementary(id);
-      return;
-    }
-    if (state.priorityIds.length < 3) {
-      selectTopPriority(id);
-      return;
-    }
-    selectComplementary(id);
-  };
 
   const generateWithClaude = async () => {
     if (!claudeTasks.length) {
@@ -573,15 +536,14 @@ export default function WeeklyPlanningPage() {
         agenda,
       });
       const validIds = new Set(tasks.map((task) => task.id));
-      const topIds = draft.topIds.filter((id) => validIds.has(id)).slice(0, 3);
-      const complementaryIds = draft.complementaryIds.filter(
-        (id) => validIds.has(id) && !topIds.includes(id),
-      );
+      // A função ainda devolve as duas listas; aqui viram uma só.
+      const acoesIds = [
+        ...new Set([...draft.topIds, ...draft.complementaryIds]),
+      ].filter((id) => validIds.has(id));
       const next: PlanningState = {
         ...state,
         focus: draft.focoSemana,
-        priorityIds: topIds,
-        complementaryIds,
+        acoesIds,
         savedAt: undefined,
       };
       await salvarPlanejamento.mutateAsync({ semanaInicio: weekStartISO, estado: next });
@@ -648,12 +610,14 @@ export default function WeeklyPlanningPage() {
           <MiniMetric label="Ações concluídas" value={`${completed}/${all}`} />
           <MiniMetric
             label="Plano da semana"
-            value={`${state.priorityIds.length}/3 top · +${state.complementaryIds.length}`}
+            value={`${state.acoesIds.length} ${state.acoesIds.length === 1 ? "ação" : "ações"}`}
           />
         </div>
 
         <div className="flex items-center overflow-x-auto rounded-xl border bg-card p-2">
-          {["Revisar", "Priorizar", "Agendar", "Confirmar"].map(
+          {/* "Priorizar" virou "Escolher": priorizar agora é o que se faz por
+              dia, na etapa Agendar. A semana só decide o que entra. */}
+          {["Revisar", "Escolher", "Agendar", "Confirmar"].map(
             (label, index) => {
               const number = index + 1;
               const active = step === number;
@@ -783,47 +747,36 @@ export default function WeeklyPlanningPage() {
               ) : (
                 <ImpactMatrix
                   tasks={tasks}
-                  topIds={state.priorityIds}
-                  complementaryIds={state.complementaryIds}
-                  onToggle={toggleFromMatrix}
+                  escolhidasIds={state.acoesIds}
+                  onToggle={toggleAcao}
                 />
               )}
             </Panel>
 
             <Panel
               icon={<Target className="h-5 w-5" />}
-              title="Defina as prioridades e complete a semana"
-              subtitle="Escolha até 3 prioridades top e acrescente outras ações complementares. Na próxima etapa, você reservará os horários de todas elas."
+              title="Escolha as ações da semana"
+              subtitle="Marque o que entra nesta semana. Na próxima etapa você reserva os horários e define a prioridade de cada dia."
             >
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-[var(--brand-accent)]/30 bg-[var(--brand-accent-soft)] p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-[var(--brand-primary)]">
-                    <Star className="h-4 w-4 fill-current" />
-                    Prioridades top
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {state.priorityIds.length}/3 escolhidas · proteja primeiro
-                    os horários que mais movem o resultado.
-                  </p>
+              <div className="mb-4 rounded-xl border bg-card p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Check className="h-4 w-4" />
+                  {state.acoesIds.length}{" "}
+                  {state.acoesIds.length === 1
+                    ? "ação na semana"
+                    : "ações na semana"}
                 </div>
-                <div className="rounded-xl border bg-card p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <Plus className="h-4 w-4" />
-                    Ações complementares
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {state.complementaryIds.length} escolhidas · adicione o que
-                    couber no tempo disponível da semana.
-                  </p>
-                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sem teto de quantidade: quem limita é o tempo livre da agenda,
+                  cobrado na etapa seguinte. A prioridade de cada dia você
+                  escolhe lá, uma por dia.
+                </p>
               </div>
               <div className="space-y-3">
                 {gruposDePrazo.map((grupo) => {
                   const aberto = grupoAberto(grupo);
-                  const escolhidasNoGrupo = grupo.tarefas.filter(
-                    (t) =>
-                      state.priorityIds.includes(t.id) ||
-                      state.complementaryIds.includes(t.id),
+                  const escolhidasNoGrupo = grupo.tarefas.filter((t) =>
+                    state.acoesIds.includes(t.id),
                   ).length;
                   return (
                   <div key={grupo.chave}>
@@ -865,10 +818,7 @@ export default function WeeklyPlanningPage() {
                     {aberto && (
                     <div className="grid gap-2 md:grid-cols-2">
                 {grupo.tarefas.map((task, index) => {
-                  const isTop = state.priorityIds.includes(task.id);
-                  const isComplementary = state.complementaryIds.includes(
-                    task.id,
-                  );
+                  const escolhida = state.acoesIds.includes(task.id);
                   const expectedBlocks = scheduleStatus(task).required;
                   const quadrant = actionQuadrant(task);
                   const style = QUADRANT_STYLE[quadrant];
@@ -876,26 +826,20 @@ export default function WeeklyPlanningPage() {
                     <div
                       key={task.id}
                       className={`rounded-xl border p-4 text-left transition ${
-                        isTop
-                          ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]"
-                          : isComplementary
-                            ? "border-[var(--brand-primary)]/30 bg-[var(--brand-light)]"
-                            : "bg-card hover:border-[var(--brand-primary)]/40"
+                        escolhida
+                          ? "border-[var(--brand-primary)]/30 bg-[var(--brand-light)]"
+                          : "bg-card hover:border-[var(--brand-primary)]/40"
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <span
                           className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${
-                            isTop
-                              ? "border-[var(--brand-accent)] bg-[var(--brand-accent)] text-white"
-                              : isComplementary
-                                ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
-                                : ""
+                            escolhida
+                              ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
+                              : ""
                           }`}
                         >
-                          {isTop ? (
-                            <Star className="h-3 w-3 fill-current" />
-                          ) : isComplementary ? (
+                          {escolhida ? (
                             <Check className="h-3 w-3" />
                           ) : (
                             index + 1
@@ -951,35 +895,19 @@ export default function WeeklyPlanningPage() {
                               );
                             })()}
                           </div>
-                          <div className="mt-4 flex flex-wrap gap-2">
+                          <div className="mt-4">
                             <Button
                               type="button"
                               size="sm"
-                              variant={isTop ? "default" : "outline"}
-                              onClick={() => selectTopPriority(task.id)}
-                              className={isTop ? "brand-button" : ""}
+                              variant={escolhida ? "secondary" : "outline"}
+                              onClick={() => toggleAcao(task.id)}
                             >
-                              <Star
-                                className={`mr-1.5 h-3.5 w-3.5 ${
-                                  isTop ? "fill-current" : ""
-                                }`}
-                              />
-                              {isTop ? "Prioridade top" : "Marcar como top"}
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={isComplementary ? "secondary" : "ghost"}
-                              onClick={() => selectComplementary(task.id)}
-                            >
-                              {isComplementary ? (
+                              {escolhida ? (
                                 <Check className="mr-1.5 h-3.5 w-3.5" />
                               ) : (
                                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                               )}
-                              {isComplementary
-                                ? "Complementar escolhida"
-                                : "Adicionar à semana"}
+                              {escolhida ? "Na semana" : "Adicionar à semana"}
                             </Button>
                           </div>
                         </div>
@@ -1022,43 +950,16 @@ export default function WeeklyPlanningPage() {
             <Panel
               icon={<CalendarClock className="h-5 w-5" />}
               title="Reserve os horários da semana"
-              subtitle="Cada prioridade top e ação complementar precisa ter pelo menos um bloco no calendário."
+              subtitle="Cada ação escolhida precisa ter pelo menos um bloco no calendário. É esta cobrança que impede a semana de virar lista de desejos."
             >
               <div className="space-y-6">
-                {[
-                  {
-                    title: "Prioridades top",
-                    description:
-                      "Os compromissos mais importantes da semana entram primeiro na agenda.",
-                    tasks: topPriorityTasks,
-                    isTop: true,
-                  },
-                  {
-                    title: "Ações complementares",
-                    description:
-                      "Use o restante da capacidade para avançar outras ações relevantes.",
-                    tasks: complementaryTasks,
-                    isTop: false,
-                  },
-                ]
+                {/* Um grupo só: a divisão top/complementar saiu junto com as
+                    3 prioridades da semana. A cobrança continua idêntica —
+                    vale para toda ação escolhida. */}
+                {[{ title: "Ações da semana", tasks: selectedTasks }]
                   .filter((group) => group.tasks.length > 0)
                   .map((group) => (
                     <div key={group.title}>
-                      <div className="mb-3 flex items-start gap-2">
-                        {group.isTop ? (
-                          <Star className="mt-0.5 h-4 w-4 fill-current text-[var(--brand-accent)]" />
-                        ) : (
-                          <Plus className="mt-0.5 h-4 w-4 text-[var(--brand-primary)]" />
-                        )}
-                        <div>
-                          <h3 className="text-sm font-semibold">
-                            {group.title}
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            {group.description}
-                          </p>
-                        </div>
-                      </div>
                       <div className="space-y-3">
                         {group.tasks.map((task, index) => {
                           const status = scheduleStatus(task);
@@ -1079,7 +980,7 @@ export default function WeeklyPlanningPage() {
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="flex min-w-0 gap-3">
                                   <span className="font-display text-lg text-[var(--brand-accent)]">
-                                    {group.isTop ? `0${index + 1}` : "+"}
+                                    {String(index + 1).padStart(2, "0")}
                                   </span>
                                   <div>
                                     <div className="text-sm font-semibold">
@@ -1227,20 +1128,9 @@ export default function WeeklyPlanningPage() {
               Semana planejada e agendada
             </h2>
             <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-              Você definiu {topPriorityTasks.length}{" "}
-              {topPriorityTasks.length === 1
-                ? "prioridade top"
-                : "prioridades top"}
-              {complementaryTasks.length > 0 && (
-                <>
-                  {" "}
-                  e {complementaryTasks.length}{" "}
-                  {complementaryTasks.length === 1
-                    ? "ação complementar"
-                    : "ações complementares"}
-                </>
-              )}{" "}
-              para {weekLabel(weekDays[0], weekDays[6])}. Todas possuem horário
+              Você escolheu {selectedTasks.length}{" "}
+              {selectedTasks.length === 1 ? "ação" : "ações"} para{" "}
+              {weekLabel(weekDays[0], weekDays[6])}. Todas possuem horário
               protegido no calendário.
             </p>
             <div className="mt-6 w-full max-w-xl rounded-xl bg-[var(--brand-light)] p-5 text-left">
@@ -1359,13 +1249,11 @@ function WeekSelector({
 
 function ImpactMatrix({
   tasks,
-  topIds,
-  complementaryIds,
+  escolhidasIds,
   onToggle,
 }: {
   tasks: PlanningTask[];
-  topIds: string[];
-  complementaryIds: string[];
+  escolhidasIds: string[];
   onToggle: (id: string) => void;
 }) {
   return (
@@ -1401,25 +1289,21 @@ function ImpactMatrix({
         </span>
 
         {tasks.map((task, index) => {
-          const isTop = topIds.includes(task.id);
-          const isComplementary = complementaryIds.includes(task.id);
-          const selected = isTop || isComplementary;
+          const escolhida = escolhidasIds.includes(task.id);
           const quadrant = actionQuadrant(task);
           const style = QUADRANT_STYLE[quadrant];
           return (
             <button
               key={task.id}
               type="button"
-              aria-pressed={selected}
-              aria-label={`${task.descricao}. Impacto ${task.impacto}, esforço ${task.esforco}, ${quadrant}${isTop ? ", prioridade top" : isComplementary ? ", ação complementar" : ""}`}
-              title={`${task.descricao} · impacto ${task.impacto} · esforço ${task.esforco} · ${quadrant}${isTop ? " · prioridade top" : isComplementary ? " · ação complementar" : ""}`}
+              aria-pressed={escolhida}
+              aria-label={`${task.descricao}. Impacto ${task.impacto}, esforço ${task.esforco}, ${quadrant}${escolhida ? ", na semana" : ""}`}
+              title={`${task.descricao} · impacto ${task.impacto} · esforço ${task.esforco} · ${quadrant}${escolhida ? " · na semana" : ""}`}
               onClick={() => onToggle(task.id)}
               className={`absolute flex h-9 w-9 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border-2 text-xs font-bold text-white shadow-lg transition hover:z-20 hover:scale-125 ${
-                isTop
+                escolhida
                   ? "z-10 scale-110 border-[var(--brand-dark)] ring-4 ring-[var(--brand-accent)]/30"
-                  : isComplementary
-                    ? "z-10 border-[var(--brand-dark)] ring-4 ring-[var(--brand-primary)]/15"
-                    : "border-white"
+                  : "border-white"
               }`}
               style={{
                 left: `${6 + task.esforco * 8.8}%`,
@@ -1433,10 +1317,8 @@ function ImpactMatrix({
         })}
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Clique nos pontos para adicioná-los ao planejamento: os 3 primeiros
-        entram como prioridades top e os seguintes como complementares. No
-        ranking abaixo, você pode trocar a categoria. Verde indica alto impacto
-        com menor esforço.
+        Clique nos pontos para pôr ou tirar a ação da semana. Verde indica alto
+        impacto com menor esforço.
       </p>
     </div>
   );

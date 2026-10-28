@@ -3,8 +3,16 @@ export type PlanningState = {
   pending: string;
   lesson: string;
   focus: string;
-  priorityIds: string[];
-  complementaryIds: string[];
+  /**
+   * As ações escolhidas para a semana, numa lista só.
+   *
+   * Antes eram duas — até 3 "prioridades top" mais as complementares — e isso
+   * colidia com a prioridade do dia, que é outra coisa e mora em
+   * `prioridade_dia`. Duas listas chamadas "prioridade" na mesma tela faziam
+   * uma parecer desmentir a outra. Aqui a semana só diz O QUE entra; QUAL
+   * delas se defende em cada dia é decisão do dia.
+   */
+  acoesIds: string[];
   savedAt?: string;
 };
 
@@ -24,8 +32,7 @@ export const emptyPlanningState = (): PlanningState => ({
   pending: "",
   lesson: "",
   focus: "",
-  priorityIds: [],
-  complementaryIds: [],
+  acoesIds: [],
 });
 
 export const LOCAL_PREFIX = "performance-week-";
@@ -34,17 +41,22 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const ids = (v: unknown) =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
+/** Junta as duas listas antigas numa só, sem repetir id. */
+const unir = (...listas: unknown[]): string[] => [
+  ...new Set(listas.flatMap((lista) => ids(lista))),
+];
+
 /** Normaliza um estado vindo do localStorage (pode estar incompleto). */
 export function normalizarEstado(raw: unknown): PlanningState {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const priorityIds = ids(o.priorityIds).slice(0, 3);
   return {
     wins: str(o.wins),
     pending: str(o.pending),
     lesson: str(o.lesson),
     focus: str(o.focus),
-    priorityIds,
-    complementaryIds: ids(o.complementaryIds).filter((id) => !priorityIds.includes(id)),
+    // `priorityIds`/`complementaryIds` são o formato antigo: uma semana já
+    // planejada não pode perder as escolhas por causa da mudança.
+    acoesIds: unir(o.acoesIds, o.priorityIds, o.complementaryIds),
     savedAt: str(o.savedAt) || undefined,
   };
 }
@@ -55,8 +67,7 @@ export function rowParaEstado(row: PlanejamentoRow): PlanningState {
     pending: row.pending ?? "",
     lesson: row.lesson ?? "",
     focus: row.foco ?? "",
-    priorityIds: row.priority_ids ?? [],
-    complementaryIds: row.complementary_ids ?? [],
+    acoesIds: unir(row.priority_ids, row.complementary_ids),
     savedAt: row.saved_at ?? undefined,
   };
 }
@@ -64,8 +75,10 @@ export function rowParaEstado(row: PlanejamentoRow): PlanningState {
 export function estadoParaRow(semana: string, s: PlanningState): PlanejamentoRow {
   return {
     semana_inicio: semana,
-    priority_ids: s.priorityIds,
-    complementary_ids: s.complementaryIds,
+    // A coluna continua existindo para não precisar de migração e para não
+    // apagar o histórico das semanas antigas; o app só não escreve mais nela.
+    priority_ids: [],
+    complementary_ids: s.acoesIds,
     foco: s.focus,
     wins: s.wins,
     pending: s.pending,

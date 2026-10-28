@@ -70,47 +70,34 @@ export function PlanejamentoClaudeModal({
     [tasks],
   );
   const [focus, setFocus] = useState("");
-  const [topIds, setTopIds] = useState<string[]>([]);
-  const [complementaryIds, setComplementaryIds] = useState<string[]>([]);
+  /**
+   * Uma lista só. A função ainda devolve `prioridades_top` e
+   * `complementares` separados — mudar o contrato dela custaria um deploy
+   * de edge function —, então as duas são juntadas aqui na chegada e a de
+   * cima volta vazia na saída.
+   */
+  const [acoesIds, setAcoesIds] = useState<string[]>([]);
   const [agenda, setAgenda] = useState<AgendaClaudeItem[]>([]);
   const [enabledAgenda, setEnabledAgenda] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!suggestion) return;
-    const top = dedupe(suggestion.prioridades_top).slice(0, 3);
-    const complementary = dedupe(suggestion.complementares).filter(
-      (id) => !top.includes(id),
-    );
     setFocus(suggestion.foco_semana);
-    setTopIds(top);
-    setComplementaryIds(complementary);
+    setAcoesIds(
+      dedupe([...suggestion.prioridades_top, ...suggestion.complementares]),
+    );
     setAgenda(suggestion.agenda.map((item) => ({ ...item })));
     setEnabledAgenda(new Set(suggestion.agenda.map((_, index) => index)));
   }, [suggestion]);
 
-  const selectedIds = useMemo(
-    () => new Set([...topIds, ...complementaryIds]),
-    [topIds, complementaryIds],
-  );
+  const selectedIds = useMemo(() => new Set(acoesIds), [acoesIds]);
 
-  const toggleTop = (id: string) => {
-    if (topIds.includes(id)) {
-      setTopIds((current) => current.filter((item) => item !== id));
-      return;
-    }
-    if (topIds.length >= 3) return;
-    setTopIds((current) => [...current, id]);
-    setComplementaryIds((current) => current.filter((item) => item !== id));
-  };
-
-  const toggleComplementary = (id: string) => {
-    if (complementaryIds.includes(id)) {
-      setComplementaryIds((current) => current.filter((item) => item !== id));
-      return;
-    }
-    setComplementaryIds((current) => [...current, id]);
-    setTopIds((current) => current.filter((item) => item !== id));
-  };
+  const toggleAcao = (id: string) =>
+    setAcoesIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
 
   const updateAgenda = (
     index: number,
@@ -145,7 +132,7 @@ export function PlanejamentoClaudeModal({
     !loading &&
     !applying &&
     Boolean(suggestion) &&
-    topIds.length > 0 &&
+    acoesIds.length > 0 &&
     focus.trim().length > 0;
 
   return (
@@ -216,10 +203,10 @@ export function PlanejamentoClaudeModal({
 
             <section className="space-y-3">
               <div>
-                <h3 className="text-sm font-semibold">Prioridades da semana</h3>
+                <h3 className="text-sm font-semibold">Ações da semana</h3>
                 <p className="text-xs text-muted-foreground">
-                  Mantenha até três prioridades top e escolha as complementares
-                  que realmente cabem.
+                  Desmarque o que não cabe. A prioridade de cada dia você
+                  escolhe depois, no planejamento.
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -229,32 +216,21 @@ export function PlanejamentoClaudeModal({
                 ]).map((id) => {
                   const task = taskById.get(id);
                   if (!task) return null;
-                  const isTop = topIds.includes(id);
-                  const isComplementary = complementaryIds.includes(id);
+                  const escolhida = acoesIds.includes(id);
                   return (
                     <div key={id} className="rounded-xl border p-3">
                       <div className="text-sm font-semibold">{task.descricao}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {task.area} · impacto {task.impacto} · esforço {task.esforco}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3">
                         <Button
                           type="button"
                           size="sm"
-                          variant={isTop ? "default" : "outline"}
-                          onClick={() => toggleTop(id)}
-                          disabled={!isTop && topIds.length >= 3}
+                          variant={escolhida ? "secondary" : "outline"}
+                          onClick={() => toggleAcao(id)}
                         >
-                          <Star className={`mr-1.5 h-3.5 w-3.5 ${isTop ? "fill-current" : ""}`} />
-                          {isTop ? "Top" : "Marcar top"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={isComplementary ? "secondary" : "ghost"}
-                          onClick={() => toggleComplementary(id)}
-                        >
-                          {isComplementary ? "Complementar" : "Usar como complementar"}
+                          {escolhida ? "Na semana" : "Adicionar à semana"}
                         </Button>
                       </div>
                     </div>
@@ -381,8 +357,10 @@ export function PlanejamentoClaudeModal({
               onClick={() =>
                 onConfirm({
                   focoSemana: focus.trim(),
-                  topIds,
-                  complementaryIds,
+                  // O contrato do draft ainda tem as duas listas; o app junta
+                  // tudo de volta, então a de cima vai vazia.
+                  topIds: [],
+                  complementaryIds: acoesIds,
                   agenda: validAgenda,
                 })
               }

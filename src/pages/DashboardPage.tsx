@@ -34,6 +34,7 @@ import {
 import { ProgressBar } from "@/components/metas/ProgressBar";
 import { NovaMetaModal } from "@/components/metas/NovaMetaModal";
 import { TodasAsMetas } from "@/components/dashboard/TodasAsMetas";
+import { PrioridadeDeCadaDia } from "@/components/dashboard/PrioridadeDeCadaDia";
 
 type Universo = "Tudo" | "Clínica" | "Mentoria" | "Pessoal";
 
@@ -97,14 +98,9 @@ export default function DashboardPage() {
   useMigrarPlanejamentoLocal();
   const semanaAtual = useMemo(() => isoLocal(segundaDaSemana(new Date())), []);
   const { data: planejamento, isLoading: carregandoPlanejamento } = usePlanejamentoSemanal(semanaAtual);
-  const { data: planos = [] } = usePlanos();
-  const { data: acoesAvulsas = [] } = useActions();
-  const acoesTop = useMemo(() => {
-    const nomes = new Map<string, { titulo: string; detalhe: string }>();
-    planos.forEach((p) => p.tarefas.forEach((t) => nomes.set(t.id, { titulo: t.descricao, detalhe: p.titulo })));
-    acoesAvulsas.forEach((a) => nomes.set(a.id, { titulo: a.descricao, detalhe: `${a.area} · ação avulsa` }));
-    return (planejamento?.priorityIds ?? []).slice(0, 3).map((id) => ({ id, ...(nomes.get(id) ?? { titulo: "Ação não encontrada", detalhe: "Removida dos planos" }) }));
-  }, [planejamento, planos, acoesAvulsas]);
+  const temPlanoDaSemana = Boolean(
+    planejamento && (planejamento.acoesIds.length > 0 || planejamento.focus),
+  );
 
   const proximosPrazos = useMemo(
     () => [...filtered]
@@ -175,15 +171,13 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <SectionHeading title="Prioridades da semana" subtitle="Seu foco estratégico para os próximos dias" action="Planejar" href="/planejamento-semanal" />
-          {carregandoPlanejamento ? <Skeleton className="h-44 w-full" /> : !planejamento || (acoesTop.length === 0 && !planejamento.focus) ? (
-            <div className="performance-card flex flex-col items-center p-10 text-center"><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]"><CalendarDays className="h-5 w-5" /></div><h3 className="font-display text-lg font-semibold">Semana ainda não planejada</h3><p className="mt-1 max-w-sm text-sm text-muted-foreground">Escolha suas 3 ações top e o foco da semana para vê-los aqui.</p><Button asChild size="sm" className="brand-button mt-4"><Link to="/planejamento-semanal">Planejar a semana</Link></Button></div>
+          <SectionHeading title="A prioridade de cada dia" subtitle="Uma por dia — o que você defende quando o dia desanda" action="Planejar" href="/planejamento-semanal" />
+          {carregandoPlanejamento ? <Skeleton className="h-44 w-full" /> : !temPlanoDaSemana ? (
+            <div className="performance-card flex flex-col items-center p-10 text-center"><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]"><CalendarDays className="h-5 w-5" /></div><h3 className="font-display text-lg font-semibold">Semana ainda não planejada</h3><p className="mt-1 max-w-sm text-sm text-muted-foreground">Escolha as ações da semana, reserve os horários e defina a prioridade de cada dia.</p><Button asChild size="sm" className="brand-button mt-4"><Link to="/planejamento-semanal">Planejar a semana</Link></Button></div>
           ) : (
             <div className="space-y-3">
-              {planejamento.focus && <div className="performance-card p-4"><div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Foco da semana</div><p className="mt-1 text-sm font-semibold">{planejamento.focus}</p></div>}
-              {acoesTop.length > 0 && <div className="grid gap-3 lg:grid-cols-3">
-                {acoesTop.map((acao, index) => <div key={acao.id} className="performance-card p-5"><span className="font-display text-2xl text-muted-foreground/40">0{index + 1}</span><h3 className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold leading-snug">{acao.titulo}</h3><p className="mt-2 truncate text-xs text-muted-foreground">{acao.detalhe}</p></div>)}
-              </div>}
+              {planejamento?.focus && <div className="performance-card p-4"><div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Foco da semana</div><p className="mt-1 text-sm font-semibold">{planejamento.focus}</p></div>}
+              <PrioridadeDeCadaDia />
             </div>
           )}
         </section>
