@@ -180,16 +180,17 @@ const FAQS: FAQ[] = [
     ),
   },
   {
-    q: "O que vejo em Relatórios?",
+    q: "Onde vejo a lista completa das metas e o CSV?",
     a: (
       <>
-        Em{" "}
-        <Link to="/relatorios" className="font-medium" style={blueLink}>
-          Relatórios
-        </Link>{" "}
-        você acompanha o panorama agregado: metas por status, evolução do
-        portfólio, desempenho por área e por responsável. Use os filtros de
-        período para recortes específicos.
+        No fim do{" "}
+        <Link to="/dashboard" className="font-medium" style={blueLink}>
+          Performance
+        </Link>
+        , na seção "Todas as metas" — clique para abrir. Lá estão a tabela com
+        resultado, ritmo, status e prazo de cada meta, os filtros de período e
+        status, e o botão de exportar CSV. Antes isso era a aba Resultados, que
+        repetia os números do painel.
       </>
     ),
   },

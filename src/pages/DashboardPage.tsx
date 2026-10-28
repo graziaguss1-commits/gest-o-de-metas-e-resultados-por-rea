@@ -33,6 +33,7 @@ import {
 } from "@/lib/metas";
 import { ProgressBar } from "@/components/metas/ProgressBar";
 import { NovaMetaModal } from "@/components/metas/NovaMetaModal";
+import { TodasAsMetas } from "@/components/dashboard/TodasAsMetas";
 
 type Universo = "Tudo" | "Clínica" | "Mentoria" | "Pessoal";
 
@@ -244,6 +245,8 @@ export default function DashboardPage() {
             </div>
           </section>
         </div>
+
+        <TodasAsMetas metas={filtered} />
 
         <NovaMetaModal open={novaOpen} onOpenChange={setNovaOpen} />
       </div>

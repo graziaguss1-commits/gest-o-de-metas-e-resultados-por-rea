@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { LancarResultadoModal } from "@/components/metas/LancarResultadoModal";
 import { NotificationsDrawer } from "@/components/NotificationsDrawer";
 
-const ROUTE_LABELS: Record<string, string> = { dashboard: "Performance", metas: "Metas e objetivos", analise: "Análise de saúde", planos: "Planos de ação", acoes: "Impacto × esforço", calendario: "Calendário estratégico", "planejamento-semanal": "Planejamento semanal", "resumo-semanal": "Resumo semanal", relatorios: "Resultados", ajuda: "Ajuda", configuracoes: "Configurações" };
+const ROUTE_LABELS: Record<string, string> = { dashboard: "Performance", metas: "Metas e objetivos", analise: "Análise de saúde", planos: "Planos de ação", acoes: "Impacto × esforço", calendario: "Calendário estratégico", "planejamento-semanal": "Planejamento semanal", "resumo-semanal": "Resumo semanal", ajuda: "Ajuda", configuracoes: "Configurações" };
 function buildBreadcrumb(pathname: string) { const segments = pathname.split("/").filter(Boolean); if (!segments.length) return [{ label: "Hoje", href: "/" }]; const crumbs: { label: string; href: string }[] = []; let href = ""; for (const seg of segments) { href += `/${seg}`; crumbs.push({ label: ROUTE_LABELS[seg] ?? (seg.length > 20 ? `${seg.slice(0, 8)}…` : seg), href }); } return crumbs; }
 
 export function AppShell({ children }: { children: ReactNode }) {

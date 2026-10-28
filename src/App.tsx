@@ -17,7 +17,6 @@ import PlanosPage from "./pages/PlanosPage";
 import CalendarPage from "./pages/CalendarPage";
 import WeeklyPlanningPage from "./pages/WeeklyPlanningPage";
 import ActionsPage from "./pages/ActionsPage";
-import RelatoriosPage from "./pages/RelatoriosPage";
 import ResumoSemanalPage from "./pages/ResumoSemanalPage";
 import AjudaPage from "./pages/AjudaPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -45,7 +44,9 @@ const App = () => <QueryClientProvider client={queryClient}><TooltipProvider><To
   <Route path="/planejamento-semanal" element={<ProtectedRoute><WeeklyPlanningPage /></ProtectedRoute>} />
   <Route path="/acoes" element={<ProtectedRoute><ActionsPage /></ProtectedRoute>} />
   <Route path="/resumo-semanal" element={<ProtectedRoute><ResumoSemanalPage /></ProtectedRoute>} />
-  <Route path="/relatorios" element={<ProtectedRoute><RelatoriosPage /></ProtectedRoute>} />
+  {/* A aba Resultados virou a secao "Todas as metas" do painel. Redireciona
+      em vez de dar 404: o link pode estar salvo nos favoritos dela. */}
+  <Route path="/relatorios" element={<Navigate to="/dashboard" replace />} />
   <Route path="/ajuda" element={<ProtectedRoute><AjudaPage /></ProtectedRoute>} />
   <Route path="/configuracoes/*" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
   <Route path="/settings/*" element={<Navigate to="/configuracoes" replace />} />

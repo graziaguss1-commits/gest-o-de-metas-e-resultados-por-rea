@@ -169,6 +169,20 @@ export function desvioPercentual(meta: Pick<Meta, "valor_atual" | "valor_alvo" |
   return Math.round((progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse) - progressoEsperado(meta.data_inicio, meta.data_fim)) * 100);
 }
 
+/**
+ * O desvio dito em palavras, no lugar de "-40pp".
+ *
+ * A sigla não dizia nada a quem lê — e o sinal sozinho também não: "-40"
+ * não revela se isso é ruim. Aqui o texto já traz a direção, e a faixa de
+ * 5 pontos para cada lado vira "no ritmo" porque oscilação dessa ordem é
+ * ruído de calendário, não atraso.
+ */
+export function ritmoEmPalavras(desvio: number): string {
+  if (desvio >= 5) return `${desvio} pontos à frente`;
+  if (desvio > -5) return "no ritmo";
+  return `${Math.abs(desvio)} pontos atrás`;
+}
+
 export function formatValor(valor: number, unidade: string): string {
   const u = unidade.trim();
   if (u === "R$" || u.toLowerCase() === "brl") return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: valor % 1 === 0 ? 0 : 2 });
