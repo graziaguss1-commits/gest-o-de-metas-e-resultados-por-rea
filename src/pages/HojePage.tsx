@@ -584,6 +584,30 @@ export default function HojePage() {
                         </div>
                       )}
 
+                      {/* Bloco concluído com o relógio correndo é estado
+                          inconsistente, mas acontecia — e aqui todos os
+                          botões sumiam, deixando um cronômetro que ninguém
+                          parava. Estado que pode existir precisa ter saída. */}
+                      {aberto && bloqueado && timerAtivo && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1.5 px-2.5 text-[11px]"
+                            disabled={alternarCronometro.isPending}
+                            onClick={() => alternarTimer(bloco)}
+                          >
+                            <Pause className="h-3.5 w-3.5" />
+                            Parar cronômetro
+                          </Button>
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Esta tarefa já está concluída, mas o cronômetro
+                            ficou correndo. Pare para o tempo não seguir
+                            contando.
+                          </p>
+                        </div>
+                      )}
+
                       {aberto && !bloqueado && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           <Button

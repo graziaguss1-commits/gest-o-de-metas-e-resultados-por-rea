@@ -688,6 +688,42 @@ export function useUpdateTarefa() {
 }
 
 /** Registra o realizado de uma ação em uma data (histórico preservado). */
+/**
+ * Para o cronômetro que tenha ficado rodando na ação concluída.
+ *
+ * Registrar execução acontece por quatro caminhos — Hoje, Calendário, o card
+ * do plano e o modal "Registrar realizado". Só os dois primeiros paravam o
+ * relógio. Concluindo pelos outros dois, o bloco ficava riscado com o
+ * cronômetro correndo, e a tela Hoje esconde os botões do bloco concluído:
+ * sobrava um relógio que ninguém conseguia parar.
+ *
+ * Por isso mora aqui, no funil por onde toda execução passa, e não em cada
+ * tela: tela nova herda o conserto em vez de repetir o bug.
+ */
+async function pararCronometroDoDia(tarefaId: string, data: string) {
+  const { data: rodando } = await supabase
+    .from("tarefa_agendamentos")
+    .select("id, cronometro_iniciado_em, cronometro_segundos")
+    .eq("tarefa_id", tarefaId)
+    .eq("data", data)
+    .not("cronometro_iniciado_em", "is", null);
+
+  for (const item of rodando ?? []) {
+    const desde = new Date(item.cronometro_iniciado_em as string).getTime();
+    const decorrido = Number.isFinite(desde)
+      ? Math.max(0, Math.floor((Date.now() - desde) / 1000))
+      : 0;
+    await supabase
+      .from("tarefa_agendamentos")
+      .update({
+        cronometro_iniciado_em: null,
+        cronometro_segundos:
+          Number(item.cronometro_segundos ?? 0) + decorrido,
+      })
+      .eq("id", item.id);
+  }
+}
+
 export function useRegistrarExecucao() {
   const qc = useQueryClient();
   return useMutation({
@@ -721,6 +757,7 @@ export function useRegistrarExecucao() {
         registrado_por: uid,
       });
       if (error) throw error;
+      await pararCronometroDoDia(tarefaId, data);
       // Meta de hábito anda com a execução: sem isto ela só atualizaria
       // quando uma ação fosse criada ou apagada.
       const { data: tarefa } = await supabase
