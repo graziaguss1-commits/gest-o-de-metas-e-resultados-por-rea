@@ -1428,6 +1428,7 @@ export type Database = {
         }
         Returns: string
       }
+      recalcular_status_metas: { Args: Record<string, never>; Returns: number }
       can_access_meta: { Args: { p_meta_id: string }; Returns: boolean }
       can_access_plan: { Args: { p_plano_id: string }; Returns: boolean }
       can_access_task: { Args: { p_tarefa_id: string }; Returns: boolean }

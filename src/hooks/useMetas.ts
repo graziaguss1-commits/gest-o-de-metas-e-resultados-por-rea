@@ -45,6 +45,13 @@ export function useMetas() {
   return useQuery({
     queryKey: METAS_KEY,
     queryFn: async (): Promise<MetaWithResponsavel[]> => {
+      // O status (verde/amarelo/vermelho) so era recalculado quando alguem
+      // lancava um resultado. Meta que nunca recebeu lancamento ficava com a
+      // cor do dia em que foi criada — uma bolinha verde dizendo "tranquilo"
+      // sobre meta vencida e zerada. Recalcular aqui corrige no banco, e a
+      // funcao so escreve nas que mudaram.
+      await supabase.rpc("recalcular_status_metas");
+
       const { data, error } = await supabase
         .from("metas_with_responsavel")
         .select("*")
