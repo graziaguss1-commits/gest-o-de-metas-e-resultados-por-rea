@@ -203,3 +203,35 @@ export function formatProgresso(
 
 export function formatDateISOToBR(iso: string): string { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
 export function todayISO(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+
+/**
+ * O prazo em linguagem de gente: "faltam 4 dias", "venceu há 32 dias".
+ *
+ * A porcentagem de prazo consumido obriga a converter tempo na cabeça, e
+ * lado a lado com a porcentagem de resultado as duas se confundem — são
+ * dois números em % medindo coisas diferentes. Dias respondem direto a
+ * pergunta que importa: ainda da tempo?
+ *
+ * Acima de 60 dias vira mês, porque "faltam 97 dias" não ajuda ninguém a
+ * decidir nada.
+ */
+export function prazoEmPalavras(dataFim: string, hoje = new Date()): string {
+  const fim = new Date(`${dataFim}T12:00:00`);
+  const base = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 12);
+  const dias = Math.round((fim.getTime() - base.getTime()) / 86400000);
+
+  if (dias === 0) return "vence hoje";
+  if (dias === 1) return "falta 1 dia";
+  if (dias === -1) return "venceu ontem";
+
+  if (dias > 0) {
+    if (dias <= 60) return `faltam ${dias} dias`;
+    const meses = Math.round(dias / 30);
+    return `faltam ${meses} meses`;
+  }
+
+  const atraso = Math.abs(dias);
+  if (atraso <= 60) return `venceu há ${atraso} dias`;
+  const meses = Math.round(atraso / 30);
+  return `venceu há ${meses} meses`;
+}

@@ -25,7 +25,7 @@ import { isoLocal, segundaDaSemana } from "@/lib/hoje";
 import {
   formatDateISOToBR,
   formatProgresso,
-  progressoEsperado,
+  prazoEmPalavras,
   progressoReal,
   STATUS_COLOR,
   type MetaWithResponsavel,
@@ -62,10 +62,6 @@ function percentualMeta(meta: MetaWithResponsavel) {
   return Math.round(progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse) * 100);
 }
 
-function percentualPrazo(meta: MetaWithResponsavel) {
-  return Math.round(progressoEsperado(meta.data_inicio, meta.data_fim) * 100);
-}
-
 export default function DashboardPage() {
   const { profile } = useAuth();
   const { data: metas, isLoading } = useMetas();
@@ -91,8 +87,10 @@ export default function DashboardPage() {
     const emRisco = filtered.filter((meta) => meta.status === "vermelho").length;
     const atencao = filtered.filter((meta) => meta.status === "amarelo").length;
     const concluidas = filtered.filter((meta) => percentualMeta(meta) >= 100).length;
-    const execucao = total ? Math.round((concluidas / total) * 100) : 0;
-    return { progresso, emRisco, atencao, execucao };
+    // Contagem, nao porcentagem. Com 13 metas longas o percentual fica 0%
+    // por meses e so anda de 8 em 8 — um numero que nunca se mexe ensina a
+    // ignorar o cartao.
+    return { progresso, emRisco, atencao, concluidas, total };
   }, [filtered]);
 
   useMigrarPlanejamentoLocal();
@@ -170,7 +168,7 @@ export default function DashboardPage() {
 
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard label="Progresso geral" value={`${resumo.progresso}%`} detail="média das metas" icon={TrendingUp} loading={isLoading} accent="primary" />
-          <MetricCard label="Execução" value={`${resumo.execucao}%`} detail="metas concluídas" icon={CheckCircle2} loading={isLoading} accent="green" />
+          <MetricCard label="Concluídas" value={`${resumo.concluidas} de ${resumo.total}`} detail="metas que chegaram a 100%" icon={CheckCircle2} loading={isLoading} accent="green" />
           <MetricCard label="Metas em risco" value={String(resumo.emRisco)} detail="exigem decisão" icon={AlertCircle} loading={isLoading} accent="red" />
           <MetricCard label="Em atenção" value={String(resumo.atencao)} detail="acompanhar de perto" icon={Clock3} loading={isLoading} accent="accent" />
         </section>
@@ -264,9 +262,10 @@ function SectionHeading({ title, subtitle, action, href }: { title: string; subt
 
 function GoalRow({ meta }: { meta: MetaWithResponsavel }) {
   const progress = percentualMeta(meta);
-  const prazo = percentualPrazo(meta);
+  const prazo = prazoEmPalavras(meta.data_fim);
+  const vencida = new Date(`${meta.data_fim}T12:00:00`) < new Date();
   const status = meta.status as Status;
-  return <Link to={`/metas/${meta.id}/analise`} className="grid gap-3 p-4 transition hover:bg-muted/30 md:grid-cols-[1fr_140px_120px] md:items-center"><div className="min-w-0"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[status].fg }} /><span className="truncate text-sm font-semibold">{meta.nome}</span></div><div className="mt-1 pl-4 text-xs text-muted-foreground">{universoDaArea(meta.area)} · {formatProgresso(meta)}</div></div><div><div className="mb-1 flex justify-between text-[10px] text-muted-foreground"><span>Resultado</span><strong className="text-foreground">{progress}%</strong></div><ProgressBar value={progress / 100} status={status} height={5} /></div><div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Prazo</span><strong>{prazo}%</strong></div></Link>;
+  return <Link to={`/metas/${meta.id}/analise`} className="grid gap-3 p-4 transition hover:bg-muted/30 md:grid-cols-[1fr_140px_120px] md:items-center"><div className="min-w-0"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[status].fg }} /><span className="truncate text-sm font-semibold">{meta.nome}</span></div><div className="mt-1 pl-4 text-xs text-muted-foreground">{universoDaArea(meta.area)} · {formatProgresso(meta)}</div></div><div><div className="mb-1 flex justify-between text-[10px] text-muted-foreground"><span>Resultado</span><strong className="text-foreground">{progress}%</strong></div><ProgressBar value={progress / 100} status={status} height={5} /></div><div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Prazo</span><strong className={vencida ? "text-[var(--color-red)]" : undefined}>{prazo}</strong></div></Link>;
 }
 
 function EmptyState({ title, text, onCreate }: { title: string; text: string; onCreate: () => void }) {
