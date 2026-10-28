@@ -5,7 +5,11 @@ import {
   janelaAcumulada,
   janelaDaTarefa,
   movimentoMeta,
+  aderenciaAcumulada,
+  aderenciaPorSemana,
+  mediaUltimasSemanas,
   periodosExigidos,
+  sequenciaAtual,
 } from "@/lib/resumoSemanal";
 import type { Execucao, TarefaMensuravel } from "@/lib/execucao";
 
@@ -237,5 +241,69 @@ describe("fim da rotina (data_fim) vs fim da ação única (prazo)", () => {
       "2026-12-20",
     );
     expect(janela.fim).toBe("2026-11-10");
+  });
+});
+
+describe("leitura de meta de hábito", () => {
+  const meta = { data_inicio: "2026-10-05", data_fim: "2026-12-31" };
+  // Diária de segunda a sexta, começando junto com a meta.
+  const diaria = tarefa({ id: "t1", frequencia: "diaria", dias_semana: [1, 2, 3, 4, 5], data_inicio: "2026-10-05" });
+  // Criada depois: não pode ser cobrada nas semanas anteriores.
+  const nova = tarefa({ id: "t2", frequencia: "diaria", dias_semana: [1, 2, 3, 4, 5], data_inicio: "2026-10-19" });
+
+  const feitas = (ids: [string, string][]): Execucao[] =>
+    ids.map(([tarefa_id, data], i) => ({ id: `x${i}`, tarefa_id, data_referencia: data, quantidade: 1 }));
+
+  it("não cobra a ação antes de ela existir", () => {
+    const semanas = aderenciaPorSemana([nova], [], meta, "2026-10-23");
+    expect(semanas.map((s) => s.inicio)).toEqual(["2026-10-19"]);
+  });
+
+  it("acumulado compara com o exigido até hoje, não até o fim da meta", () => {
+    // 05/10 a 09/10 = 5 dias úteis exigidos; 2 cumpridos.
+    const a = aderenciaAcumulada([diaria], feitas([["t1", "2026-10-05"], ["t1", "2026-10-06"]]), meta, "2026-10-09");
+    expect(a).toEqual({ exigidos: 5, cumpridos: 2, pct: 2 / 5 });
+  });
+
+  it("uma linha por semana, sem semana vazia de exigência", () => {
+    const semanas = aderenciaPorSemana([diaria], feitas([["t1", "2026-10-06"]]), meta, "2026-10-16");
+    expect(semanas).toHaveLength(2);
+    expect(semanas[0]).toMatchObject({ inicio: "2026-10-05", exigidos: 5, cumpridos: 1 });
+    expect(semanas[1]).toMatchObject({ inicio: "2026-10-12", cumpridos: 0 });
+  });
+
+  it("a média olha só as últimas semanas", () => {
+    const semanas = [
+      { inicio: "a", exigidos: 5, cumpridos: 0, pct: 0 },
+      { inicio: "b", exigidos: 5, cumpridos: 5, pct: 1 },
+      { inicio: "c", exigidos: 5, cumpridos: 5, pct: 1 },
+    ];
+    expect(mediaUltimasSemanas(semanas, 2)).toBe(1);
+    expect(mediaUltimasSemanas(semanas, 3)).toBeCloseTo(2 / 3);
+  });
+});
+
+describe("sequenciaAtual", () => {
+  const meta = { data_inicio: "2026-10-05", data_fim: "2026-12-31" };
+  const todos = tarefa({ id: "t1", frequencia: "diaria", dias_semana: [1, 2, 3, 4, 5, 6, 7], data_inicio: "2026-10-05" });
+  const execs = (datas: string[]): Execucao[] =>
+    datas.map((data, i) => ({ id: `e${i}`, tarefa_id: "t1", data_referencia: data, quantidade: 1 }));
+
+  it("conta os dias seguidos cumpridos", () => {
+    expect(sequenciaAtual([todos], execs(["2026-10-19", "2026-10-20", "2026-10-21"]), meta, "2026-10-21")).toBe(3);
+  });
+
+  it("para no primeiro dia falhado", () => {
+    expect(sequenciaAtual([todos], execs(["2026-10-19", "2026-10-21"]), meta, "2026-10-21")).toBe(1);
+  });
+
+  it("hoje ainda vazio não zera o que veio antes", () => {
+    expect(sequenciaAtual([todos], execs(["2026-10-19", "2026-10-20"]), meta, "2026-10-21")).toBe(2);
+  });
+
+  it("dia sem nada exigido não quebra a sequência", () => {
+    const uteis = tarefa({ id: "t1", frequencia: "diaria", dias_semana: [1, 2, 3, 4, 5], data_inicio: "2026-10-05" });
+    // 17 e 18/10 são sábado e domingo; a sexta e a segunda foram cumpridas.
+    expect(sequenciaAtual([uteis], execs(["2026-10-16", "2026-10-19"]), meta, "2026-10-19")).toBe(2);
   });
 });

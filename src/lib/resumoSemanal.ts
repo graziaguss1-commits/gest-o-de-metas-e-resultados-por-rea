@@ -204,6 +204,152 @@ export function janelaDaTarefa(
   return { inicio, fim };
 }
 
+export type MetaJanela = { data_inicio?: string | null; data_fim?: string | null };
+
+/**
+ * Aderência de um conjunto de ações numa janela, respeitando a janela
+ * PRÓPRIA de cada ação.
+ *
+ * Sem o recorte por ação, uma rotina criada hoje apareceria sendo cobrada
+ * desde o início da meta — e a meta ficaria com meses de falta que nunca
+ * foram pedidos de ninguém.
+ */
+export function aderenciaDasTarefas(
+  tarefas: TarefaMensuravel[],
+  execucoes: Execucao[],
+  meta: MetaJanela | null,
+  janela: Janela,
+): Aderencia {
+  let exigidos = 0;
+  let cumpridos = 0;
+  for (const tarefa of tarefas) {
+    const propria = janelaDaTarefa(tarefa, meta);
+    if (!propria) continue;
+    const inicio = maior(janela.inicio, propria.inicio);
+    const fim = menor(janela.fim, propria.fim);
+    if (fim < inicio) continue;
+    const a = aderencia(tarefa, execucoes, { inicio, fim });
+    exigidos += a.exigidos;
+    cumpridos += a.cumpridos;
+  }
+  return { exigidos, cumpridos, pct: exigidos ? cumpridos / exigidos : null };
+}
+
+/**
+ * A leitura certa de uma meta de hábito: do que foi pedido ATÉ HOJE,
+ * quanto saiu.
+ *
+ * Comparar o feito com o total até o fim da meta transforma o hábito numa
+ * pilha a encher — o número fica baixo por meses e não responde à pergunta
+ * que importa, que é "estou cumprindo?".
+ */
+export function aderenciaAcumulada(
+  tarefas: TarefaMensuravel[],
+  execucoes: Execucao[],
+  meta: MetaJanela,
+  hojeISO: string,
+): Aderencia {
+  const inicio = meta.data_inicio ?? hojeISO;
+  const fim = menor(hojeISO, meta.data_fim ?? hojeISO);
+  if (fim < inicio) return { exigidos: 0, cumpridos: 0, pct: null };
+  return aderenciaDasTarefas(tarefas, execucoes, meta, { inicio, fim });
+}
+
+export type SemanaAderencia = Aderencia & {
+  /** Segunda-feira da semana, em ISO. */
+  inicio: string;
+};
+
+/** Recua até a segunda-feira da semana da data. */
+const segundaDa = (iso: string) => {
+  const d = comMeioDia(iso);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return toISO(d);
+};
+
+/**
+ * Uma linha por semana, da primeira semana cobrada até hoje.
+ *
+ * Semana sem nada exigido sai da lista em vez de virar barra de 0%: barra
+ * zerada onde nada foi pedido faria o gráfico acusar uma falta que não
+ * existiu.
+ */
+export function aderenciaPorSemana(
+  tarefas: TarefaMensuravel[],
+  execucoes: Execucao[],
+  meta: MetaJanela,
+  hojeISO: string,
+): SemanaAderencia[] {
+  const inicio = meta.data_inicio ?? hojeISO;
+  const limite = menor(hojeISO, meta.data_fim ?? hojeISO);
+  if (limite < inicio) return [];
+
+  const semanas: SemanaAderencia[] = [];
+  const cursor = comMeioDia(segundaDa(inicio));
+  while (toISO(cursor) <= limite) {
+    const domingo = new Date(cursor);
+    domingo.setDate(cursor.getDate() + 6);
+    const janela = {
+      inicio: maior(toISO(cursor), inicio),
+      fim: menor(toISO(domingo), limite),
+    };
+    const a = aderenciaDasTarefas(tarefas, execucoes, meta, janela);
+    if (a.exigidos > 0) semanas.push({ ...a, inicio: toISO(cursor) });
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return semanas;
+}
+
+/**
+ * Média das últimas N semanas — o número que diz como está AGORA.
+ *
+ * O acumulado carrega o começo ruim para sempre; para decidir se o hábito
+ * está de pé hoje, o que vale é o comportamento recente.
+ */
+export function mediaUltimasSemanas(
+  semanas: SemanaAderencia[],
+  quantas = 4,
+): number | null {
+  const ultimas = semanas.slice(-quantas);
+  if (!ultimas.length) return null;
+  const soma = ultimas.reduce((acc, s) => acc + (s.pct ?? 0), 0);
+  return soma / ultimas.length;
+}
+
+/**
+ * Dias seguidos cumprindo, contando de hoje para trás.
+ *
+ * Dia sem nada exigido não quebra a sequência nem conta (fim de semana de
+ * um hábito de dia útil não é falta). O dia de hoje incompleto também não
+ * quebra: a sequência começaria a cair no meio da manhã, e punir alguém
+ * às 9h por algo que ela ainda vai fazer às 20h é só desanimar.
+ */
+export function sequenciaAtual(
+  tarefas: TarefaMensuravel[],
+  execucoes: Execucao[],
+  meta: MetaJanela,
+  hojeISO: string,
+): number {
+  const limite = meta.data_inicio ?? hojeISO;
+  const dia = comMeioDia(hojeISO);
+  let sequencia = 0;
+  let ehHoje = true;
+
+  while (toISO(dia) >= limite) {
+    const iso = toISO(dia);
+    const a = aderenciaDasTarefas(tarefas, execucoes, meta, {
+      inicio: iso,
+      fim: iso,
+    });
+    const completo = a.exigidos > 0 && a.cumpridos >= a.exigidos;
+    if (completo) sequencia += 1;
+    else if (a.exigidos > 0 && !ehHoje) break;
+    ehHoje = false;
+    dia.setDate(dia.getDate() - 1);
+  }
+  return sequencia;
+}
+
 /**
  * Aderência somada de várias ações — a leitura de uma meta de hábito.
  *

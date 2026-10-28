@@ -4,10 +4,11 @@ import type { MembroResumo, Plano, Tarefa } from "@/lib/metas";
 import { execucaoPlano, type Execucao, type TarefaMensuravel } from "@/lib/execucao";
 import { isoLocal } from "@/lib/hoje";
 import {
-  aderencia,
-  janelaAcumulada,
-  janelaDaTarefa,
+  aderenciaAcumulada,
+  aderenciaPorSemana,
+  mediaUltimasSemanas,
 } from "@/lib/resumoSemanal";
+import { statusDaAderencia } from "@/lib/metas";
 
 const PLANOS_KEY = ["planos"] as const;
 const EXEC_KEY = ["execucoes"] as const;
@@ -46,7 +47,13 @@ async function metaIdDoPlano(planoId: string): Promise<string | null> {
  */
 async function sincronizarHabitoDaMeta(
   metaId: string,
-  meta: { data_inicio?: string | null; data_fim?: string | null; is_inverse?: boolean; status?: string },
+  meta: {
+    data_inicio?: string | null;
+    data_fim?: string | null;
+    is_inverse?: boolean;
+    status?: string;
+    meta_aderencia?: number | null;
+  },
 ) {
   const { data: planos } = await supabase.from("planos_acao").select("id").eq("meta_id", metaId);
   const ids = (planos ?? []).map((p) => p.id);
@@ -68,33 +75,28 @@ async function sincronizarHabitoDaMeta(
   const execucoes = (execucoesBrutas ?? []) as unknown as Execucao[];
 
   const hoje = isoLocal(new Date());
-  let alvo = 0;
-  let atual = 0;
-  for (const tarefa of tarefas) {
-    const cheia = janelaDaTarefa(tarefa, meta);
-    if (!cheia) continue;
-    // Alvo e atual na MESMA unidade: cumprimentos, não períodos. Uma rotina
-    // de 3 por semana pede 3 por semana — contar períodos aqui e
-    // cumprimentos ali fazia "0 de 12" para quem tinha feito 7 treinos.
-    alvo += aderencia(tarefa, [], cheia).exigidos;
-    atual += aderencia(tarefa, execucoes, janelaAcumulada(tarefa, meta, hoje)).cumpridos;
-  }
-  if (alvo <= 0) return;
 
-  const { data: statusCalc } = await supabase.rpc("calcular_status_meta", {
-    p_valor_atual: atual,
-    p_valor_alvo: alvo,
-    p_data_inicio: meta.data_inicio,
-    p_data_fim: meta.data_fim,
-    p_is_inverse: false,
-  });
-  const status = (statusCalc as "verde" | "amarelo" | "vermelho" | null) ?? meta.status;
+  // Aderência: do que foi pedido ATÉ HOJE, quanto saiu. Comparar com o total
+  // do período inteiro tratava o hábito como pilha a encher até dezembro —
+  // o número ficava baixo por meses e não respondia "estou cumprindo?".
+  const acumulada = aderenciaAcumulada(tarefas, execucoes, meta, hoje);
+  if (acumulada.exigidos <= 0) return;
+
+  // O status olha as últimas 4 semanas, não o acumulado: começo ruim não
+  // pode pintar de vermelho quem voltou a cumprir, e um começo bom não pode
+  // esconder quem parou.
+  const semanas = aderenciaPorSemana(tarefas, execucoes, meta, hoje);
+  const status =
+    statusDaAderencia(
+      mediaUltimasSemanas(semanas, 4),
+      (meta.meta_aderencia ?? 80) / 100,
+    ) ?? meta.status;
 
   await supabase
     .from("metas")
     .update({
-      valor_alvo: alvo,
-      valor_atual: atual,
+      valor_alvo: acumulada.exigidos,
+      valor_atual: acumulada.cumpridos,
       status,
       // A unidade antiga ("vezes por semana") descrevia o alvo digitado. O
       // numero agora conta cumprimentos no periodo inteiro, entao manter o
@@ -114,7 +116,7 @@ async function sincronizarEtapasDaMeta(metaId: string | null | undefined) {
   const { data: meta, error: metaError } = await supabase
     .from("metas")
     .select(
-      "metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status,arquivada_em",
+      "metric_type,unidade,valor_alvo,valor_atual,data_inicio,data_fim,is_inverse,status,arquivada_em,meta_aderencia",
     )
     .eq("id", metaId)
     .maybeSingle();

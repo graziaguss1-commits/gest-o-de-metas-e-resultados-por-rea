@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useArquivarMeta } from "@/hooks/useMetas";
 import { Archive, ChevronDown, History, Plus, Sparkles, Calendar, Pencil } from "lucide-react";
 import {
+  ehHabito,
   formatDateISOToBR,
   formatProgresso,
   getMetricType,
@@ -12,6 +13,7 @@ import {
   type MetaWithResponsavel,
   type Status,
 } from "@/lib/metas";
+import { AderenciaSemanal } from "./AderenciaSemanal";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "./StatusChip";
 import { ProgressBar } from "./ProgressBar";
@@ -130,7 +132,14 @@ export function MetaCard({ meta, defaultOpen, onLancarResultado, onVerHistorico,
 
             </div>
 
-            <BurnUpMini meta={meta} />
+            {/* Hábito não tem trajetória para encher até o fim: tem semana
+                cumprida ou não. A linha subindo só servia para mostrar o
+                quanto falta até dezembro, que não é a pergunta. */}
+            {ehHabito(meta) ? (
+              <AderenciaSemanal meta={meta} compacto />
+            ) : (
+              <BurnUpMini meta={meta} />
+            )}
           </div>
 
           <ExecucaoConsolidada meta={meta} />

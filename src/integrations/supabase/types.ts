@@ -814,6 +814,7 @@ export type Database = {
           id: string
           is_demo: boolean
           is_inverse: boolean
+          meta_aderencia: number
           metric_type: string
           nome: string
           periodicidade: string
@@ -835,6 +836,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           is_inverse?: boolean
+          meta_aderencia?: number
           metric_type?: string
           nome: string
           periodicidade: string
@@ -857,6 +859,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           is_inverse?: boolean
+          meta_aderencia?: number
           metric_type?: string
           nome?: string
           periodicidade?: string
@@ -1388,6 +1391,7 @@ export type Database = {
           funil_ativo: boolean | null
           id: string | null
           is_demo: boolean | null
+          meta_aderencia: number | null
           is_inverse: boolean | null
           metric_type: string | null
           nome: string | null

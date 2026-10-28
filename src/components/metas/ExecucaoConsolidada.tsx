@@ -1,6 +1,20 @@
 import { diagnosticar, execucaoResponsavel, prazoConsumido } from "@/lib/execucao";
 import { useExecucaoDaMeta } from "@/hooks/usePlanos";
-import { formatProgresso, progressoReal, type MetaWithResponsavel } from "@/lib/metas";
+import { isoLocal } from "@/lib/hoje";
+import {
+  aderenciaAcumulada,
+  aderenciaDasTarefas,
+  aderenciaPorSemana,
+  mediaUltimasSemanas,
+} from "@/lib/resumoSemanal";
+import {
+  ehHabito,
+  formatProgresso,
+  progressoReal,
+  statusDaAderencia,
+  type MetaWithResponsavel,
+} from "@/lib/metas";
+import { AderenciaSemanal } from "./AderenciaSemanal";
 
 type Props = {
   meta: MetaWithResponsavel;
@@ -20,10 +34,38 @@ const TOM: Record<"verde" | "amarelo" | "vermelho", { fg: string; bg: string }> 
  */
 export function ExecucaoConsolidada({ meta, variant = "compacto" }: Props) {
   const { pct: execPct, tarefas, execucoes } = useExecucaoDaMeta(meta.id);
-  const resultado = progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
+  const habito = ehHabito(meta);
+  const hoje = isoLocal(new Date());
+  const janela = { data_inicio: meta.data_inicio, data_fim: meta.data_fim };
+  const alvoAderencia = (meta.meta_aderencia ?? 80) / 100;
+
+  /**
+   * Hábito é lido por aderência: do que foi pedido ATÉ HOJE, quanto saiu.
+   * O progresso contra o alvo do período inteiro tratava o hábito como
+   * pilha a encher até dezembro — ficava em 3% por meses e não respondia
+   * "estou cumprindo?".
+   */
+  const acumulada = habito
+    ? aderenciaAcumulada(tarefas, execucoes, janela, hoje)
+    : null;
+  const semanas = habito
+    ? aderenciaPorSemana(tarefas, execucoes, janela, hoje)
+    : [];
+  const mediaRecente = habito ? mediaUltimasSemanas(semanas, 4) : null;
+  const hojeAderencia = aderenciaDasTarefas(tarefas, execucoes, janela, {
+    inicio: hoje,
+    fim: hoje,
+  });
+
+  const resultado = habito
+    ? (acumulada?.pct ?? 0)
+    : progressoReal(meta.valor_atual, meta.valor_alvo, meta.is_inverse);
   const prazo = prazoConsumido(meta.data_inicio, meta.data_fim);
   const diag = diagnosticar(resultado, execPct ?? 0, prazo);
-  const tom = TOM[diag.tom];
+  // No hábito o que colore é o comportamento recente, não o acumulado: o
+  // começo ruim não pode pintar de vermelho quem voltou a cumprir.
+  const tomHabito = statusDaAderencia(mediaRecente, alvoAderencia);
+  const tom = TOM[habito && tomHabito ? tomHabito : diag.tom];
   const desempenhoPorPessoa = (meta.responsaveis ?? []).map((responsavel) => ({
     ...responsavel,
     pct: execucaoResponsavel(tarefas, execucoes, responsavel.id),
@@ -32,30 +74,65 @@ export function ExecucaoConsolidada({ meta, variant = "compacto" }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Indicador
-          titulo="Resultado da meta"
+          titulo={habito ? "Aderência acumulada" : "Resultado da meta"}
           valor={`${Math.round(resultado * 100)}%`}
-          detalhe={formatProgresso(meta)}
+          detalhe={
+            habito && acumulada
+              ? `${acumulada.cumpridos} de ${acumulada.exigidos} pedidos até hoje`
+              : formatProgresso(meta)
+          }
           cor="var(--color-blue)"
         />
         <Indicador
-          titulo="Plano executado"
-          valor={execPct === null ? "—" : `${Math.round(execPct * 100)}%`}
+          titulo={habito ? "Últimas 4 semanas" : "Plano executado"}
+          valor={
+            habito
+              ? mediaRecente === null
+                ? "—"
+                : `${Math.round(mediaRecente * 100)}%`
+              : execPct === null
+                ? "—"
+                : `${Math.round(execPct * 100)}%`
+          }
           detalhe={
-            tarefas.length === 0
-              ? "Sem ações vinculadas"
-              : `${tarefas.length} ${tarefas.length === 1 ? "ação" : "ações"} no período`
+            habito
+              ? `média semanal · meta ${Math.round(alvoAderencia * 100)}%`
+              : tarefas.length === 0
+                ? "Sem ações vinculadas"
+                : `${tarefas.length} ${tarefas.length === 1 ? "ação" : "ações"} no período corrente`
           }
           cor="var(--color-amber)"
         />
-        <Indicador
-          titulo="Prazo consumido"
-          valor={`${Math.round(prazo * 100)}%`}
-          detalhe="do período da meta"
-          cor="hsl(var(--muted-foreground))"
-        />
+        {/* Hábito não se cumpre, se mantém: "prazo consumido" sugeria uma
+            linha de chegada que não existe. No lugar dele, o que hoje pede. */}
+        {habito ? (
+          <Indicador
+            titulo="Hoje"
+            valor={
+              hojeAderencia.exigidos === 0
+                ? "—"
+                : `${hojeAderencia.cumpridos} de ${hojeAderencia.exigidos}`
+            }
+            detalhe={
+              hojeAderencia.exigidos === 0
+                ? "nada pedido hoje"
+                : "cumprimentos pedidos hoje"
+            }
+            cor="hsl(var(--muted-foreground))"
+          />
+        ) : (
+          <Indicador
+            titulo="Prazo consumido"
+            valor={`${Math.round(prazo * 100)}%`}
+            detalhe="do período da meta"
+            cor="hsl(var(--muted-foreground))"
+          />
+        )}
       </div>
+
+      {habito && variant === "completo" && <AderenciaSemanal meta={meta} />}
 
       {desempenhoPorPessoa.length > 0 && (
         <div className="rounded-lg border bg-card p-3">

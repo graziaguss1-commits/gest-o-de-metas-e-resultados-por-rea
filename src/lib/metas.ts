@@ -170,6 +170,28 @@ export function desvioPercentual(meta: Pick<Meta, "valor_atual" | "valor_alvo" |
 }
 
 /**
+ * Meta de hábito: o resultado é a soma de cumprimentos de rotinas, não um
+ * número que se digita. Essas metas são lidas por aderência — do que foi
+ * pedido até hoje, quanto saiu — e não por quanto falta até o fim.
+ */
+export function ehHabito(
+  meta: Pick<MetaWithResponsavel, "metric_type" | "unidade">,
+): boolean {
+  return meta.metric_type === "habito" || meta.unidade === "cumprimentos";
+}
+
+/** Corte do status de hábito: verde a partir da meta, amarelo na metade. */
+export function statusDaAderencia(
+  media: number | null,
+  alvo: number,
+): Status | null {
+  if (media === null) return null;
+  if (media >= alvo) return "verde";
+  if (media >= alvo / 2) return "amarelo";
+  return "vermelho";
+}
+
+/**
  * O desvio dito em palavras, no lugar de "-40pp".
  *
  * A sigla não dizia nada a quem lê — e o sinal sozinho também não: "-40"

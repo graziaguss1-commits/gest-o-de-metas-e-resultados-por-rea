@@ -55,6 +55,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
   const [dataInicio, setDataInicio] = useState<string>(todayISO());
   const [dataFim, setDataFim] = useState<string>("");
   const [isInverse, setIsInverse] = useState(false);
+  const [metaAderencia, setMetaAderencia] = useState("80");
 
   const { data: membros = [] } = useMembros();
   const { user } = useAuth();
@@ -82,6 +83,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       setDataInicio(meta.data_inicio ?? todayISO());
       setDataFim(meta.data_fim ?? "");
       setIsInverse(!!meta.is_inverse);
+      setMetaAderencia(String(meta.meta_aderencia ?? 80));
     } else {
       setNome("");
       setDescricao("");
@@ -94,6 +96,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       setDataInicio(todayISO());
       setDataFim("");
       setIsInverse(false);
+      setMetaAderencia("80");
     }
   }, [open, meta, user?.id]);
 
@@ -109,6 +112,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
     if (t === "projeto") {
       setValorAlvo("0");
       setIsInverse(false);
+      setMetaAderencia("80");
     } else {
       setValorAlvo("");
     }
@@ -152,6 +156,10 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
       data_inicio: dataInicio,
       data_fim: dataFim,
       is_inverse: projetoAutomatico ? false : isInverse,
+      meta_aderencia:
+        metricType === "habito"
+          ? Math.min(100, Math.max(1, Number(metaAderencia) || 80))
+          : undefined,
     };
 
     try {
@@ -259,7 +267,7 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
                 <div className="rounded-lg bg-background/70 px-3 py-2">
                   <strong>Alvo</strong>
                   <span className="block text-muted-foreground">
-                    quantos cumprimentos as ações pedem até o fim da meta
+                    quantos cumprimentos as ações pediram até hoje
                   </span>
                 </div>
                 <div className="rounded-lg bg-background/70 px-3 py-2">
@@ -268,6 +276,31 @@ export function NovaMetaModal({ open, onOpenChange, meta }: Props) {
                     quantos você já cumpriu, contados pelos blocos marcados
                   </span>
                 </div>
+              </div>
+
+              {/* O patamar razoável muda de hábito para hábito: 80% de um
+                  treino não é a mesma exigência que 80% de uma leitura
+                  diária. Por isso é campo, não constante no código. */}
+              <div className="mt-4 space-y-1.5">
+                <Label htmlFor="meta-aderencia">
+                  Meta de aderência semanal
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="meta-aderencia"
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="w-24"
+                    value={metaAderencia}
+                    onChange={(event) => setMetaAderencia(event.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A linha do gráfico semanal e o corte do status. Verde a
+                  partir dela, vermelho abaixo da metade.
+                </p>
               </div>
             </div>
           ) : metricType === "projeto" ? (
