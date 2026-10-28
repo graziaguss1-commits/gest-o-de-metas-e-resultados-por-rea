@@ -56,8 +56,11 @@ export type PlanejamentoClaudeResponse = {
   success: true;
   resumo: string;
   foco_semana: string;
-  prioridades_top: string[];
-  complementares: string[];
+  /** Formato atual: uma lista só de ações da semana. */
+  acoes_semana?: string[];
+  /** Formato antigo, ainda devolvido por compatibilidade. */
+  prioridades_top?: string[];
+  complementares?: string[];
   agenda: AgendaClaudeItem[];
   alertas: string[];
   provider: "anthropic";

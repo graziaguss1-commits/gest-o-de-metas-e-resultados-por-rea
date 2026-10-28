@@ -80,15 +80,30 @@ export function PlanejamentoClaudeModal({
   const [agenda, setAgenda] = useState<AgendaClaudeItem[]>([]);
   const [enabledAgenda, setEnabledAgenda] = useState<Set<number>>(new Set());
 
+  /**
+   * A função devolve `acoes_semana`; versões anteriores devolviam duas
+   * listas. Ler as duas formas evita que a tela fique vazia na janela em
+   * que um lado já subiu e o outro não.
+   */
+  const sugeridas = useMemo(
+    () =>
+      suggestion
+        ? dedupe([
+            ...(suggestion.acoes_semana ?? []),
+            ...(suggestion.prioridades_top ?? []),
+            ...(suggestion.complementares ?? []),
+          ])
+        : [],
+    [suggestion],
+  );
+
   useEffect(() => {
     if (!suggestion) return;
     setFocus(suggestion.foco_semana);
-    setAcoesIds(
-      dedupe([...suggestion.prioridades_top, ...suggestion.complementares]),
-    );
+    setAcoesIds(sugeridas);
     setAgenda(suggestion.agenda.map((item) => ({ ...item })));
     setEnabledAgenda(new Set(suggestion.agenda.map((_, index) => index)));
-  }, [suggestion]);
+  }, [suggestion, sugeridas]);
 
   const selectedIds = useMemo(() => new Set(acoesIds), [acoesIds]);
 
@@ -210,10 +225,7 @@ export function PlanejamentoClaudeModal({
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {dedupe([
-                  ...suggestion.prioridades_top,
-                  ...suggestion.complementares,
-                ]).map((id) => {
+                {sugeridas.map((id) => {
                   const task = taskById.get(id);
                   if (!task) return null;
                   const escolhida = acoesIds.includes(id);
