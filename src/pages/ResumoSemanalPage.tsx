@@ -21,7 +21,16 @@ const somaDias = (iso: string, dias: number) => {
   return isoLocal(d);
 };
 
+/**
+ * Taxa guardada como fração (0 a 1) virando texto.
+ *
+ * `cumprimentoAgenda` devolve a taxa JÁ em 0–100, e por um tempo as duas
+ * passaram por aqui: 9 de 27 blocos virava "3300%". Por isso esta função
+ * só atende fração — o que já vem em porcentagem é escrito direto.
+ */
 const pctTexto = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+
+const pctInteiro = (v: number | null) => (v == null ? "—" : `${v}%`);
 
 const numero = (v: number) =>
   v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
@@ -79,53 +88,94 @@ export default function ResumoSemanalPage() {
 
   const perdidos = daSemana.filter((b) => naoExecutado(b, agora));
 
-  /** Toda rotina de plano, com a aderência da semana e a acumulada. */
-  const rotinas = useMemo(() => {
+  /**
+   * As rotinas agrupadas pela meta que elas servem.
+   *
+   * Antes eram duas listas: as metas de hábito num bloco e TODAS as rotinas
+   * soltas em outro, sem dizer qual rotina alimentava qual meta. Agora a meta
+   * é a linha, o número dela é a soma das rotinas abaixo, e a lista só abre
+   * quando ela quiser ver de onde o número veio.
+   */
+  const gruposPorMeta = useMemo(() => {
     const metaPorId = new Map(metas.map((m) => [m.id, m]));
-    return planos
-      .flatMap((plano) =>
-        plano.tarefas
-          .filter((t) => getFrequencia(t) !== "unica")
-          .map((tarefa) => {
-            const meta = plano.meta ? metaPorId.get(plano.meta.id) : null;
-            const janela = janelaAcumulada(
-              tarefa,
-              meta
-                ? { data_inicio: meta.data_inicio, data_fim: meta.data_fim }
-                : null,
-              ehSemanaAtual ? hojeISO : domingoISO,
-            );
-            return {
-              id: tarefa.id,
-              descricao: tarefa.descricao,
-              area: plano.meta?.area ?? null,
-              frequencia: getFrequencia(tarefa),
-              naSemana: aderencia(tarefa, execucoes, semana),
-              acumulada: aderencia(tarefa, execucoes, janela),
-            };
-          }),
-      )
-      .filter((r) => r.naSemana.exigidos > 0 || r.acumulada.exigidos > 0)
+    const limiteAcumulado = ehSemanaAtual ? hojeISO : domingoISO;
+    const grupos = new Map<
+      string,
+      {
+        chave: string;
+        nome: string;
+        area: string | null;
+        tarefas: typeof planos[number]["tarefas"];
+        rotinas: {
+          id: string;
+          descricao: string;
+          frequencia: ReturnType<typeof getFrequencia>;
+          naSemana: ReturnType<typeof aderencia>;
+          acumulada: ReturnType<typeof aderencia>;
+        }[];
+      }
+    >();
+
+    planos.forEach((plano) => {
+      const meta = plano.meta ? metaPorId.get(plano.meta.id) : null;
+      const chave = meta?.id ?? "__sem_meta";
+      const grupo = grupos.get(chave) ?? {
+        chave,
+        nome: meta?.nome ?? "Rotinas sem meta",
+        area: meta?.area ?? plano.meta?.area ?? null,
+        tarefas: [],
+        rotinas: [],
+      };
+
+      plano.tarefas
+        .filter((t) => getFrequencia(t) !== "unica")
+        .forEach((tarefa) => {
+          const janela = janelaAcumulada(
+            tarefa,
+            meta
+              ? { data_inicio: meta.data_inicio, data_fim: meta.data_fim }
+              : null,
+            limiteAcumulado,
+          );
+          const naSemana = aderencia(tarefa, execucoes, semana);
+          const acumulada = aderencia(tarefa, execucoes, janela);
+          if (naSemana.exigidos === 0 && acumulada.exigidos === 0) return;
+          grupo.tarefas.push(tarefa);
+          grupo.rotinas.push({
+            id: tarefa.id,
+            descricao: tarefa.descricao,
+            frequencia: getFrequencia(tarefa),
+            naSemana,
+            acumulada,
+          });
+        });
+
+      grupos.set(chave, grupo);
+    });
+
+    return [...grupos.values()]
+      .filter((g) => g.rotinas.length > 0)
+      .map((g) => ({
+        ...g,
+        // Soma exigidos e cumpridos das ações; média de porcentagens faria
+        // uma rotina mensal pesar o mesmo que uma diária.
+        naSemana: aderenciaConjunta(g.tarefas, execucoes, semana),
+        rotinas: [...g.rotinas].sort(
+          (a, b) => (a.naSemana.pct ?? 1) - (b.naSemana.pct ?? 1),
+        ),
+      }))
       .sort((a, b) => (a.naSemana.pct ?? 1) - (b.naSemana.pct ?? 1));
   }, [planos, metas, execucoes, semana, ehSemanaAtual, hojeISO, domingoISO]);
 
-  /**
-   * Metas de hábito na semana: quantos cumprimentos a semana pediu e quantos
-   * saíram. É a leitura que a meta não dá — lá o número é o total até o fim.
-   */
-  const habitosDaSemana = useMemo(() => {
-    return metas
-      .filter((m) => m.metric_type === "habito")
-      .map((meta) => {
-        const tarefas = planos
-          .filter((p) => p.meta?.id === meta.id)
-          .flatMap((p) => p.tarefas)
-          .filter((t) => getFrequencia(t) !== "unica");
-        return { meta, aderencia: aderenciaConjunta(tarefas, execucoes, semana) };
-      })
-      .filter((h) => h.aderencia.exigidos > 0)
-      .sort((a, b) => (a.aderencia.pct ?? 1) - (b.aderencia.pct ?? 1));
-  }, [metas, planos, execucoes, semana]);
+  const [metasAbertas, setMetasAbertas] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const alternarMeta = (chave: string) =>
+    setMetasAbertas((atual) => {
+      const proximo = new Set(atual);
+      if (!proximo.delete(chave)) proximo.add(chave);
+      return proximo;
+    });
 
   /** Metas que se moveram na semana, maior movimento primeiro. */
   const movimentos = useMemo(() => {
@@ -198,7 +248,7 @@ export default function ResumoSemanalPage() {
               Cumprimento da agenda
             </div>
             <div className="font-display text-3xl font-semibold tabular-nums">
-              {carregando ? "—" : pctTexto(metrica.pct)}
+              {carregando ? "—" : pctInteiro(metrica.pct)}
             </div>
             <div className="text-[11px] text-muted-foreground">
               {metrica.feitos} de {metrica.total} blocos
@@ -221,14 +271,21 @@ export default function ResumoSemanalPage() {
                     <Minus className="h-5 w-5 text-muted-foreground" />
                   )}
                   <span className="font-display text-3xl font-semibold tabular-nums">
-                    {variacao > 0 ? "+" : ""}
-                    {variacao} pp
+                    {variacao === 0
+                      ? "igual"
+                      : `${Math.abs(variacao)} ${Math.abs(variacao) === 1 ? "ponto" : "pontos"}`}
                   </span>
                 </>
               )}
             </div>
+            {/* A frase inteira em vez de "pp": a sigla não dizia nada e o
+                número sozinho não revela se subiu ou caiu. */}
             <div className="text-[11px] text-muted-foreground">
-              Semana anterior: {pctTexto(metricaAnterior.pct)}
+              {variacao == null
+                ? "Sem base de comparação na semana anterior."
+                : variacao === 0
+                  ? `Mesmo ${pctInteiro(metrica.pct)} da semana passada.`
+                  : `Saiu de ${pctInteiro(metricaAnterior.pct)} na semana passada para ${pctInteiro(metrica.pct)} nesta.`}
             </div>
           </div>
           <div className="rounded-2xl border bg-card p-4">
@@ -244,83 +301,102 @@ export default function ResumoSemanalPage() {
           </div>
         </section>
 
-        {habitosDaSemana.length > 0 && (
-          <section className="rounded-2xl border bg-card p-4">
-            <h2 className="mb-1 text-sm font-semibold">Hábitos nesta semana</h2>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              Quantos cumprimentos a semana pediu e quantos saíram. Na tela da
-              meta o número é o total até o fim; aqui é só esta semana.
-            </p>
-            <div className="space-y-2">
-              {habitosDaSemana.map(({ meta, aderencia: a }) => (
-                <div
-                  key={meta.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{meta.nome}</div>
-                    {meta.area && (
-                      <div className="text-[11px] text-muted-foreground">{meta.area}</div>
-                    )}
-                  </div>
-                  <div className="flex items-baseline gap-2 tabular-nums">
-                    <span className="text-lg font-semibold">{a.cumpridos}</span>
-                    <span className="text-sm text-muted-foreground">de {a.exigidos}</span>
-                    {a.pct != null && (
-                      <span className="text-[11px] font-semibold text-muted-foreground">
-                        {Math.round(a.pct * 100)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         <section className="rounded-2xl border bg-card p-4">
-          <h2 className="mb-1 text-sm font-semibold">Rotinas</h2>
+          <h2 className="mb-1 text-sm font-semibold">Metas e suas rotinas</h2>
           <p className="mb-3 text-[11px] text-muted-foreground">
-            A semana mostra o momento; o acumulado vai do início da ação até
-            hoje, sem passar do fim da meta. Juntos dizem se a semana foi típica.
+            O número da meta é a soma das rotinas dela nesta semana. Clique na
+            meta para ver quais rotinas sustentaram — ou derrubaram — esse
+            número.
           </p>
           {carregando ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
-          ) : rotinas.length === 0 ? (
+          ) : gruposPorMeta.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               Nenhuma rotina cadastrada nos planos de ação.
             </p>
           ) : (
-            <ul className="divide-y">
-              {rotinas.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                  <span
-                    aria-hidden="true"
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: corDaArea(r.area) }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{r.descricao}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {r.area ?? "Sem área"} · {FREQUENCIA_LABEL[r.frequencia]}
-                    </div>
+            <div className="space-y-2">
+              {gruposPorMeta.map((grupo) => {
+                const aberta = metasAbertas.has(grupo.chave);
+                return (
+                  <div key={grupo.chave} className="rounded-xl border">
+                    <button
+                      type="button"
+                      onClick={() => alternarMeta(grupo.chave)}
+                      aria-expanded={aberta}
+                      className="flex w-full flex-wrap items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-muted/50"
+                    >
+                      <ChevronRight
+                        aria-hidden="true"
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                          aberta ? "rotate-90" : ""
+                        }`}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: corDaArea(grupo.area) }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {grupo.nome}
+                        </div>
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {grupo.area ?? "Sem área"} · {grupo.rotinas.length}{" "}
+                          {grupo.rotinas.length === 1 ? "rotina" : "rotinas"}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-baseline gap-2 tabular-nums">
+                        <span className="text-lg font-semibold">
+                          {grupo.naSemana.cumpridos}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          de {grupo.naSemana.exigidos}
+                        </span>
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          {pctTexto(grupo.naSemana.pct)}
+                        </span>
+                      </div>
+                    </button>
+
+                    {aberta && (
+                      <ul className="divide-y border-t px-3">
+                        {grupo.rotinas.map((r) => (
+                          <li
+                            key={r.id}
+                            className="flex flex-wrap items-center gap-3 py-2.5"
+                          >
+                            <div className="min-w-0 flex-1 pl-7">
+                              <div className="truncate text-sm font-medium">
+                                {r.descricao}
+                              </div>
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {FREQUENCIA_LABEL[r.frequencia]}
+                              </div>
+                            </div>
+                            <div className="text-right text-xs tabular-nums">
+                              <div className="font-semibold">
+                                {r.naSemana.cumpridos} de {r.naSemana.exigidos}{" "}
+                                na semana
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {r.acumulada.cumpridos} de{" "}
+                                {r.acumulada.exigidos} desde o início ·{" "}
+                                {pctTexto(r.acumulada.pct)}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                  <div className="text-right text-xs tabular-nums">
-                    <div className="font-semibold">
-                      {r.naSemana.cumpridos} de {r.naSemana.exigidos} na semana
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {r.acumulada.cumpridos} de {r.acumulada.exigidos} no total ·{" "}
-                      {pctTexto(r.acumulada.pct)}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                );
+              })}
+            </div>
           )}
         </section>
 
