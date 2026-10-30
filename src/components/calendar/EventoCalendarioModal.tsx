@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { CalendarClock, CalendarX2, Repeat2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,12 @@ import {
 } from "@/hooks/useAgendamentos";
 import { useScheduleAction, type ActionItem } from "@/hooks/useActions";
 import {
+  useAtualizarCompromisso,
   useExcluirCompromisso,
   type Compromisso,
 } from "@/hooks/useCompromissos";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useUpdateTarefa } from "@/hooks/usePlanos";
 import { formatDuracao, hhmm, horaFim, type Agendamento } from "@/lib/agenda";
 import type { Tarefa } from "@/lib/metas";
@@ -69,12 +73,38 @@ export function EventoCalendarioModal({
   const updateTarefa = useUpdateTarefa();
   const scheduleAction = useScheduleAction();
   const excluirCompromisso = useExcluirCompromisso();
+  const atualizarCompromisso = useAtualizarCompromisso();
   const pending =
     cancelarOcorrencia.isPending ||
     removerAgendamento.isPending ||
     updateTarefa.isPending ||
     scheduleAction.isPending ||
-    excluirCompromisso.isPending;
+    excluirCompromisso.isPending ||
+    atualizarCompromisso.isPending;
+
+  const [editando, setEditando] = useState(false);
+  const [form, setForm] = useState({ data: "", inicio: "", fim: "" });
+
+  const compromisso = evento?.tipo === "compromisso" ? evento.compromisso : null;
+  // Primitivos nas dependências, não o objeto `evento`: o pai o recria a
+  // cada render, e um efeito que escreve estado com objeto na dependência
+  // se realimenta sem parar.
+  const compromissoId = compromisso?.id ?? null;
+  const compromissoData = compromisso?.data ?? "";
+  const compromissoInicio = compromisso?.hora_inicio ?? "";
+  const compromissoFim = compromisso?.hora_fim ?? "";
+
+  // Reabrir o modal noutro compromisso não pode herdar o formulário do
+  // anterior: seria salvar o horário de um evento em cima de outro.
+  useEffect(() => {
+    setEditando(false);
+    if (!open || !compromissoId) return;
+    setForm({
+      data: compromissoData,
+      inicio: hhmm(compromissoInicio),
+      fim: hhmm(compromissoFim),
+    });
+  }, [open, compromissoId, compromissoData, compromissoInicio, compromissoFim]);
 
   const fechar = () => onOpenChange(false);
   const executar = async (acao: () => Promise<unknown>, sucesso: string) => {
@@ -260,7 +290,112 @@ export function EventoCalendarioModal({
 
           {evento.tipo === "compromisso" && (
             <>
-              {evento.compromisso.recorrencia !== "nenhuma" && (
+              {/* Compromisso era o único tipo sem edição: só dava para
+                  excluir e recriar. A tabela não guarda exceção por dia, só
+                  a série — então editar move todas as ocorrências, e isso
+                  fica dito aqui em vez de ser descoberto depois. */}
+              {editando ? (
+                <div className="space-y-3 rounded-xl border p-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1.5 sm:col-span-3">
+                      <Label htmlFor="compromisso-data">Dia</Label>
+                      <Input
+                        id="compromisso-data"
+                        type="date"
+                        value={form.data}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, data: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="compromisso-inicio">Início</Label>
+                      <Input
+                        id="compromisso-inicio"
+                        type="time"
+                        value={form.inicio}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, inicio: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="compromisso-fim">Fim</Label>
+                      <Input
+                        id="compromisso-fim"
+                        type="time"
+                        value={form.fim}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, fim: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {evento.compromisso.recorrencia !== "nenhuma" && (
+                    <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                      Compromisso recorrente: a mudança vale para toda a série.
+                      Trocar o dia muda o dia da semana de todas as
+                      ocorrências.
+                    </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      className="flex-1"
+                      disabled={pending}
+                      onClick={() => {
+                        if (!form.data) {
+                          toast.error("Informe o dia.");
+                          return;
+                        }
+                        if (form.fim <= form.inicio) {
+                          toast.error(
+                            "O fim precisa ser depois do início.",
+                          );
+                          return;
+                        }
+                        executar(
+                          () =>
+                            atualizarCompromisso.mutateAsync({
+                              id: evento.compromisso.id,
+                              data: form.data,
+                              hora_inicio: form.inicio,
+                              hora_fim: form.fim,
+                            }),
+                          evento.compromisso.recorrencia === "nenhuma"
+                            ? "Compromisso remarcado"
+                            : "Série remarcada",
+                        );
+                      }}
+                    >
+                      Salvar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() => setEditando(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start"
+                  disabled={pending}
+                  onClick={() => setEditando(true)}
+                >
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  Alterar dia ou horário
+                </Button>
+              )}
+
+              {evento.compromisso.recorrencia !== "nenhuma" && !editando && (
                 <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
                   Este compromisso é recorrente. A exclusão removerá toda a
                   série.
