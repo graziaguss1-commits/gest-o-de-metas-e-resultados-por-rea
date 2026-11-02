@@ -68,7 +68,15 @@ export function GoogleCalendarConnect() {
         toast.info("Já existe uma sincronização em andamento.");
         return;
       }
-      toast.success(`Sincronizado: ${result.busy_upserts ?? 0} horários ocupados e ${result.eventos_criados ?? 0} eventos enviados.`);
+      // Fila grande escoa em várias rodadas: dizer quantos faltam evita a
+      // leitura de que sincronizar "não fez efeito".
+      const adiadas = result.criacoes_adiadas ?? 0;
+      toast.success(
+        `Sincronizado: ${result.busy_upserts ?? 0} horários ocupados e ${result.eventos_criados ?? 0} eventos enviados.` +
+          (adiadas > 0
+            ? ` Faltam ${adiadas} — toque em sincronizar de novo para enviar o resto.`
+            : ""),
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao sincronizar.");
     }

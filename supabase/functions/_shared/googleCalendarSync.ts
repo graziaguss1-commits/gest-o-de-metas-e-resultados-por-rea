@@ -12,7 +12,11 @@ import {
 // Teto de criacoes por execucao. Ver valvula de seguranca abaixo.
 const LIMITE_CRIACOES_POR_SYNC = 30;
 
-const WINDOW_PAST_DAYS = 7;
+// A janela comeca HOJE: evento que ja passou nao precisa ir para o Google,
+// e eram eles a maior parte do trabalho de cada sincronizacao. O que ja foi
+// criado no passado fica onde esta — a limpeza ignora vinculo fora da
+// janela, entao nada e apagado retroativamente.
+const WINDOW_PAST_DAYS = 0;
 const WINDOW_FUTURE_DAYS = 60;
 const OBSERVACAO_CANCELADA = "Ocorrência cancelada";
 const OBSERVACAO_DUPLICADA = "Ocorrência duplicada arquivada";
@@ -118,6 +122,8 @@ export type SyncStats = {
   eventos_atualizados?: number;
   eventos_removidos?: number;
   itens_desagendados?: number;
+  /** Criacoes que ficaram para a proxima rodada por causa do teto. */
+  criacoes_adiadas?: number;
 };
 
 type SyncFailure = Error & { code?: string };
@@ -238,6 +244,7 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
     eventos_criados: 0,
     eventos_atualizados: 0,
     eventos_removidos: 0,
+    criacoes_adiadas: 0,
     itens_desagendados: 0,
   };
 
@@ -488,7 +495,7 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
   links = (refreshedLinks ?? []) as LinkRow[];
   const currentByKey = new Map(links.map((link) => [link.origem_chave, link]));
 
-  for (const mirror of mirrors) {
+  for (const [indiceMirror, mirror] of mirrors.entries()) {
     const eventBody = {
       summary: mirror.summary,
       start: { dateTime: `${mirror.data}T${mirror.hora_inicio}`, timeZone },
@@ -541,12 +548,17 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
       // Valvula de seguranca: 30 criacoes novas numa unica sincronizacao e
       // anormal. Se passar disso, a deducplicacao por google_calendar_event_links
       // nao esta funcionando e a execucao morre aqui, em vez de virar bola de neve.
-      if (stats.eventos_criados > LIMITE_CRIACOES_POR_SYNC) {
-        throw new Error(
-          `Limite de seguranca atingido: ${stats.eventos_criados} eventos criados ` +
-          "numa unica sincronizacao. Execucao abortada. Verifique se a tabela " +
-          "google_calendar_event_links esta recebendo os vinculos."
-        );
+      if (stats.eventos_criados >= LIMITE_CRIACOES_POR_SYNC) {
+        // Antes isto lancava excecao e derrubava a sincronizacao inteira: com
+        // uma fila legitima de eventos novos, NADA era gravado e last_sync_at
+        // nunca avancava — sincronizar parecia nao fazer efeito.
+        //
+        // Agora o limite para apenas as CRIACOES desta rodada. O que ja foi
+        // criado permanece, o resto da sincronizacao termina normalmente e a
+        // fila escoa nas proximas rodadas. A protecao contra duplicacao em
+        // bola de neve continua: o teto por rodada e o mesmo.
+        stats.criacoes_adiadas = mirrors.length - indiceMirror - 1;
+        break;
       }
       continue;
     }
