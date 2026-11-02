@@ -30,7 +30,11 @@ import { useDefinirPrioridadeDia, usePrioridadesDia } from "@/hooks/usePrioridad
 import { corDaArea } from "@/lib/coresArea";
 import { chaveMotivo, exigeTexto, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenciaBloco, type MotivoId } from "@/lib/motivos";
 import { useScheduleAction, useToggleAction } from "@/hooks/useActions";
-import { useAtualizarCompromisso } from "@/hooks/useCompromissos";
+import {
+  chaveDaOcorrencia,
+  useAtualizarCompromisso,
+  useConcluirOcorrencia,
+} from "@/hooks/useCompromissos";
 import {
   usePlanos,
   useRegistrarExecucao,
@@ -220,6 +224,7 @@ export default function HojePage() {
   const toggleTarefa = useToggleTarefa();
   const toggleAction = useToggleAction();
   const atualizarCompromisso = useAtualizarCompromisso();
+  const concluirOcorrencia = useConcluirOcorrencia();
   const reagendarTarefa = useReagendarTarefa();
   const remarcarAvulsa = useScheduleAction();
   const [concluindoId, setConcluindoId] = useState<string | null>(null);
@@ -257,7 +262,10 @@ export default function HojePage() {
       } else if (bloco.tipo === "avulsa") {
         await toggleAction.mutateAsync({ id: bloco.origemId, concluida: !bloco.concluido });
       } else if (bloco.tipo === "compromisso") {
-        await atualizarCompromisso.mutateAsync({ id: bloco.origemId, concluido: !bloco.concluido });
+        await concluirOcorrencia.mutateAsync({
+          compromisso: chaveDaOcorrencia(bloco.origemId, bloco.data),
+          concluido: !bloco.concluido,
+        });
       }
       localStorage.removeItem(TIMER_LOCAL(bloco.id));
       if (!bloco.concluido) toast.success("Bloco marcado como feito.");

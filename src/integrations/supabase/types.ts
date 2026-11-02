@@ -354,6 +354,7 @@ export type Database = {
         Row: {
           cancelado: boolean
           compromisso_id: string
+          concluido: boolean
           created_at: string
           data: string | null
           data_original: string
@@ -366,6 +367,7 @@ export type Database = {
         Insert: {
           cancelado?: boolean
           compromisso_id: string
+          concluido?: boolean
           created_at?: string
           data?: string | null
           data_original: string
@@ -378,6 +380,7 @@ export type Database = {
         Update: {
           cancelado?: boolean
           compromisso_id?: string
+          concluido?: boolean
           created_at?: string
           data?: string | null
           data_original?: string

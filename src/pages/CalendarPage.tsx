@@ -35,6 +35,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   useCompromissos,
   useAtualizarCompromisso,
+  useConcluirOcorrencia,
 } from "@/hooks/useCompromissos";
 import {
   useActions,
@@ -128,6 +129,7 @@ export default function CalendarPage() {
   const [compromissoOpen, setCompromissoOpen] = useState(false);
   const [compromissoData, setCompromissoData] = useState<string>();
   const atualizarCompromisso = useAtualizarCompromisso();
+  const concluirOcorrencia = useConcluirOcorrencia();
   const days = useMemo(
     () => Array.from({ length: calendarSpan }, (_, i) => addDays(anchor, i)),
     [anchor, calendarSpan],
@@ -613,8 +615,8 @@ export default function CalendarPage() {
             onToggleStandaloneAction={(id, concluida) =>
               toggleAction.mutate({ id, concluida })
             }
-            onToggleCommitment={(id, concluido) =>
-              atualizarCompromisso.mutate({ id, concluido })
+            onToggleCommitment={(compromisso, concluido) =>
+              concluirOcorrencia.mutate({ compromisso, concluido })
             }
             onMoveAction={(id, data, hora) => {
               const atual = agendamentos.find((item) => item.id === id);
@@ -780,8 +782,8 @@ export default function CalendarPage() {
                               variant="outline"
                               className="h-6 px-1.5 text-[10px]"
                               onClick={() =>
-                                atualizarCompromisso.mutate({
-                                  id: c.id,
+                                concluirOcorrencia.mutate({
+                                  compromisso: c,
                                   concluido: !c.concluido,
                                 })
                               }

@@ -113,7 +113,9 @@ type Props = {
   onMarkActionDone: (id: string) => void;
   onToggleTimer: (agendamento: Agendamento) => void;
   onToggleStandaloneAction: (id: string, concluida: boolean) => void;
-  onToggleCommitment: (id: string, concluido: boolean) => void;
+  /** Recebe o compromisso inteiro: a conclusao e gravada por OCORRENCIA,
+   *  e a chave dela (serie + data original) nao cabe num id so. */
+  onToggleCommitment: (compromisso: Compromisso, concluido: boolean) => void;
 };
 
 export function HourlyCalendarGrid({
@@ -532,7 +534,7 @@ export function HourlyCalendarGrid({
                         onClick={(event) => {
                           event.stopPropagation();
                           onToggleCommitment(
-                            commitment.id,
+                            commitment,
                             !commitment.concluido,
                           );
                         }}

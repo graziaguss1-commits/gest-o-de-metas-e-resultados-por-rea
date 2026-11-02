@@ -14,6 +14,14 @@ export type RecorrenciaCompromisso =
 export type Compromisso = {
   id: string;
   serie_id: string;
+  /**
+   * A data que identifica esta ocorrencia na tabela de excecoes.
+   *
+   * Nao e a mesma coisa que `data`: remarcar uma ocorrencia muda `data`, mas
+   * a chave continua sendo a original. Sem guardar as duas, marcar como
+   * feita uma ocorrencia remarcada gravaria na linha errada.
+   */
+  data_original: string;
   titulo: string;
   data: string;
   hora_inicio: string;
@@ -25,9 +33,12 @@ export type Compromisso = {
   recorrencia_fim: string | null;
 };
 
-export type NovoCompromisso = Omit<Compromisso, "id" | "serie_id" | "concluido">;
+export type NovoCompromisso = Omit<
+  Compromisso,
+  "id" | "serie_id" | "concluido" | "data_original"
+>;
 
-type CompromissoBanco = Omit<Compromisso, "serie_id">;
+type CompromissoBanco = Omit<Compromisso, "serie_id" | "data_original">;
 type CompromissoOcorrencia = {
   compromisso_id: string;
   data_original: string;
@@ -35,6 +46,7 @@ type CompromissoOcorrencia = {
   hora_inicio: string | null;
   hora_fim: string | null;
   cancelado: boolean;
+  concluido: boolean;
 };
 const KEY = ["compromissos"] as const;
 const STORAGE_KEY = "metasia_compromissos_contingencia";
@@ -89,7 +101,7 @@ function normalizarRegistro(registro: CompromissoBanco): CompromissoBanco {
   };
 }
 
-function expandirNaJanela(
+export function expandirNaJanela(
   registrosBrutos: CompromissoBanco[],
   inicio: string,
   fim: string,
@@ -110,9 +122,11 @@ function expandirNaJanela(
         ...registro,
         recorrencia,
         serie_id: registro.id,
+        data_original: registro.data,
         data,
         hora_inicio: alteracao?.hora_inicio ?? registro.hora_inicio,
         hora_fim: alteracao?.hora_fim ?? registro.hora_fim,
+        concluido: alteracao?.concluido ?? registro.concluido,
       }];
     }
 
@@ -133,10 +147,14 @@ function expandirNaJanela(
           ...registro,
           id: `${registro.id}@${dataOriginal}`,
           serie_id: registro.id,
+          data_original: dataOriginal,
           data,
           hora_inicio: alteracao?.hora_inicio ?? registro.hora_inicio,
           hora_fim: alteracao?.hora_fim ?? registro.hora_fim,
           recorrencia,
+          // Nunca herda o `concluido` da serie: era isso que riscava a
+          // reuniao de todas as semanas quando uma era marcada como feita.
+          concluido: alteracao?.concluido ?? false,
         });
       }
       atual = proximaOcorrencia(atual, recorrencia, parseData(registro.data));
@@ -159,7 +177,7 @@ export function useCompromissos(inicio: string, fim: string) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
           .from("compromisso_ocorrencias")
-          .select("compromisso_id,data_original,data,hora_inicio,hora_fim,cancelado"),
+          .select("compromisso_id,data_original,data,hora_inicio,hora_fim,cancelado,concluido"),
       ]);
       const remotos = error ? [] : (data ?? []) as unknown as CompromissoBanco[];
       return expandirNaJanela(
@@ -224,6 +242,74 @@ export function useAtualizarCompromisso() {
       agendarSyncGoogle();
       return qc.invalidateQueries({ queryKey: KEY });
     },
+  });
+}
+
+export type ChaveOcorrencia = Pick<Compromisso, "serie_id" | "data_original">;
+
+/**
+ * A chave da ocorrência a partir do id expandido.
+ *
+ * Série recorrente usa `serie@data-original`; compromisso único usa o id da
+ * série sozinho, e aí a data original é a própria data do bloco. Telas que
+ * só carregam o id (a agenda de Hoje) passam por aqui em vez de repetir o
+ * `split("@")` — foi o tipo de detalhe que já gravou na linha errada.
+ */
+export const chaveDaOcorrencia = (
+  origemId: string,
+  data: string,
+): ChaveOcorrencia => {
+  const [serie, dataOriginal] = origemId.split("@");
+  return { serie_id: serie, data_original: dataOriginal ?? data };
+};
+
+/**
+ * Marca ou desmarca UMA ocorrência como feita.
+ *
+ * Antes isso ia para `compromissos.concluido`, que é campo da série: marcar
+ * a reunião de segunda riscava todas as reuniões, de agosto a novembro.
+ * Agora grava na tabela de exceções, a mesma que já guarda remarcação e
+ * cancelamento por dia.
+ */
+export function useConcluirOcorrencia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      compromisso,
+      concluido,
+    }: {
+      compromisso: ChaveOcorrencia;
+      concluido: boolean;
+    }) => {
+      if (compromisso.serie_id.startsWith("local-")) {
+        salvarLocais(
+          lerLocais().map((item) =>
+            item.id === compromisso.serie_id
+              ? ({ ...item, concluido } as CompromissoBanco)
+              : item,
+          ),
+        );
+        return;
+      }
+      const { data: user } = await supabase.auth.getUser();
+      const uid = user.user?.id;
+      if (!uid) throw new Error("Sessão expirada — faça login novamente.");
+      const { error } = await supabase
+        .from("compromisso_ocorrencias")
+        .upsert(
+          {
+            user_id: uid,
+            compromisso_id: compromisso.serie_id,
+            data_original: compromisso.data_original,
+            concluido,
+          },
+          // A unicidade no banco inclui o user_id; omitir a coluna aqui faria
+          // o upsert procurar um índice que não existe e virar insert duplicado.
+          { onConflict: "user_id,compromisso_id,data_original" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 
