@@ -284,13 +284,27 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
     // antes de chegar a enviar qualquer evento.
     let paginas = 0;
     do {
-      const params = new URLSearchParams({ singleEvents: "true", showDeleted: "true", maxResults: "250" });
+      const params = new URLSearchParams({ singleEvents: "true", maxResults: "250" });
+      // Pedir SO os campos usados. O Google devolve o evento inteiro —
+      // participantes, descricao, organizador, lembretes, links — e nada
+      // disso e lido aqui: o tipo GoogleEvent tem sete campos. Era esse
+      // JSON gigante sendo interpretado pagina apos pagina que estourava o
+      // limite de CPU e matava a execucao em 27 segundos.
+      params.set(
+        "fields",
+        "nextPageToken,nextSyncToken,items(id,status,etag,updated,start/dateTime,start/date,end/dateTime,end/date,extendedProperties/private)",
+      );
       if (syncToken) {
         params.set("syncToken", syncToken);
+        // Numa sincronizacao incremental, evento apagado precisa vir: e
+        // assim que se sabe que ele sumiu.
+        params.set("showDeleted", "true");
       } else {
         params.set("timeMin", timeMin.toISOString());
         params.set("timeMax", timeMax.toISOString());
         params.set("orderBy", "startTime");
+        // Na listagem completa nao ha estado anterior para comparar: evento
+        // cancelado so engorda o JSON.
       }
       if (pageToken) params.set("pageToken", pageToken);
       const res = await callGoogleApi(
