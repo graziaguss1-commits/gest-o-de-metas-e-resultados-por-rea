@@ -170,12 +170,30 @@ async function freshTokens(userId: string, forceRefresh = false) {
   return tokens;
 }
 
+/**
+ * Teto de espera por chamada ao Google.
+ *
+ * Sem isto o `fetch` espera para sempre. Uma unica requisicao pendurada
+ * segurava a sincronizacao inteira ate o runtime MATAR a execucao — e
+ * processo morto nao roda `catch` nem `finally`: nenhum codigo de erro era
+ * gravado e a trava ficava presa ate expirar sozinha, dois minutos depois.
+ * Era por isso que sincronizar parecia nao fazer nada e nao deixava rastro.
+ *
+ * Com o teto, a chamada falha como erro normal, que sobe, grava o codigo e
+ * libera a trava.
+ */
+const TIMEOUT_GOOGLE_MS = 15_000;
+
 function authorizedRequest(tokens: StoredGoogleTokens, path: string, init?: RequestInit) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${tokens.access_token}`);
   headers.set("Accept", "application/json");
-  return fetch(`${GOOGLE_API_BASE_URL}${normalizedPath}`, { ...init, headers });
+  return fetch(`${GOOGLE_API_BASE_URL}${normalizedPath}`, {
+    ...init,
+    headers,
+    signal: init?.signal ?? AbortSignal.timeout(TIMEOUT_GOOGLE_MS),
+  });
 }
 
 async function markReconnect(userId: string) {

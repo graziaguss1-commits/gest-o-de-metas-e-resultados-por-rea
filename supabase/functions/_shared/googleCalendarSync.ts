@@ -22,6 +22,8 @@ const LIMITE_CRIACOES_POR_SYNC = 30;
  * reinicio eterno.
  */
 const PRAZO_GOOGLE_MS = 50_000;
+/** Teto de paginas da listagem do Google: 20 x 250 = 5.000 eventos por rodada. */
+const MAX_PAGINAS_LISTAGEM = 20;
 
 // A janela comeca HOJE: evento que ja passou nao precisa ir para o Google,
 // e eram eles a maior parte do trabalho de cada sincronizacao. O que ja foi
@@ -276,6 +278,11 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
     const events: GoogleEvent[] = [];
     let nextSyncToken: string | null = null;
     let pageToken: string | undefined;
+    // A paginacao era um `do/while` sem teto: 250 eventos por pagina, uma
+    // chamada sequencial por pagina, e nada que a fizesse parar. Numa agenda
+    // grande ela sozinha consumia a execucao inteira, e a rodada morria
+    // antes de chegar a enviar qualquer evento.
+    let paginas = 0;
     do {
       const params = new URLSearchParams({ singleEvents: "true", showDeleted: "true", maxResults: "250" });
       if (syncToken) {
@@ -296,7 +303,8 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
       events.push(...((body.items ?? []) as GoogleEvent[]));
       pageToken = body.nextPageToken;
       if (body.nextSyncToken) nextSyncToken = body.nextSyncToken;
-    } while (pageToken);
+      paginas++;
+    } while (pageToken && paginas < MAX_PAGINAS_LISTAGEM && Date.now() < prazoFinal);
     return { items: events, nextSyncToken, full: !syncToken };
   };
 
