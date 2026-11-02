@@ -16,14 +16,15 @@ import {
 } from "@/hooks/useAgendamentos";
 import { useScheduleAction, type ActionItem } from "@/hooks/useActions";
 import {
-  useAtualizarCompromisso,
   useExcluirCompromisso,
+  useRemarcarDaquiEmDiante,
   type Compromisso,
 } from "@/hooks/useCompromissos";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUpdateTarefa } from "@/hooks/usePlanos";
 import { formatDuracao, hhmm, horaFim, type Agendamento } from "@/lib/agenda";
+import { isoLocal } from "@/lib/hoje";
 import type { Tarefa } from "@/lib/metas";
 
 type TarefaCalendario = Tarefa & {
@@ -73,14 +74,14 @@ export function EventoCalendarioModal({
   const updateTarefa = useUpdateTarefa();
   const scheduleAction = useScheduleAction();
   const excluirCompromisso = useExcluirCompromisso();
-  const atualizarCompromisso = useAtualizarCompromisso();
+  const remarcar = useRemarcarDaquiEmDiante();
   const pending =
     cancelarOcorrencia.isPending ||
     removerAgendamento.isPending ||
     updateTarefa.isPending ||
     scheduleAction.isPending ||
     excluirCompromisso.isPending ||
-    atualizarCompromisso.isPending;
+    remarcar.isPending;
 
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ data: "", inicio: "", fim: "" });
@@ -334,9 +335,9 @@ export function EventoCalendarioModal({
 
                   {evento.compromisso.recorrencia !== "nenhuma" && (
                     <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-                      Compromisso recorrente: a mudança vale para toda a série.
-                      Trocar o dia muda o dia da semana de todas as
-                      ocorrências.
+                      Vale deste dia em diante. As ocorrências que já
+                      passaram ficam com o horário que tiveram — o histórico
+                      não é reescrito.
                     </p>
                   )}
 
@@ -358,15 +359,16 @@ export function EventoCalendarioModal({
                         }
                         executar(
                           () =>
-                            atualizarCompromisso.mutateAsync({
-                              id: evento.compromisso.id,
+                            remarcar.mutateAsync({
+                              compromisso: evento.compromisso,
                               data: form.data,
                               hora_inicio: form.inicio,
                               hora_fim: form.fim,
+                              hoje: isoLocal(new Date()),
                             }),
                           evento.compromisso.recorrencia === "nenhuma"
                             ? "Compromisso remarcado"
-                            : "Série remarcada",
+                            : "Remarcado deste dia em diante",
                         );
                       }}
                     >

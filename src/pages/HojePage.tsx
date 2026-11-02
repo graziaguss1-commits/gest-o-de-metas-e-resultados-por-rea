@@ -32,8 +32,8 @@ import { chaveMotivo, exigeTexto, MOTIVO_LABEL, MOTIVOS, naoExecutado, referenci
 import { useScheduleAction, useToggleAction } from "@/hooks/useActions";
 import {
   chaveDaOcorrencia,
-  useAtualizarCompromisso,
   useConcluirOcorrencia,
+  useRemarcarDaquiEmDiante,
 } from "@/hooks/useCompromissos";
 import {
   usePlanos,
@@ -223,8 +223,8 @@ export default function HojePage() {
   const registrarExecucao = useRegistrarExecucao();
   const toggleTarefa = useToggleTarefa();
   const toggleAction = useToggleAction();
-  const atualizarCompromisso = useAtualizarCompromisso();
   const concluirOcorrencia = useConcluirOcorrencia();
+  const remarcarCompromisso = useRemarcarDaquiEmDiante();
   const reagendarTarefa = useReagendarTarefa();
   const remarcarAvulsa = useScheduleAction();
   const [concluindoId, setConcluindoId] = useState<string | null>(null);
@@ -335,11 +335,14 @@ export default function HojePage() {
         });
       } else {
         const fim = horarioEmMinutos(hora) + duracao;
-        await atualizarCompromisso.mutateAsync({
-          id: bloco.origemId,
+        // Remarcar compromisso vale deste dia em diante: as ocorrencias
+        // que ja passaram ficam com o horario que tiveram.
+        await remarcarCompromisso.mutateAsync({
+          compromisso: chaveDaOcorrencia(bloco.origemId, bloco.data),
           data: bloco.data,
           hora_inicio: hora,
           hora_fim: `${String(Math.floor(fim / 60)).padStart(2, "0")}:${String(fim % 60).padStart(2, "0")}`,
+          hoje: hojeISO,
         });
       }
       setBlocoAberto(null);

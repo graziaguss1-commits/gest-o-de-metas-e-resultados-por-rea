@@ -34,8 +34,8 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useCompromissos,
-  useAtualizarCompromisso,
   useConcluirOcorrencia,
+  useRemarcarDaquiEmDiante,
 } from "@/hooks/useCompromissos";
 import {
   useActions,
@@ -128,8 +128,8 @@ export default function CalendarPage() {
   );
   const [compromissoOpen, setCompromissoOpen] = useState(false);
   const [compromissoData, setCompromissoData] = useState<string>();
-  const atualizarCompromisso = useAtualizarCompromisso();
   const concluirOcorrencia = useConcluirOcorrencia();
+  const remarcarCompromisso = useRemarcarDaquiEmDiante();
   const days = useMemo(
     () => Array.from({ length: calendarSpan }, (_, i) => addDays(anchor, i)),
     [anchor, calendarSpan],
@@ -646,11 +646,13 @@ export default function CalendarPage() {
               const duracao = hf * 60 + mf - hi * 60 - mi;
               const [nh, nm] = hora.split(":").map(Number);
               const fim = nh * 60 + nm + duracao;
-              atualizarCompromisso.mutate({
-                id,
+              // Arrastar tambem e edicao: so daqui para frente.
+              remarcarCompromisso.mutate({
+                compromisso: atual,
                 data,
                 hora_inicio: hora,
                 hora_fim: `${String(Math.floor(fim / 60)).padStart(2, "0")}:${String(fim % 60).padStart(2, "0")}`,
+                hoje: iso(new Date()),
               });
             }}
           />

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { agendarSyncGoogle } from "@/lib/googleSync";
+import { planejarEdicaoDeSerie } from "@/lib/edicaoDeSerie";
 
 import { proximaOcorrencia } from "../../supabase/functions/_shared/recorrencia";
 
@@ -225,18 +226,104 @@ export function useCriarCompromisso() {
   });
 }
 
-type AtualizacaoCompromisso = Partial<Omit<Compromisso, "id" | "serie_id">> & { id: string };
-export function useAtualizarCompromisso() {
+export type ChaveOcorrencia = Pick<Compromisso, "serie_id" | "data_original">;
+
+/**
+ * Remarca o compromisso DESTE dia em diante, sem tocar no que já passou.
+ *
+ * Mudar a linha da série mudaria todas as ocorrências, inclusive as
+ * antigas: a aula das 15h de duas semanas atrás viraria 16h no histórico.
+ * Por isso a série é dividida — a antiga guarda o passado, uma nova começa
+ * no corte com o horário novo. `planejarEdicaoDeSerie` decide se há corte;
+ * aqui só se executa o que ela decidiu.
+ */
+export function useRemarcarDaquiEmDiante() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: AtualizacaoCompromisso) => {
-      const serieId = id.split("@")[0];
+    mutationFn: async ({
+      compromisso,
+      data,
+      hora_inicio,
+      hora_fim,
+      hoje,
+    }: {
+      compromisso: ChaveOcorrencia;
+      data: string;
+      hora_inicio: string;
+      hora_fim: string;
+      hoje: string;
+    }) => {
+      const serieId = compromisso.serie_id;
+      const novosValores = { data, hora_inicio, hora_fim };
+
       if (serieId.startsWith("local-")) {
-        salvarLocais(lerLocais().map((item) => item.id === serieId ? { ...item, ...values } as CompromissoBanco : item));
-        return;
+        salvarLocais(
+          lerLocais().map((item) =>
+            item.id === serieId
+              ? ({ ...item, ...novosValores } as CompromissoBanco)
+              : item,
+          ),
+        );
+        return { dividiu: false };
       }
-      const { error } = await supabase.from("compromissos").update(values as never).eq("id", serieId);
-      if (error) throw error;
+
+      // A serie e lida do banco, e nao do objeto expandido: e o registro que
+      // diz onde ela nasce e ate quando vai, e e isso que decide se ha
+      // passado a preservar.
+      const { data: atual, error: erroLeitura } = await supabase
+        .from("compromissos")
+        .select("*")
+        .eq("id", serieId)
+        .maybeSingle();
+      if (erroLeitura) throw erroLeitura;
+      if (!atual) throw new Error("Compromisso nao encontrado.");
+      const base = atual as unknown as CompromissoBanco;
+
+      const atualizarTudo = async () => {
+        const { error } = await supabase
+          .from("compromissos")
+          .update(novosValores as never)
+          .eq("id", serieId);
+        if (error) throw error;
+        return { dividiu: false };
+      };
+
+      const plano = planejarEdicaoDeSerie(
+        {
+          id: serieId,
+          data: base.data,
+          recorrencia: base.recorrencia ?? "nenhuma",
+          recorrencia_fim: base.recorrencia_fim ?? null,
+        },
+        {
+          dataOriginal: compromisso.data_original,
+          hoje,
+          ...novosValores,
+        },
+      );
+      if (plano.tipo === "atualizar_serie") return atualizarTudo();
+
+      const { data: user } = await supabase.auth.getUser();
+      // A nova serie nasce ANTES de a antiga ser cortada: se a criacao
+      // falhar, as ocorrencias futuras continuam na antiga em vez de sumirem
+      // da agenda.
+      const { error: erroInsert } = await supabase.from("compromissos").insert({
+        titulo: base.titulo,
+        area: base.area,
+        observacao: base.observacao,
+        recorrencia: base.recorrencia,
+        recorrencia_fim: base.recorrencia_fim,
+        criado_por: user.user?.id ?? null,
+        ...novosValores,
+      } as never);
+      if (erroInsert) throw erroInsert;
+
+      const { error: erroCorte } = await supabase
+        .from("compromissos")
+        .update({ recorrencia_fim: plano.fimDaAntiga } as never)
+        .eq("id", serieId);
+      if (erroCorte) throw erroCorte;
+      return { dividiu: true };
     },
     onSuccess: () => {
       agendarSyncGoogle();
@@ -244,8 +331,6 @@ export function useAtualizarCompromisso() {
     },
   });
 }
-
-export type ChaveOcorrencia = Pick<Compromisso, "serie_id" | "data_original">;
 
 /**
  * A chave da ocorrência a partir do id expandido.
