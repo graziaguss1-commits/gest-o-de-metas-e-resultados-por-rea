@@ -166,10 +166,20 @@ export function HourlyCalendarGrid({
 
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
+      {/* Um dia só não precisa de largura mínima: herdar os 760px de três
+          dias criaria rolagem horizontal numa coluna que cabe na tela. */}
       <div
-        className={`grid ${days.length <= 3 ? "min-w-[760px]" : "min-w-[1050px]"}`}
+        className={`grid ${
+          days.length === 1
+            ? ""
+            : days.length <= 3
+              ? "min-w-[760px]"
+              : "min-w-[1050px]"
+        }`}
         style={{
-          gridTemplateColumns: `64px repeat(${days.length}, minmax(${days.length <= 3 ? "220px" : "135px"}, 1fr))`,
+          gridTemplateColumns: `64px repeat(${days.length}, minmax(${
+            days.length === 1 ? "0" : days.length <= 3 ? "220px" : "135px"
+          }, 1fr))`,
         }}
       >
         <div className="sticky left-0 z-20 border-b border-r bg-card" />

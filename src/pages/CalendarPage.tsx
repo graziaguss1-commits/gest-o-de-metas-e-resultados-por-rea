@@ -120,7 +120,7 @@ export default function CalendarPage() {
   const finalizarCronometro = useFinalizarCronometroAgendamento();
   const materializar = useMaterializarRecorrencias();
   const [anchor, setAnchor] = useState(() => dateFromParam(requestedWeek));
-  const [calendarSpan, setCalendarSpan] = useState<3 | 7>(3);
+  const [calendarSpan, setCalendarSpan] = useState<1 | 3 | 7>(3);
   const [novoOpen, setNovoOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"horas" | "compacto">(
     "horas",
@@ -308,7 +308,17 @@ export default function CalendarPage() {
   );
   const semAgendamento =
     availableToSchedule.length + standaloneToSchedule.length;
-  const periodLabel = `${days[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} — ${days[days.length - 1].toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
+  // Um dia só não vira intervalo: "02 de nov. — 02 de nov." repetiria a
+  // mesma data dos dois lados do travessão.
+  const periodLabel =
+    days.length === 1
+      ? days[0].toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+      : `${days[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} — ${days[days.length - 1].toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
   const minutosCompromissos = compromissosDaSemana.reduce((total, c) => {
     const [hi, mi] = c.hora_inicio.split(":").map(Number);
     const [hf, mf] = c.hora_fim.split(":").map(Number);
@@ -499,7 +509,11 @@ export default function CalendarPage() {
         <section className="performance-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              {calendarSpan === 3 ? "Período selecionado" : "Semana selecionada"}
+              {calendarSpan === 1
+                ? "Dia selecionado"
+                : calendarSpan === 3
+                  ? "Período selecionado"
+                  : "Semana selecionada"}
             </div>
             <div className="mt-1 font-display text-lg font-semibold capitalize">
               {periodLabel}
@@ -534,6 +548,13 @@ export default function CalendarPage() {
 
         <div className="flex flex-wrap justify-end gap-2">
           <div className="mr-2 flex gap-2 border-r pr-4">
+            <Button
+              size="sm"
+              variant={calendarSpan === 1 ? "default" : "outline"}
+              onClick={() => setCalendarSpan(1)}
+            >
+              Dia
+            </Button>
             <Button
               size="sm"
               variant={calendarSpan === 3 ? "default" : "outline"}
@@ -640,9 +661,9 @@ export default function CalendarPage() {
             <Skeleton className="h-[440px] w-full" />
           ) : (
             <div
-              className={`grid divide-x overflow-x-auto ${calendarSpan === 3 ? "min-w-[720px]" : "min-w-[1050px]"}`}
+              className={`grid divide-x overflow-x-auto ${calendarSpan === 1 ? "" : calendarSpan === 3 ? "min-w-[720px]" : "min-w-[1050px]"}`}
               style={{
-                gridTemplateColumns: `repeat(${days.length}, minmax(${calendarSpan === 3 ? "220px" : "145px"}, 1fr))`,
+                gridTemplateColumns: `repeat(${days.length}, minmax(${calendarSpan === 1 ? "0" : calendarSpan === 3 ? "220px" : "145px"}, 1fr))`,
               }}
             >
               {days.map((day) => {
