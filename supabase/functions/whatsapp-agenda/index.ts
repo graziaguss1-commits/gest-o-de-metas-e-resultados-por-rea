@@ -234,7 +234,7 @@ async function resolverTitulos(db: Db, refs: string[], destino: Map<string, stri
       : Promise.resolve({ data: [] }),
   ]);
 
-  for (const a of (ag.data ?? []) as { id: string; plano_tarefas: { descricao: string } }[]) {
+  for (const a of (ag.data ?? []) as unknown as { id: string; plano_tarefas: { descricao: string } }[]) {
     destino.set(`ag:${a.id}`, a.plano_tarefas.descricao);
   }
   for (const a of (av.data ?? []) as { id: string; descricao: string }[]) {
@@ -281,7 +281,7 @@ async function processarUsuario(db: Db, uid: string, modo: Modo, cfg: { base: st
     const capacidadeDiaria = Number(cfgCap?.capacidade_diaria_minutos ?? 480);
 
     const motivos = await motivosRegistrados(db, uid, sp.data, blocos).catch(
-      () => ({ motivosDeHoje: [], motivosDoMes: [] }),
+      () => ({ motivosDeHoje: [], motivosPorTarefa: [], motivosDoMes: [] }),
     );
     const doCoach = await linhasDoCoach(db, uid, {
       data: sp.data,

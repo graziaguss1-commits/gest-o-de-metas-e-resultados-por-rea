@@ -303,7 +303,7 @@ export async function linhasDoCoach(
     });
 
     const texto = (resposta.content ?? [])
-      .filter((p: { type: string }) => p.type === "text")
+      .filter((p) => p.type === "text")
       .map((p: { text?: string }) => p.text ?? "")
       .join("")
       .trim();

@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
       return json({ ok: false, message: `Slack respondeu ${slackResp.status}: ${txt.slice(0, 200)}` }, 502);
     }
 
-    return json({ ok: true });
+    return json({ ok: true }, 200);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return json({ ok: false, message: `Erro inesperado: ${msg}` }, 500);
