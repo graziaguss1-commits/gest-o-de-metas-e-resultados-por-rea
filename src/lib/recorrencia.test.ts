@@ -92,3 +92,35 @@ describe("rotuloMensalPorSemana", () => {
     expect(rotuloMensalPorSemana(d("2026-10-13"))).toBe("na segunda terça-feira");
   });
 });
+
+describe("toda recorrência real precisa ANDAR", () => {
+  // A sincronização com o Google tinha uma cópia deste cálculo que não
+  // conhecia "mensal_dia_semana": para esse valor devolvia a mesma data, e o
+  // laço que gera ocorrências girava para sempre até o runtime matar a
+  // execução por CPU. Quatro segundos depois de "Aula da Kamila" ser criada,
+  // a sincronização parou de funcionar e ficou 6 dias assim.
+  const REAIS = ["semanal", "quinzenal", "mensal", "mensal_dia_semana"] as const;
+
+  it.each(REAIS)("%s devolve uma data maior que a atual", (recorrencia) => {
+    const inicio = d("2026-10-30");
+    const proxima = proximaOcorrencia(inicio, recorrencia, inicio);
+    expect(proxima.getTime()).toBeGreaterThan(inicio.getTime());
+  });
+
+  it.each(REAIS)("%s continua andando em doze passos seguidos", (recorrencia) => {
+    const primeira = d("2026-10-30");
+    let atual = primeira;
+    for (let i = 0; i < 12; i++) {
+      const proxima = proximaOcorrencia(atual, recorrencia, primeira);
+      expect(proxima.getTime()).toBeGreaterThan(atual.getTime());
+      atual = proxima;
+    }
+  });
+
+  it("\"nenhuma\" não anda, e por isso quem chama precisa tratar antes do laço", () => {
+    const inicio = d("2026-10-30");
+    expect(proximaOcorrencia(inicio, "nenhuma", inicio).getTime()).toBe(
+      inicio.getTime(),
+    );
+  });
+});

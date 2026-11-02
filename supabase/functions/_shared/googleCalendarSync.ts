@@ -3,6 +3,7 @@
 // participante, descrição ou local é persistido ou enviado ao Claude.
 import { adminClient } from "./appUserConnections.ts";
 import { callGoogleApi, hasGoogleConnection } from "./googleOAuth.ts";
+import { proximaOcorrencia, type Recorrencia } from "./recorrencia.ts";
 import {
   TIMEZONE,
   googleDateTimeToLocal,
@@ -60,18 +61,29 @@ function endDateForTimes(data: string, inicio: string, fim: string) {
   return hhmm(fim) <= hhmm(inicio) ? addDays(data, 1) : data;
 }
 
-function nextOccurrence(data: string, recurrence: string) {
-  const current = parseLocalDate(data);
-  if (recurrence === "semanal") current.setDate(current.getDate() + 7);
-  if (recurrence === "quinzenal") current.setDate(current.getDate() + 14);
-  if (recurrence === "mensal") {
-    const day = current.getDate();
-    current.setDate(1);
-    current.setMonth(current.getMonth() + 1);
-    const lastDay = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
-    current.setDate(Math.min(day, lastDay));
-  }
-  return isoDate(current);
+/**
+ * Proxima ocorrencia, pelo MESMO calculo que o app usa.
+ *
+ * Esta funcao era uma copia que conhecia semanal, quinzenal e mensal — e
+ * nao `mensal_dia_semana`. Para esse valor ela devolvia a data sem avancar,
+ * e o `while` que gera as ocorrencias girava para sempre: `CPU Time
+ * exceeded`, execucao morta, nada gravado, trava presa.
+ *
+ * Nao e hipotese. "Aula da Kamila" (mensal_dia_semana) foi criada em
+ * 27/10 as 21:48:07, quatro segundos depois da ultima sincronizacao que
+ * funcionou, as 21:48:03. Nenhuma funcionou desde entao.
+ *
+ * Era exatamente o que o comentario de _shared/recorrencia.ts avisava:
+ * duas copias da mesma conta divergem. Agora so existe uma.
+ */
+function nextOccurrence(data: string, recurrence: string, referencia: string) {
+  return isoDate(
+    proximaOcorrencia(
+      parseLocalDate(data),
+      recurrence as Recorrencia,
+      parseLocalDate(referencia),
+    ),
+  );
 }
 
 function laterIso(...values: Array<string | null | undefined>) {
@@ -473,7 +485,24 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
       ? commitment.recorrencia_fim
       : requestedEnd;
     let originalDate = commitment.data;
-    while (originalDate < generationStart) originalDate = nextOccurrence(originalDate, recurrence);
+    // Guarda contra laco infinito: se a proxima data nao for MAIOR que a
+    // atual, a regra de recorrencia nao sabe avancar. Antes isso travava a
+    // execucao inteira ate o runtime mata-la; agora a serie e pulada e as
+    // outras seguem.
+    const avancar = (de: string): string | null => {
+      const proxima = nextOccurrence(de, recurrence, commitment.data);
+      return proxima > de ? proxima : null;
+    };
+    let travou = false;
+    while (originalDate < generationStart) {
+      const proxima = avancar(originalDate);
+      if (!proxima) { travou = true; break; }
+      originalDate = proxima;
+    }
+    if (travou) {
+      console.error(`Recorrencia nao avanca: ${recurrence}`);
+      continue;
+    }
     while (originalDate <= generationEnd) {
       const change = changesByKey.get(`${commitment.id}|${originalDate}`);
       const date = change?.data ?? originalDate;
@@ -493,7 +522,12 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
           updated_at: laterIso(commitment.updated_at, change?.updated_at),
         });
       }
-      originalDate = nextOccurrence(originalDate, recurrence);
+      const proxima = avancar(originalDate);
+      if (!proxima) {
+        console.error(`Recorrencia nao avanca: ${recurrence}`);
+        break;
+      }
+      originalDate = proxima;
     }
   }
 
