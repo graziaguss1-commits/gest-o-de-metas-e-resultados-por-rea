@@ -11,6 +11,17 @@ import {
 
 // Teto de criacoes por execucao. Ver valvula de seguranca abaixo.
 const LIMITE_CRIACOES_POR_SYNC = 30;
+/**
+ * Quanto tempo a rodada pode gastar nos lacos que falam com o Google.
+ *
+ * Cada evento e uma chamada HTTP sequencial. Com fila grande a execucao
+ * estourava o tempo do runtime e era MORTA no meio: `last_sync_at` nunca
+ * avancava, nenhum codigo de erro era gravado e sincronizar parecia nao
+ * fazer efeito. Com um prazo proprio, a rodada para antes disso, grava o
+ * que conseguiu e deixa o resto para a proxima — progresso em vez de
+ * reinicio eterno.
+ */
+const PRAZO_GOOGLE_MS = 50_000;
 
 // A janela comeca HOJE: evento que ja passou nao precisa ir para o Google,
 // e eram eles a maior parte do trabalho de cada sincronizacao. O que ja foi
@@ -233,6 +244,7 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
   const calendarId = String(conn.calendar_id || "primary");
   const timeZone = String(conn.calendar_timezone || TIMEZONE);
   const now = Date.now();
+  const prazoFinal = now + PRAZO_GOOGLE_MS;
   const timeMin = new Date(now - WINDOW_PAST_DAYS * 86400000);
   const timeMax = new Date(now + WINDOW_FUTURE_DAYS * 86400000);
   const windowStart = isoDate(timeMin);
@@ -496,6 +508,10 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
   const currentByKey = new Map(links.map((link) => [link.origem_chave, link]));
 
   for (const [indiceMirror, mirror] of mirrors.entries()) {
+    if (Date.now() > prazoFinal) {
+      stats.criacoes_adiadas = mirrors.length - indiceMirror;
+      break;
+    }
     const eventBody = {
       summary: mirror.summary,
       start: { dateTime: `${mirror.data}T${mirror.hora_inicio}`, timeZone },
@@ -594,6 +610,7 @@ async function syncUnlocked(userId: string, conn: GoogleConnectionRow): Promise<
   // Itens desagendados/cancelados no app removem somente o espelho no Google.
   const activeKeys = new Set(mirrors.map((mirror) => mirror.origem_chave));
   for (const link of links) {
+    if (Date.now() > prazoFinal) break;
     if (activeKeys.has(link.origem_chave)) continue;
     if (link.source_date && (link.source_date < windowStart || link.source_date > windowEnd)) continue;
     const res = await callGoogleApi(
