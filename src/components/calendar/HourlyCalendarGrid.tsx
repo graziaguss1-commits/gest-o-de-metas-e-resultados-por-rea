@@ -513,7 +513,7 @@ export function HourlyCalendarGrid({
                     key={commitment.id}
                     className={`absolute z-10 cursor-pointer overflow-hidden rounded-lg border border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] shadow-sm active:cursor-grabbing ${compacto ? "px-1.5 py-1" : "p-2"} ${mostrarTextoAcoes ? "pr-24" : commitment.recorrencia === "nenhuma" ? "pr-12" : "pr-6"} ${commitment.concluido ? "opacity-60" : ""}`}
                     style={estiloDoLayout(layout)}
-                    title={`${inicio}–${fim} · ${commitment.titulo}. Clique para excluir; arraste para reagendar.`}
+                    title={`${inicio}–${fim} · ${commitment.titulo}. Clique para editar ou excluir; arraste para reagendar.`}
                   >
                     {commitment.recorrencia === "nenhuma" && (
                       <button
